@@ -1,0 +1,156 @@
+from datetime import datetime, timedelta
+import uuid
+
+from django.db import transaction
+from django.utils import timezone
+from rest_framework.exceptions import ValidationError
+
+from compagnies.models import Compagnie
+from voyages.models import Voyage
+
+from .models import PlaceReservee, Reservation
+
+RESERVATION_HOLD_DURATION = timedelta(minutes=10)
+
+
+def _expire_for_voyage(voyage, now):
+    expired_ids = list(
+        Reservation.objects.select_for_update()
+        .filter(
+            voyage=voyage,
+            statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+            date_expiration__lte=now,
+        )
+        .values_list("pk", flat=True)
+    )
+    if not expired_ids:
+        return
+
+    Reservation.objects.filter(pk__in=expired_ids).update(
+        statut=Reservation.Statut.EXPIREE
+    )
+    PlaceReservee.objects.filter(
+        reservation_id__in=expired_ids,
+        liberee=False,
+    ).update(liberee=True)
+
+
+def expire_overdue_reservations(*, voyageur=None, now=None):
+    now = now or timezone.now()
+    reservations = Reservation.objects.filter(
+        statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+        date_expiration__lte=now,
+    )
+    if voyageur is not None:
+        reservations = reservations.filter(voyageur=voyageur)
+
+    with transaction.atomic():
+        expired_ids = list(
+            reservations.select_for_update().values_list("pk", flat=True)
+        )
+        if not expired_ids:
+            return 0
+        Reservation.objects.filter(pk__in=expired_ids).update(
+            statut=Reservation.Statut.EXPIREE
+        )
+        PlaceReservee.objects.filter(
+            reservation_id__in=expired_ids,
+            liberee=False,
+        ).update(liberee=True)
+    return len(expired_ids)
+
+
+def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
+    now = now or timezone.now()
+
+    with transaction.atomic():
+        try:
+            voyage = Voyage.objects.select_for_update().select_related(
+                "compagnie"
+            ).get(pk=voyage_id)
+        except (Voyage.DoesNotExist, ValueError):
+            raise ValidationError({"voyage_id": "Voyage introuvable."})
+
+        _expire_for_voyage(voyage, now)
+
+        if voyage.compagnie.statut != Compagnie.Statut.ACTIVE:
+            raise ValidationError({"voyage_id": "Cette compagnie n’est pas active."})
+        if voyage.statut != Voyage.Statut.PUBLIE:
+            raise ValidationError({"voyage_id": "Ce voyage n’est pas ouvert aux réservations."})
+
+        departure = timezone.make_aware(
+            datetime.combine(voyage.date_depart, voyage.heure_depart),
+            timezone.get_current_timezone(),
+        )
+        if departure <= now:
+            raise ValidationError({"voyage_id": "Ce voyage est déjà passé."})
+
+        occupied_seats = set(
+            PlaceReservee.objects.filter(voyage=voyage, liberee=False).values_list(
+                "numero_siege",
+                flat=True,
+            )
+        )
+        seat_numbers = []
+        next_seat = 1
+        while len(seat_numbers) < len(passenger_names):
+            seat_number = f"S{next_seat:03d}"
+            if seat_number not in occupied_seats:
+                seat_numbers.append(seat_number)
+            next_seat += 1
+            if next_seat > voyage.place_totale and len(seat_numbers) < len(passenger_names):
+                raise ValidationError({"passagers": "Il n’y a pas assez de places disponibles."})
+
+        reservation = Reservation.objects.create(
+            reference=f"RES-{uuid.uuid4().hex[:16].upper()}",
+            voyageur=voyageur,
+            voyage=voyage,
+            date_expiration=now + RESERVATION_HOLD_DURATION,
+            montant_total=voyage.prix * len(passenger_names),
+            statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+        )
+        PlaceReservee.objects.bulk_create(
+            [
+                PlaceReservee(
+                    reservation=reservation,
+                    voyage=voyage,
+                    numero_siege=seat_number,
+                    nom_passager=passenger_name,
+                )
+                for seat_number, passenger_name in zip(seat_numbers, passenger_names)
+            ]
+        )
+        return reservation
+
+
+def cancel_reservation(*, reservation_id, voyageur, now=None):
+    now = now or timezone.now()
+    try:
+        voyage_id = Reservation.objects.values_list("voyage_id", flat=True).get(
+            pk=reservation_id,
+            voyageur=voyageur,
+        )
+    except (Reservation.DoesNotExist, ValueError):
+        raise ValidationError({"reservation": "Réservation introuvable."})
+
+    with transaction.atomic():
+        try:
+            voyage = Voyage.objects.select_for_update().get(pk=voyage_id)
+            reservation = Reservation.objects.select_for_update().get(
+                pk=reservation_id,
+                voyageur=voyageur,
+            )
+        except (Voyage.DoesNotExist, Reservation.DoesNotExist):
+            raise ValidationError({"reservation": "Réservation introuvable."})
+
+        _expire_for_voyage(voyage, now)
+        reservation.refresh_from_db()
+        if reservation.statut != Reservation.Statut.EN_ATTENTE_PAIEMENT:
+            raise ValidationError(
+                {"reservation": "Seule une réservation en attente peut être annulée."}
+            )
+
+        reservation.statut = Reservation.Statut.ANNULEE
+        reservation.save(update_fields=("statut",))
+        reservation.places.filter(liberee=False).update(liberee=True)
+        return reservation

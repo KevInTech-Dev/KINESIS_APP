@@ -1,0 +1,12 @@
+Django>=5.2,<5.3
+djangorestframework
+djangorestframework-simplejwt>=5.5,<6
+drf-spectacular
+psycopg[binary]>=3.2
+django-environ
+Pillow>=11.0
+cloudinary
+django-cloudinary-storage
+pytest-django
+ruff
+black

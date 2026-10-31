@@ -1,0 +1,278 @@
+from datetime import time, timedelta
+
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
+from django.test import TestCase
+from django.urls import reverse
+from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import AccessToken
+
+from compagnies.models import Compagnie
+from reservations.models import PlaceReservee, Reservation
+
+from .models import Ville, Voyage
+
+
+User = get_user_model()
+
+
+class VilleModelTests(TestCase):
+    def test_city_names_are_unique_without_case_sensitivity(self):
+        Ville.objects.create(nom="Lome")
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Ville.objects.create(nom="LOME")
+
+
+class VoyageApiTests(APITestCase):
+    password = "Qx7!mR4#vN8p"
+
+    def setUp(self):
+        self.company_user = User.objects.create_user(
+            email="compagnie@example.com",
+            password=self.password,
+            nom="Transport Kinesis",
+            prenoms="Admin",
+            role=User.Role.COMPAGNIE,
+        )
+        self.company = Compagnie.objects.create(
+            utilisateur=self.company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        self.depart = Ville.objects.create(nom="Lome")
+        self.arrivee = Ville.objects.create(nom="Sokode")
+        self.future_date = timezone.localdate() + timedelta(days=2)
+        self.voyage = Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date,
+            heure_depart=time(10, 0),
+            place_totale=45,
+            prix="5000",
+        )
+
+    def authenticate_company(self, email):
+        user = User.objects.create_user(
+            email=email,
+            password=self.password,
+            nom="Autre transport",
+            prenoms="Admin",
+            role=User.Role.COMPAGNIE,
+        )
+        Compagnie.objects.create(utilisateur=user, statut=Compagnie.Statut.ACTIVE)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}"
+        )
+
+    def test_public_search_returns_only_published_future_trips_and_filters(self):
+        Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date,
+            heure_depart=time(12, 0),
+            place_totale=20,
+            prix="6000",
+            statut=Voyage.Statut.ARCHIVE,
+        )
+        other_depart = Ville.objects.create(nom="Kara")
+        Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=other_depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date,
+            heure_depart=time(14, 0),
+            place_totale=20,
+            prix="6000",
+        )
+
+        response = self.client.get(
+            reverse("voyage-list"),
+            {
+                "ville_depart": str(self.depart.pk),
+                "ville_arrivee": str(self.arrivee.pk),
+                "date_depart": self.future_date.isoformat(),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id_voyage"], str(self.voyage.pk))
+
+    def test_public_results_show_remaining_seats_and_hide_full_trips(self):
+        self.voyage.place_totale = 2
+        self.voyage.save(update_fields=("place_totale",))
+        traveler = User.objects.create_user(
+            email="reservation@example.com",
+            password=self.password,
+            nom="Doe",
+            prenoms="Jane",
+            role=User.Role.VOYAGEUR,
+        )
+        reservation = Reservation.objects.create(
+            reference="RES-AVAIL-1",
+            voyageur=traveler,
+            voyage=self.voyage,
+            montant_total=5000,
+            date_expiration=timezone.now() + timedelta(minutes=10),
+        )
+        PlaceReservee.objects.create(
+            reservation=reservation,
+            voyage=self.voyage,
+            numero_siege="S001",
+            nom_passager="Jane Doe",
+        )
+
+        full_trip = Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date + timedelta(days=1),
+            heure_depart=time(9, 0),
+            place_totale=1,
+            prix="5000",
+        )
+        full_reservation = Reservation.objects.create(
+            reference="RES-AVAIL-2",
+            voyageur=traveler,
+            voyage=full_trip,
+            montant_total=5000,
+            date_expiration=timezone.now() + timedelta(minutes=10),
+        )
+        PlaceReservee.objects.create(
+            reservation=full_reservation,
+            voyage=full_trip,
+            numero_siege="S001",
+            nom_passager="Jane Doe",
+        )
+
+        response = self.client.get(reverse("voyage-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        trips = {item["id_voyage"]: item for item in response.data}
+        self.assertIn(str(self.voyage.pk), trips)
+        self.assertEqual(trips[str(self.voyage.pk)]["places_disponibles"], 1)
+        self.assertNotIn(str(full_trip.pk), trips)
+
+    def test_company_creates_a_trip_owned_by_its_authenticated_profile(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        response = self.client.post(
+            reverse("voyage-list"),
+            {
+                "ville_depart": str(self.depart.pk),
+                "ville_arrivee": str(self.arrivee.pk),
+                "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
+                "heure_depart": "09:00",
+                "place_totale": 32,
+                "prix": "7500",
+                "compagnie": "00000000-0000-0000-0000-000000000001",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created = Voyage.objects.get(pk=response.data["id_voyage"])
+        self.assertEqual(created.compagnie, self.company)
+        self.assertEqual(created.statut, Voyage.Statut.PUBLIE)
+
+    def test_same_departure_and_arrival_is_rejected(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        response = self.client.post(
+            reverse("voyage-list"),
+            {
+                "ville_depart": str(self.depart.pk),
+                "ville_arrivee": str(self.depart.pk),
+                "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
+                "heure_depart": "09:00",
+                "place_totale": 32,
+                "prix": "7500",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Voyage.objects.count(), 1)
+
+    def test_fractional_fcfa_price_is_rejected(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        response = self.client.post(
+            reverse("voyage-list"),
+            {
+                "ville_depart": str(self.depart.pk),
+                "ville_arrivee": str(self.arrivee.pk),
+                "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
+                "heure_depart": "09:00",
+                "place_totale": 32,
+                "prix": "7500.50",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Voyage.objects.count(), 1)
+
+    def test_company_cannot_modify_another_company_trip(self):
+        self.authenticate_company("autre-compagnie@example.com")
+
+        response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"prix": "1"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.voyage.refresh_from_db()
+        self.assertEqual(str(self.voyage.prix), "5000")
+
+    def test_company_cannot_reduce_capacity_below_active_reservations(self):
+        from reservations.models import PlaceReservee, Reservation
+
+        traveler = User.objects.create_user(
+            email="reservataire@example.com",
+            password=self.password,
+            nom="Doe",
+            prenoms="Jane",
+            role=User.Role.VOYAGEUR,
+        )
+        reservation = Reservation.objects.create(
+            reference="RES-CAPACITY-1",
+            voyageur=traveler,
+            voyage=self.voyage,
+            montant_total=10000,
+            date_expiration=timezone.now() + timedelta(minutes=10),
+        )
+        PlaceReservee.objects.create(
+            reservation=reservation,
+            voyage=self.voyage,
+            numero_siege="S001",
+            nom_passager="Jane Doe",
+        )
+        PlaceReservee.objects.create(
+            reservation=reservation,
+            voyage=self.voyage,
+            numero_siege="S002",
+            nom_passager="John Doe",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"place_totale": 1},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
