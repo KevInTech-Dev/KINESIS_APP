@@ -69,7 +69,7 @@ class AgentSerializer(serializers.ModelSerializer):
         model = AgentCompagnie
         fields = ("email", "nom", "prenoms", "telephone", "permissions")
 
-    def get_permissions(self, obj):
+    def get_permissions(self, obj) -> list[str]:
         return list(obj.permissions.values_list("permission", flat=True))
 
 

@@ -1,8 +1,8 @@
 from django.contrib.auth import get_user_model
+from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
-
 
 User = get_user_model()
 
@@ -102,3 +102,33 @@ class UserAuthenticationTests(APITestCase):
 			format="json",
 		)
 		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class UserAdminPrivacyTests(TestCase):
+	def setUp(self):
+		self.admin = User.objects.create_superuser(
+			email="admin@example.com",
+			password="Secure-admin-Password-42!",
+			nom="Admin",
+			prenoms="Kinesis",
+		)
+		self.traveler = User.objects.create_user(
+			email="traveler-private@example.com",
+			password="Secure-user-Password-42!",
+			nom="NomConfidentiel",
+			prenoms="PrenomConfidentiel",
+			telephone="+22800000000",
+		)
+		self.client.force_login(self.admin)
+
+	def test_admin_can_change_traveler_status_without_seeing_profile_details(self):
+		response = self.client.get(
+			reverse("admin:utilisateurs_utilisateur_change", args=[self.traveler.pk])
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertContains(response, "is_active")
+		self.assertNotContains(response, self.traveler.email)
+		self.assertNotContains(response, "NomConfidentiel")
+		self.assertNotContains(response, "PrenomConfidentiel")
+		self.assertNotContains(response, "+22800000000")

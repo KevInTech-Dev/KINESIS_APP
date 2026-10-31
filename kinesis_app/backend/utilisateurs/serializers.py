@@ -49,3 +49,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "must_change_password",
         )
         read_only_fields = ("id", "email", "role", "must_change_password")
+
+
+class LogoutRequestSerializer(serializers.Serializer):
+    refresh = serializers.CharField()
+
+
+class PasswordChangeRequestSerializer(serializers.Serializer):
+    old_password = serializers.CharField()
+    new_password = serializers.CharField()
+    password_confirmation = serializers.CharField()

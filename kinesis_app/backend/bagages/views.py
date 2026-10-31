@@ -1,4 +1,5 @@
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
@@ -95,6 +96,7 @@ class BagageDetailView(generics.RetrieveAPIView):
 class PaiementFraisBagageView(APIView):
     permission_classes = [CanRecordBaggageFee]
 
+    @extend_schema(request=None, responses={status.HTTP_200_OK: BagageSerializer})
     def post(self, request, pk):
         baggage = record_manual_fee_payment(actor=request.user, baggage_id=pk)
         return Response(
@@ -106,6 +108,7 @@ class PaiementFraisBagageView(APIView):
 class RestitutionBagageView(APIView):
     permission_classes = [CanReturnBaggage]
 
+    @extend_schema(request=None, responses={status.HTTP_200_OK: BagageSerializer})
     def post(self, request, pk):
         baggage = return_baggage(actor=request.user, baggage_id=pk)
         return Response(

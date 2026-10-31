@@ -1,4 +1,5 @@
 from django.shortcuts import get_object_or_404
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -61,6 +62,7 @@ class ReservationDetailView(generics.RetrieveAPIView):
 class ReservationCancelView(APIView):
     permission_classes = [IsAuthenticated, IsVoyageur]
 
+    @extend_schema(request=None, responses={status.HTTP_200_OK: ReservationSerializer})
     def post(self, request, pk):
         reservation = cancel_reservation(
             reservation_id=pk,

@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,9 +9,14 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .permissions import PasswordChangeComplete
 from .models import Utilisateur
-from .serializers import UserProfileSerializer, UserRegistrationSerializer
+from .permissions import PasswordChangeComplete
+from .serializers import (
+	LogoutRequestSerializer,
+	PasswordChangeRequestSerializer,
+	UserProfileSerializer,
+	UserRegistrationSerializer,
+)
 
 
 class UserRegistrationView(generics.CreateAPIView):
@@ -30,6 +36,7 @@ class CurrentUserView(generics.RetrieveUpdateAPIView):
 class LogoutView(APIView):
 	permission_classes = [IsAuthenticated]
 
+	@extend_schema(request=LogoutRequestSerializer, responses={205: None})
 	def post(self, request):
 		refresh_token = request.data.get("refresh")
 		if not refresh_token:
@@ -52,6 +59,7 @@ class LogoutView(APIView):
 class ChangePasswordView(APIView):
 	permission_classes = [IsAuthenticated]
 
+	@extend_schema(request=PasswordChangeRequestSerializer, responses={204: None})
 	def post(self, request):
 		user = request.user
 		old_password = request.data.get("old_password")

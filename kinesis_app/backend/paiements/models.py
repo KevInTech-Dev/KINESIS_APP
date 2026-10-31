@@ -118,6 +118,13 @@ class BilletElectronique(models.Model):
     )
     date_creation = models.DateTimeField(default=timezone.now)
     date_embarquement = models.DateTimeField(null=True, blank=True)
+    embarque_par = models.ForeignKey(
+        "utilisateurs.Utilisateur",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="billets_valides_embarquement",
+    )
 
     class Meta:
         ordering = ("-date_creation",)

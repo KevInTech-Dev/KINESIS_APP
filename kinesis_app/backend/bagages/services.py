@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from compagnies.models import Compagnie, PermissionAgent
+from notifications.models import Notification
 from reservations.models import Reservation
 
 from .models import Bagage, TarifBagage
@@ -172,6 +173,15 @@ def register_baggage(
         )
         for image in photo_files:
             baggage.photos.create(image=image)
+        Notification.objects.create(
+            utilisateur=reservation.voyageur,
+            type=Notification.Type.BAGAGE,
+            titre="Bagage enregistré",
+            message=(
+                f"Un bagage de {weight} kg a été enregistré pour la réservation "
+                f"{reservation.reference}. Frais dus : {fee} FCFA."
+            ),
+        )
         return baggage
 
 
@@ -180,7 +190,8 @@ def record_manual_fee_payment(*, actor, baggage_id):
     with transaction.atomic():
         try:
             baggage = Bagage.objects.select_for_update().select_related(
-                "reservation__voyage"
+                "reservation__voyage",
+                "reservation__voyageur",
             ).get(pk=baggage_id)
         except Bagage.DoesNotExist:
             raise ValidationError({"bagage": "Bagage introuvable."})
@@ -196,6 +207,15 @@ def record_manual_fee_payment(*, actor, baggage_id):
         baggage.save(
             update_fields=("frais_payes", "date_paiement_frais", "paiement_enregistre_par")
         )
+        Notification.objects.create(
+            utilisateur=baggage.reservation.voyageur,
+            type=Notification.Type.BAGAGE,
+            titre="Paiement des frais de bagage enregistré",
+            message=(
+                f"Le paiement de {baggage.frais_total} FCFA pour la réservation "
+                f"{baggage.reservation.reference} a été enregistré."
+            ),
+        )
         return baggage
 
 
@@ -204,7 +224,8 @@ def return_baggage(*, actor, baggage_id):
     with transaction.atomic():
         try:
             baggage = Bagage.objects.select_for_update().select_related(
-                "reservation__voyage"
+                "reservation__voyage",
+                "reservation__voyageur",
             ).get(pk=baggage_id)
         except Bagage.DoesNotExist:
             raise ValidationError({"bagage": "Bagage introuvable."})
@@ -218,4 +239,13 @@ def return_baggage(*, actor, baggage_id):
         baggage.date_restitution = timezone.now()
         baggage.restitue_par = actor
         baggage.save(update_fields=("statut", "date_restitution", "restitue_par"))
+        Notification.objects.create(
+            utilisateur=baggage.reservation.voyageur,
+            type=Notification.Type.BAGAGE,
+            titre="Bagage restitué",
+            message=(
+                f"Le bagage de la réservation {baggage.reservation.reference} "
+                "a été marqué comme restitué."
+            ),
+        )
         return baggage

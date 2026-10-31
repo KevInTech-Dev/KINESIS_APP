@@ -89,6 +89,7 @@ INSTALLED_APPS = [
     "reservations",
     "paiements",
     "bagages",
+    "notifications",
 ]
 
 MIDDLEWARE = [

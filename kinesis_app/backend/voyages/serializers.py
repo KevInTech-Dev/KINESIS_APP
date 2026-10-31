@@ -50,7 +50,7 @@ class VoyageSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id_voyage", "compagnie", "compagnie_nom")
 
-    def get_places_disponibles(self, obj):
+    def get_places_disponibles(self, obj) -> int:
         occupied = getattr(obj, "_places_occupees", None)
         if occupied is None:
             from reservations.models import PlaceReservee

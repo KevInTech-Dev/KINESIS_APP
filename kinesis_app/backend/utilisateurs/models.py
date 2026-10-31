@@ -74,4 +74,6 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     REQUIRED_FIELDS = ["nom", "prenoms"]
 
     def __str__(self):
+        if self.role == self.Role.VOYAGEUR:
+            return f"Voyageur {self.pk}"
         return self.email

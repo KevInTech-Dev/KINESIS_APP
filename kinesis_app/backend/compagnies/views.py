@@ -3,18 +3,19 @@ from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from django.db import transaction
 from django.shortcuts import get_object_or_404
-from rest_framework import generics
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
+from rest_framework import generics, serializers
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.status import HTTP_400_BAD_REQUEST, HTTP_200_OK
+from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 
 from .models import AgentCompagnie, Compagnie
 from .permissions import IsActiveCompany
 from .serializers import (
     AgentCreateSerializer,
-    AgentUpdateSerializer,
     AgentSerializer,
+    AgentUpdateSerializer,
     CompanyProfileSerializer,
     CompanyRegistrationSerializer,
 )
@@ -31,6 +32,26 @@ class CompanyRegistrationView(generics.CreateAPIView):
 class CompanyActivationView(APIView):
     permission_classes = [AllowAny]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+            )
+        ],
+        responses={
+            HTTP_200_OK: inline_serializer(
+                name="CompanyActivationResponse",
+                fields={"detail": serializers.CharField()},
+            ),
+            HTTP_400_BAD_REQUEST: inline_serializer(
+                name="CompanyActivationError",
+                fields={"detail": serializers.CharField()},
+            ),
+        },
+    )
     def get(self, request):
         token = request.query_params.get("token", "")
         try:

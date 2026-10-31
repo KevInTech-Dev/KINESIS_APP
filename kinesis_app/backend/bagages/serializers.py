@@ -31,7 +31,7 @@ class PhotoBagageSerializer(serializers.ModelSerializer):
         model = PhotoBagage
         fields = ("id_photobagage", "url", "created_at")
 
-    def get_url(self, obj):
+    def get_url(self, obj) -> str:
         return obj.image.url
 
 

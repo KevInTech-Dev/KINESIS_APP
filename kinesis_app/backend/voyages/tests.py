@@ -10,10 +10,10 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from compagnies.models import Compagnie
+from notifications.models import Notification
 from reservations.models import PlaceReservee, Reservation
 
 from .models import Ville, Voyage
-
 
 User = get_user_model()
 
@@ -235,6 +235,35 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
         self.voyage.refresh_from_db()
         self.assertEqual(str(self.voyage.prix), "5000")
+
+    def test_company_trip_update_notifies_active_reservation_owners(self):
+        traveler = User.objects.create_user(
+            email="trip-update-traveler@example.com",
+            password=self.password,
+            nom="Voyageur",
+            prenoms="Test",
+        )
+        Reservation.objects.create(
+            reference="RES-TRIP-UPDATE",
+            voyageur=traveler,
+            voyage=self.voyage,
+            montant_total=5000,
+            statut=Reservation.Statut.PAYEE,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"prix": "6000"},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        notification = Notification.objects.get(utilisateur=traveler)
+        self.assertEqual(notification.type, Notification.Type.VOYAGE)
+        self.assertEqual(notification.titre, "Voyage modifié")
 
     def test_company_cannot_reduce_capacity_below_active_reservations(self):
         from reservations.models import PlaceReservee, Reservation

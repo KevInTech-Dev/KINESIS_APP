@@ -1,8 +1,12 @@
+from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
+
+from notifications.models import Notification
+from reservations.models import Reservation
 
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
@@ -124,3 +128,47 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             queryset = queryset | own_trips
         return queryset
 
+    @transaction.atomic
+    def perform_update(self, serializer):
+        voyage = serializer.instance
+        changed = any(
+            getattr(voyage, field) != value
+            for field, value in serializer.validated_data.items()
+        )
+        voyage = serializer.save()
+        if not changed:
+            return
+
+        reservation_statuses = Q(statut=Reservation.Statut.PAYEE) | Q(
+            statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+            date_expiration__gt=timezone.now(),
+        )
+        voyageurs = (
+            Reservation.objects.filter(voyage=voyage)
+            .filter(reservation_statuses)
+            .values_list("voyageur_id", flat=True)
+            .distinct()
+        )
+        if voyage.statut == Voyage.Statut.ANNULEE:
+            titre = "Voyage annulé"
+            message = (
+                f"Le voyage {voyage.ville_depart} - {voyage.ville_arrivee} "
+                f"du {voyage.date_depart} a été annulé."
+            )
+        else:
+            titre = "Voyage modifié"
+            message = (
+                f"Les informations du voyage {voyage.ville_depart} - "
+                f"{voyage.ville_arrivee} du {voyage.date_depart} ont été modifiées."
+            )
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    utilisateur_id=voyageur_id,
+                    type=Notification.Type.VOYAGE,
+                    titre=titre,
+                    message=message,
+                )
+                for voyageur_id in voyageurs
+            ]
+        )

@@ -1,9 +1,14 @@
+from datetime import datetime
+
 from django.db import transaction
 from django.utils import timezone
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import PermissionDenied, ValidationError
 
+from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
+from notifications.models import Notification
 from reservations.models import PlaceReservee, Reservation
 from reservations.services import RESERVATION_HOLD_DURATION, expire_overdue_reservations
+from utilisateurs.models import Utilisateur
 
 from .models import BilletElectronique, Paiement
 
@@ -127,4 +132,103 @@ def apply_verified_paygate_event(
         ):
             BilletElectronique.objects.get_or_create(place=place)
 
+        Notification.objects.create(
+            utilisateur=reservation.voyageur,
+            type=Notification.Type.PAIEMENT,
+            titre="Paiement confirmé",
+            message=(
+                f"Votre réservation {reservation.reference} est confirmée. "
+                "Vos billets sont disponibles."
+            ),
+        )
         return payment
+
+
+def _company_for_ticket_permission(actor, permission):
+    if not actor or not actor.is_authenticated:
+        raise PermissionDenied("Authentification requise.")
+    if actor.role != Utilisateur.Role.AGENT_COMPAGNIE:
+        raise PermissionDenied("Cette action est réservée aux agents.")
+    if actor.must_change_password:
+        raise PermissionDenied("Le mot de passe provisoire doit être changé.")
+
+    try:
+        agent = actor.profil_agent
+    except AgentCompagnie.DoesNotExist:
+        raise PermissionDenied("Profil agent introuvable.")
+
+    if agent.compagnie.statut != Compagnie.Statut.ACTIVE:
+        raise PermissionDenied("La compagnie n’est pas active.")
+    if not agent.permissions.filter(permission=permission).exists():
+        raise PermissionDenied("Permission agent manquante.")
+    return agent.compagnie
+
+
+def _get_ticket_for_company(*, code_qr, company, lock=False):
+    tickets = BilletElectronique.objects.select_related(
+        "place__reservation__voyage__compagnie",
+        "place__reservation__voyage__ville_depart",
+        "place__reservation__voyage__ville_arrivee",
+        "place__reservation",
+    )
+    if lock:
+        tickets = tickets.select_for_update()
+    ticket = tickets.filter(
+        code_qr=code_qr,
+        place__reservation__voyage__compagnie=company,
+    ).first()
+    if ticket is None:
+        raise ValidationError({"code_qr": "Billet invalide ou hors périmètre."})
+    return ticket
+
+
+def _validate_boarding_ticket(ticket, now):
+    reservation = ticket.place.reservation
+    if reservation.statut != Reservation.Statut.PAYEE:
+        raise ValidationError({"code_qr": "Le billet n’est pas payé."})
+    if ticket.statut != BilletElectronique.Statut.VALIDE:
+        raise ValidationError({"code_qr": "Le billet est expiré ou invalide."})
+    if ticket.date_embarquement is not None:
+        raise ValidationError({"code_qr": "Ce billet a déjà été utilisé."})
+
+    voyage = reservation.voyage
+    departure = timezone.make_aware(
+        datetime.combine(voyage.date_depart, voyage.heure_depart),
+        timezone.get_current_timezone(),
+    )
+    if departure <= now:
+        raise ValidationError({"code_qr": "Le billet de ce voyage est expiré."})
+
+
+def scan_ticket(*, actor, code_qr, now=None):
+    company = _company_for_ticket_permission(
+        actor,
+        PermissionAgent.Code.SCANNER_BILLET,
+    )
+    ticket = _get_ticket_for_company(code_qr=code_qr, company=company)
+    _validate_boarding_ticket(ticket, now or timezone.now())
+    return ticket
+
+
+def validate_ticket_boarding(*, actor, code_qr, now=None):
+    company = _company_for_ticket_permission(
+        actor,
+        PermissionAgent.Code.SCANNER_BILLET,
+    )
+    _company_for_ticket_permission(
+        actor,
+        PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+    )
+    now = now or timezone.now()
+
+    with transaction.atomic():
+        ticket = _get_ticket_for_company(
+            code_qr=code_qr,
+            company=company,
+            lock=True,
+        )
+        _validate_boarding_ticket(ticket, now)
+        ticket.date_embarquement = now
+        ticket.embarque_par = actor
+        ticket.save(update_fields=("date_embarquement", "embarque_par"))
+        return ticket

@@ -21,29 +21,20 @@ class UtilisateurChangeForm(UserChangeForm):
 class UtilisateurAdmin(UserAdmin):
 	form = UtilisateurChangeForm
 	add_form = UtilisateurCreationForm
-	ordering = ("email",)
-	list_display = ("email", "nom", "prenoms", "role", "is_staff", "is_active")
+	ordering = ("id",)
+	list_display = ("id", "role", "is_active")
 	list_filter = ("role", "is_staff", "is_active")
-	search_fields = ("email", "nom", "prenoms")
-	fieldsets = (
-		(None, {"fields": ("email", "password")}),
-		(
-			"Informations personnelles",
-			{"fields": ("nom", "prenoms", "telephone", "photo_profil", "role")},
-		),
-		(
-			"Autorisations",
-			{"fields": ("is_active", "is_staff", "is_superuser", "groups", "user_permissions")},
-		),
-		("Dates importantes", {"fields": ("last_login",)}),
-	)
-	add_fieldsets = (
-		(
-			None,
-			{
-				"classes": ("wide",),
-				"fields": ("email", "nom", "prenoms", "role", "password1", "password2"),
-			},
-		),
-	)
-	filter_horizontal = ("groups", "user_permissions")
+	search_fields = ()
+	readonly_fields = ("id", "email", "role")
+
+	def get_fieldsets(self, request, obj=None):
+		fields = ("id", "role", "is_active")
+		if obj and obj.role != Utilisateur.Role.VOYAGEUR:
+			fields = ("id", "email", "role", "is_active")
+		return ((None, {"fields": fields}),)
+
+	def has_add_permission(self, request):
+		return False
+
+	def has_delete_permission(self, request, obj=None):
+		return False

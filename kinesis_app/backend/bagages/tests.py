@@ -14,6 +14,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
+from notifications.models import Notification
 from reservations.models import Reservation
 from reservations.services import create_reservation
 from voyages.models import Ville, Voyage
@@ -26,8 +27,6 @@ from .services import (
     return_baggage,
 )
 from .storage import AuthenticatedBagageStorage
-from .models import TarifBagage
-
 
 User = get_user_model()
 
@@ -123,6 +122,10 @@ class BagageServiceTests(TestCase):
         self.assertEqual(baggage.photos.count(), 1)
         self.assertFalse(baggage.frais_payes)
         self.assertEqual(_mock_save.call_count, 1)
+        self.assertEqual(
+            Notification.objects.filter(utilisateur=self.traveler).count(),
+            1,
+        )
 
         paid = record_manual_fee_payment(
             actor=self.company_user,
@@ -131,6 +134,10 @@ class BagageServiceTests(TestCase):
         self.assertTrue(paid.frais_payes)
         self.assertEqual(paid.paiement_enregistre_par, self.company_user)
         self.assertIsNotNone(paid.date_paiement_frais)
+        self.assertEqual(
+            Notification.objects.filter(utilisateur=self.traveler).count(),
+            2,
+        )
 
     @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
     def test_agent_requires_individual_permission_and_return_requires_paid_fees(
@@ -178,6 +185,10 @@ class BagageServiceTests(TestCase):
         returned = return_baggage(actor=agent_user, baggage_id=baggage.pk)
         self.assertEqual(returned.statut, Bagage.Statut.RESTITUE)
         self.assertEqual(returned.restitue_par, agent_user)
+        self.assertEqual(
+            Notification.objects.filter(utilisateur=self.traveler).count(),
+            3,
+        )
 
         with self.assertRaises(ValidationError):
             return_baggage(actor=agent_user, baggage_id=baggage.pk)
