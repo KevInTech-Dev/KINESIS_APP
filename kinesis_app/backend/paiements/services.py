@@ -1,12 +1,14 @@
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
+from django.db.models import Count
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
 from notifications.models import Notification
+from notifications.services import notify_company_and_agents
 from reservations.models import PlaceReservee, Reservation
 from reservations.services import RESERVATION_HOLD_DURATION, expire_overdue_reservations
 from utilisateurs.models import Utilisateur
@@ -141,6 +143,15 @@ def _reconcile_mismatched_fedapay_payment(*, payment, provider_transaction):
                 "doit être vérifié manuellement."
             ),
         )
+        notify_company_and_agents(
+            company=reservation.voyage.compagnie,
+            type=Notification.Type.PAIEMENT,
+            titre="Paiement à réconcilier",
+            message=(
+                f"Le paiement de la réservation {reservation.reference} est à "
+                "réconcilier manuellement."
+            ),
+        )
     return payment
 
 
@@ -237,6 +248,15 @@ def apply_verified_fedapay_event(
                     "manuellement."
                 ),
             )
+            notify_company_and_agents(
+                company=reservation.voyage.compagnie,
+                type=Notification.Type.PAIEMENT,
+                titre="Paiement à réconcilier",
+                message=(
+                    f"Le paiement de la réservation {reservation.reference} est "
+                    "confirmé, mais la réservation n’est plus valide."
+                ),
+            )
             return payment
 
         payment.cle_evenement_fournisseur = event_id
@@ -267,6 +287,20 @@ def apply_verified_fedapay_event(
             message=(
                 f"Votre réservation {reservation.reference} est confirmée. "
                 "Vos billets sont disponibles."
+            ),
+        )
+        notify_company_and_agents(
+            company=reservation.voyage.compagnie,
+            type=Notification.Type.RESERVATION,
+            titre="Nouvelle réservation payée",
+            message=(
+                f"La réservation {reservation.reference} est confirmée pour le "
+                f"voyage {reservation.voyage.ville_depart} - "
+                f"{reservation.voyage.ville_arrivee}."
+            ),
+            any_agent_permissions=(
+                PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                PermissionAgent.Code.CONSULTER_BAGAGES,
             ),
         )
         return payment
@@ -327,6 +361,15 @@ def sync_fedapay_transaction(*, payment, provider_transaction):
                 "cle_evenement_fournisseur",
                 "reponse_fournisseur",
             )
+        )
+        Notification.objects.create(
+            utilisateur=payment.reservation.voyageur,
+            type=Notification.Type.PAIEMENT,
+            titre="Paiement non confirmé",
+            message=(
+                f"Le paiement de la réservation {payment.reservation.reference} "
+                "n’a pas été confirmé. Vérifiez son statut avant de réessayer."
+            ),
         )
     return payment
 
@@ -438,6 +481,30 @@ def validate_ticket_boarding(*, actor, code_qr, now=None):
         ticket.embarque_par = actor
         ticket.statut = BilletElectronique.Statut.EMBARQUE
         ticket.save(update_fields=("statut", "date_embarquement", "embarque_par"))
+        reservation = ticket.place.reservation
+        Notification.objects.create(
+            utilisateur=reservation.voyageur,
+            type=Notification.Type.BILLET,
+            titre="Embarquement confirmé",
+            message=(
+                f"L’embarquement de {ticket.place.nom_passager} pour la "
+                f"réservation {reservation.reference} a été enregistré."
+            ),
+        )
+        notify_company_and_agents(
+            company=company,
+            type=Notification.Type.BILLET,
+            titre="Embarquement validé",
+            message=(
+                f"L’embarquement de {ticket.place.nom_passager} "
+                f"(réservation {reservation.reference}) a été validé."
+            ),
+            required_agent_permissions=(
+                PermissionAgent.Code.SCANNER_BILLET,
+                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            ),
+            exclude_user=actor,
+        )
         return ticket
 
 
@@ -480,9 +547,24 @@ def register_voyage_departure(*, actor, voyage_id, now=None):
             now=now,
             voyage_id=voyage.pk,
         )
+        notify_company_and_agents(
+            company=company,
+            type=Notification.Type.VOYAGE,
+            titre="Départ réel enregistré",
+            message=(
+                f"Le départ réel du voyage {voyage.ville_depart} - "
+                f"{voyage.ville_arrivee} a été enregistré."
+            ),
+            required_agent_permissions=(
+                PermissionAgent.Code.SCANNER_BILLET,
+                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            ),
+            exclude_user=actor,
+        )
         return voyage, expired_count
 
 
+@transaction.atomic
 def expire_unused_tickets_after_departure(*, now=None, voyage_id=None):
     now = now or timezone.now()
     tickets = BilletElectronique.objects.filter(
@@ -493,4 +575,23 @@ def expire_unused_tickets_after_departure(*, now=None, voyage_id=None):
     )
     if voyage_id is not None:
         tickets = tickets.filter(place__reservation__voyage_id=voyage_id)
-    return tickets.update(statut=BilletElectronique.Statut.NON_UTILISE)
+    affected_reservations = list(
+        tickets.values(
+            "place__reservation__voyageur_id",
+            "place__reservation__reference",
+        )
+        .annotate(ticket_count=Count("pk"))
+    )
+    updated_count = tickets.update(statut=BilletElectronique.Statut.NON_UTILISE)
+    for reservation in affected_reservations:
+        Notification.objects.create(
+            utilisateur_id=reservation["place__reservation__voyageur_id"],
+            type=Notification.Type.BILLET,
+            titre="Billet non utilisé",
+            message=(
+                f"{reservation['ticket_count']} billet(s) de la réservation "
+                f"{reservation['place__reservation__reference']} sont passés "
+                "à NON_UTILISE après le départ réel du bus."
+            ),
+        )
+    return updated_count

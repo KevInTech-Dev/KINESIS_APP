@@ -871,6 +871,26 @@ paths:
   /api/v1/notifications/:
     get:
       operationId: notifications_list
+      description: Liste paginée des notifications de l’utilisateur connecté. page_size
+        est limité à 100.
+      parameters:
+      - in: query
+        name: non_lues
+        schema:
+          type: boolean
+        description: Filtre les notifications non lues (true) ou lues (false).
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
       tags:
       - notifications
       security:
@@ -880,9 +900,7 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Notification'
+                $ref: '#/components/schemas/PaginatedNotificationList'
           description: ''
   /api/v1/notifications/{id}/lire/:
     post:
@@ -2202,6 +2220,29 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/BilletCompagnie'
+    PaginatedNotificationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
     PaginatedPaiementListList:
       type: object
       required:

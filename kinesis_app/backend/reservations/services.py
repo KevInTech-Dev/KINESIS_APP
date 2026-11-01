@@ -5,7 +5,9 @@ from django.db import transaction
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from compagnies.models import Compagnie
+from compagnies.models import Compagnie, PermissionAgent
+from notifications.models import Notification
+from notifications.services import notify_company_and_agents
 from voyages.models import Voyage
 
 from .models import PlaceReservee, Reservation
@@ -133,6 +135,15 @@ def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
                 for seat_number, passenger_name in zip(seat_numbers, passenger_names)
             ]
         )
+        Notification.objects.create(
+            utilisateur=voyageur,
+            type=Notification.Type.RESERVATION,
+            titre="Réservation créée",
+            message=(
+                f"Votre réservation {reservation.reference} est créée et attend "
+                "le paiement."
+            ),
+        )
         return reservation
 
 
@@ -166,4 +177,25 @@ def cancel_reservation(*, reservation_id, voyageur, now=None):
         reservation.statut = Reservation.Statut.ANNULEE
         reservation.save(update_fields=("statut",))
         reservation.places.filter(liberee=False).update(liberee=True)
+        message = (
+            f"La réservation {reservation.reference} du voyage "
+            f"{voyage.ville_depart} - {voyage.ville_arrivee} a été annulée."
+        )
+        Notification.objects.create(
+            utilisateur=voyageur,
+            type=Notification.Type.RESERVATION,
+            titre="Réservation annulée",
+            message=f"Votre réservation {reservation.reference} a été annulée.",
+        )
+        notify_company_and_agents(
+            company=voyage.compagnie,
+            type=Notification.Type.RESERVATION,
+            titre="Réservation annulée",
+            message=message,
+            any_agent_permissions=(
+                PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                PermissionAgent.Code.CONSULTER_BAGAGES,
+            ),
+            exclude_user=voyageur,
+        )
         return reservation

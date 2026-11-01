@@ -1,22 +1,56 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from config.pagination import StandardResultsSetPagination
+
 from .models import Notification
 from .serializers import NotificationSerializer
+
+
+class NotificationListFilterSerializer(serializers.Serializer):
+    non_lues = serializers.BooleanField(required=False)
 
 
 class NotificationListView(generics.ListAPIView):
     serializer_class = NotificationSerializer
     permission_classes = [IsAuthenticated]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return Notification.objects.filter(utilisateur=self.request.user)
+        queryset = Notification.objects.filter(utilisateur=self.request.user)
+        if "non_lues" in self.request.query_params:
+            filters = NotificationListFilterSerializer(
+                data={"non_lues": self.request.query_params["non_lues"]}
+            )
+            filters.is_valid(raise_exception=True)
+            if filters.validated_data["non_lues"]:
+                queryset = queryset.filter(date_lecture__isnull=True)
+            else:
+                queryset = queryset.filter(date_lecture__isnull=False)
+        return queryset
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="non_lues",
+                type=bool,
+                location=OpenApiParameter.QUERY,
+                description="Filtre les notifications non lues (true) ou lues (false).",
+            )
+        ],
+        description=(
+            "Liste paginée des notifications de l’utilisateur connecté. "
+            "page_size est limité à 100."
+        ),
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
 
 
 class NotificationReadView(APIView):

@@ -131,7 +131,7 @@ class PaiementServiceTests(TestCase):
         self.assertEqual(BilletElectronique.objects.count(), 2)
         self.assertEqual(
             Notification.objects.filter(utilisateur=self.traveler).count(),
-            1,
+            2,
         )
 
     def test_wrong_amount_does_not_confirm_or_issue_tickets(self):
@@ -493,6 +493,71 @@ class PaiementApiTests(APITestCase):
             str(payment.pk),
         )
 
+    def test_confirmed_payment_notifies_company_and_baggage_agents(self):
+        baggage_agent_user = User.objects.create_user(
+            email="agent-bagage-paiement@example.com",
+            password=self.password,
+            nom="Agent bagage",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        baggage_agent = AgentCompagnie.objects.create(
+            utilisateur=baggage_agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=baggage_agent,
+            permission=PermissionAgent.Code.CONSULTER_BAGAGES,
+        )
+        boarding_agent_user = User.objects.create_user(
+            email="agent-embarquement-paiement@example.com",
+            password=self.password,
+            nom="Agent embarquement",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        boarding_agent = AgentCompagnie.objects.create(
+            utilisateur=boarding_agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=boarding_agent,
+            permission=PermissionAgent.Code.SCANNER_BILLET,
+        )
+
+        payment = start_payment_attempt(
+            reservation_id=self.reservation.pk,
+            voyageur=self.traveler,
+        )
+        payment.reference_fedapay = "99771"
+        payment.save(update_fields=("reference_fedapay",))
+        apply_verified_fedapay_event(
+            paiement_id=payment.pk,
+            reference_fedapay="99771",
+            event_id="transaction.approved:99771",
+            montant=payment.montant,
+            response_data={"id": 99771, "status": "approved"},
+        )
+
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.company_user,
+                titre="Nouvelle réservation payée",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=baggage_agent_user,
+                titre="Nouvelle réservation payée",
+            ).count(),
+            1,
+        )
+        self.assertFalse(
+            Notification.objects.filter(
+                utilisateur=boarding_agent_user,
+                titre="Nouvelle réservation payée",
+            ).exists()
+        )
+
     def test_agents_cannot_list_payments(self):
         agent_user = User.objects.create_user(
             email="agent-paiement@example.com",
@@ -822,7 +887,7 @@ class BilletBoardingApiTests(APITestCase):
             place_totale=1,
             prix="5000",
         )
-        traveler = User.objects.create_user(
+        self.traveler = User.objects.create_user(
             email="traveler@example.com",
             password="Secure-test-Password-42!",
             nom="Voyageur",
@@ -830,7 +895,7 @@ class BilletBoardingApiTests(APITestCase):
         )
         reservation = Reservation.objects.create(
             reference="RES-BOARDING-1",
-            voyageur=traveler,
+            voyageur=self.traveler,
             voyage=voyage,
             montant_total=5000,
             statut=Reservation.Statut.PAYEE,
@@ -933,6 +998,28 @@ class BilletBoardingApiTests(APITestCase):
             microsecond=0,
         )
         voyage.save(update_fields=("date_depart", "heure_depart"))
+        observing_agent_user = User.objects.create_user(
+            email="agent-observateur-embarquement@example.com",
+            password="Qx7!mR4#vN8p",
+            nom="Agent observateur",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        observing_agent = AgentCompagnie.objects.create(
+            utilisateur=observing_agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.bulk_create(
+            [
+                PermissionAgent(
+                    agent=observing_agent,
+                    permission=PermissionAgent.Code.SCANNER_BILLET,
+                ),
+                PermissionAgent(
+                    agent=observing_agent,
+                    permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                ),
+            ]
+        )
 
         response = self.client.post(
             reverse("billet-embarquement"),
@@ -946,6 +1033,27 @@ class BilletBoardingApiTests(APITestCase):
         self.assertIsNotNone(self.ticket.date_embarquement)
         self.assertEqual(self.ticket.embarque_par, self.agent_user)
         self.assertEqual(self.ticket.statut, BilletElectronique.Statut.EMBARQUE)
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.traveler,
+                titre="Embarquement confirmé",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.company.utilisateur,
+                titre="Embarquement validé",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=observing_agent_user,
+                titre="Embarquement validé",
+            ).count(),
+            1,
+        )
 
         duplicate_response = self.client.post(
             reverse("billet-embarquement"),
@@ -997,6 +1105,13 @@ class BilletBoardingApiTests(APITestCase):
         )
         self.ticket.refresh_from_db()
         self.assertEqual(self.ticket.statut, BilletElectronique.Statut.NON_UTILISE)
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.traveler,
+                titre="Billet non utilisé",
+            ).count(),
+            1,
+        )
 
         boarding_response = self.client.post(
             reverse("billet-embarquement"),

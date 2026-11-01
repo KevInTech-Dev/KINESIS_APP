@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -41,11 +42,75 @@ class NotificationApiTests(APITestCase):
         response = self.client.get(reverse("notification-list"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
         self.assertEqual(
-            response.data[0]["id_notification"],
+            response.data["results"][0]["id_notification"],
             str(self.notification.pk),
         )
+
+    def test_list_filters_unread_and_read_notifications(self):
+        self.notification.date_lecture = timezone.now()
+        self.notification.save(update_fields=("date_lecture",))
+        unread = Notification.objects.create(
+            utilisateur=self.user,
+            type=Notification.Type.BILLET,
+            titre="Billet embarqué",
+            message="Embarquement enregistré.",
+        )
+
+        unread_response = self.client.get(
+            reverse("notification-list"),
+            {"non_lues": "true"},
+        )
+        read_response = self.client.get(
+            reverse("notification-list"),
+            {"non_lues": "false"},
+        )
+
+        self.assertEqual(unread_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(unread_response.data["count"], 1)
+        self.assertEqual(
+            unread_response.data["results"][0]["id_notification"],
+            str(unread.pk),
+        )
+        self.assertEqual(read_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(read_response.data["count"], 1)
+        self.assertEqual(
+            read_response.data["results"][0]["id_notification"],
+            str(self.notification.pk),
+        )
+
+    def test_list_rejects_invalid_unread_filter(self):
+        response = self.client.get(
+            reverse("notification-list"),
+            {"non_lues": "maybe"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_list_uses_standard_pagination(self):
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    utilisateur=self.user,
+                    type=Notification.Type.VOYAGE,
+                    titre=f"Voyage modifié {index}",
+                    message="Mise à jour du voyage.",
+                )
+                for index in range(25)
+            ]
+        )
+
+        response = self.client.get(
+            reverse("notification-list"),
+            {"page_size": 5},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 26)
+        self.assertEqual(len(response.data["results"]), 5)
+        self.assertIsNotNone(response.data["next"])
 
     def test_user_can_mark_one_notification_as_read(self):
         response = self.client.post(

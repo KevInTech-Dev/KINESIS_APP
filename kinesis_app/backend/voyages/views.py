@@ -5,7 +5,9 @@ from rest_framework import generics
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 
+from compagnies.models import PermissionAgent
 from notifications.models import Notification
+from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
 
 from .models import Ville, Voyage
@@ -173,4 +175,17 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
                 )
                 for voyageur_id in voyageurs
             ]
+        )
+        notify_company_and_agents(
+            company=voyage.compagnie,
+            type=Notification.Type.VOYAGE,
+            titre=titre,
+            message=message,
+            any_agent_permissions=(
+                PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.SCANNER_BILLET,
+                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            ),
+            exclude_user=self.request.user,
         )

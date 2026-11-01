@@ -107,6 +107,21 @@ class BagageServiceTests(TestCase):
         self,
         _mock_save,
     ):
+        agent_user = User.objects.create_user(
+            email="agent-notifications-bagage@example.com",
+            password=self.password,
+            nom="Agent bagages",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.CONSULTER_BAGAGES,
+        )
+
         baggage = register_baggage(
             actor=self.company_user,
             reservation_id=self.reservation.pk,
@@ -124,6 +139,13 @@ class BagageServiceTests(TestCase):
         self.assertEqual(_mock_save.call_count, 1)
         self.assertEqual(
             Notification.objects.filter(utilisateur=self.traveler).count(),
+            2,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=agent_user,
+                titre="Bagage enregistré",
+            ).count(),
             1,
         )
 
@@ -136,7 +158,14 @@ class BagageServiceTests(TestCase):
         self.assertIsNotNone(paid.date_paiement_frais)
         self.assertEqual(
             Notification.objects.filter(utilisateur=self.traveler).count(),
-            2,
+            3,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=agent_user,
+                titre="Frais de bagage enregistrés",
+            ).count(),
+            1,
         )
 
     @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
@@ -187,7 +216,7 @@ class BagageServiceTests(TestCase):
         self.assertEqual(returned.restitue_par, agent_user)
         self.assertEqual(
             Notification.objects.filter(utilisateur=self.traveler).count(),
-            3,
+            4,
         )
 
         with self.assertRaises(ValidationError):

@@ -6,6 +6,7 @@ from rest_framework.exceptions import ValidationError
 
 from compagnies.models import Compagnie, PermissionAgent
 from notifications.models import Notification
+from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
 
 from .models import Bagage, TarifBagage
@@ -182,6 +183,20 @@ def register_baggage(
                 f"{reservation.reference}. Frais dus : {fee} FCFA."
             ),
         )
+        notify_company_and_agents(
+            company=company,
+            type=Notification.Type.BAGAGE,
+            titre="Bagage enregistré",
+            message=(
+                f"Un bagage de {weight} kg a été enregistré pour la réservation "
+                f"{reservation.reference}. Frais dus : {fee} FCFA."
+            ),
+            any_agent_permissions=(
+                PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                PermissionAgent.Code.CONSULTER_BAGAGES,
+            ),
+            exclude_user=actor,
+        )
         return baggage
 
 
@@ -216,6 +231,20 @@ def record_manual_fee_payment(*, actor, baggage_id):
                 f"{baggage.reservation.reference} a été enregistré."
             ),
         )
+        notify_company_and_agents(
+            company=company,
+            type=Notification.Type.BAGAGE,
+            titre="Frais de bagage enregistrés",
+            message=(
+                f"Les frais de {baggage.frais_total} FCFA du bagage de la "
+                f"réservation {baggage.reservation.reference} ont été enregistrés."
+            ),
+            any_agent_permissions=(
+                PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                PermissionAgent.Code.CONSULTER_BAGAGES,
+            ),
+            exclude_user=actor,
+        )
         return baggage
 
 
@@ -247,5 +276,19 @@ def return_baggage(*, actor, baggage_id):
                 f"Le bagage de la réservation {baggage.reservation.reference} "
                 "a été marqué comme restitué."
             ),
+        )
+        notify_company_and_agents(
+            company=company,
+            type=Notification.Type.BAGAGE,
+            titre="Bagage restitué",
+            message=(
+                f"Le bagage de la réservation {baggage.reservation.reference} "
+                "a été marqué comme restitué."
+            ),
+            any_agent_permissions=(
+                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.RESTITUER_BAGAGE,
+            ),
+            exclude_user=actor,
         )
         return baggage

@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
+from notifications.models import Notification
 from voyages.models import Ville, Voyage
 
 from .models import PlaceReservee, Reservation
@@ -82,6 +83,9 @@ class ReservationApiTests(APITestCase):
             reservation.date_expiration
             <= timezone.now() + timedelta(minutes=10, seconds=2)
         )
+        notification = Notification.objects.get(utilisateur=self.traveler)
+        self.assertEqual(notification.type, Notification.Type.RESERVATION)
+        self.assertEqual(notification.titre, "Réservation créée")
 
     def test_three_passengers_get_three_seats_and_three_fares(self):
         self.voyage.place_totale = 3
@@ -183,6 +187,20 @@ class ReservationApiTests(APITestCase):
         self.assertEqual(Reservation.objects.count(), 1)
 
     def test_cancellation_releases_the_seat(self):
+        agent_user = User.objects.create_user(
+            email="agent-reservation-notif@example.com",
+            password=self.password,
+            nom="Agent",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+        )
         response = self.reserve(["Jane Doe"])
         reservation_id = response.data["id_reservation"]
 
@@ -195,6 +213,27 @@ class ReservationApiTests(APITestCase):
             Reservation.Statut.ANNULEE,
         )
         self.assertTrue(Reservation.objects.get(pk=reservation_id).places.get().liberee)
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.traveler,
+                titre="Réservation annulée",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=self.company_user,
+                titre="Réservation annulée",
+            ).count(),
+            1,
+        )
+        self.assertEqual(
+            Notification.objects.filter(
+                utilisateur=agent_user,
+                titre="Réservation annulée",
+            ).count(),
+            1,
+        )
 
         new_response = self.reserve(["John Doe"])
         new_reservation = Reservation.objects.get(pk=new_response.data["id_reservation"])
