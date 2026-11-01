@@ -66,8 +66,9 @@ def _resource_from_response(response_data, resource_name):
     resource = response_data
     if isinstance(resource.get("data"), dict):
         resource = resource["data"]
-    if isinstance(resource.get(resource_name), dict):
-        resource = resource[resource_name]
+    for key in (resource_name, f"v1/{resource_name}"):
+        if isinstance(resource.get(key), dict):
+            return resource[key]
     return resource
 
 

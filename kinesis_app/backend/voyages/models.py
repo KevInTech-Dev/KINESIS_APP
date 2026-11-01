@@ -61,6 +61,14 @@ class Voyage(models.Model):
     )
     date_depart = models.DateField()
     heure_depart = models.TimeField()
+    date_depart_effective = models.DateTimeField(null=True, blank=True)
+    depart_effectue_par = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="voyages_declares_partis",
+    )
     place_totale = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     prix = models.DecimalField(
         max_digits=12,

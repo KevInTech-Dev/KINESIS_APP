@@ -1,0 +1,3026 @@
+openapi: 3.0.3
+info:
+  title: KINESIS API
+  version: 1.0.0
+  description: API de réservation de voyages et de gestion des bagages.
+paths:
+  /api/v1/auth/change-password/:
+    post:
+      operationId: auth_change_password_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChangeRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/auth/logout/:
+    post:
+      operationId: auth_logout_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/LogoutRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '205':
+          description: No response body
+  /api/v1/auth/me/:
+    get:
+      operationId: auth_me_retrieve
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+    put:
+      operationId: auth_me_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserProfileRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+    patch:
+      operationId: auth_me_partial_update
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserProfileRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserProfile'
+          description: ''
+  /api/v1/auth/register/:
+    post:
+      operationId: auth_register_create
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserRegistrationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/UserRegistrationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/UserRegistrationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserRegistration'
+          description: ''
+  /api/v1/auth/token/:
+    post:
+      operationId: auth_token_create
+      description: |-
+        Takes a set of user credentials and returns an access and refresh JSON web
+        token pair to prove the authentication of those credentials.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenObtainPairRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenObtainPair'
+          description: ''
+  /api/v1/auth/token/refresh/:
+    post:
+      operationId: auth_token_refresh_create
+      description: |-
+        Takes a refresh type JSON web token and returns an access type JSON web
+        token if the refresh token is valid.
+      tags:
+      - auth
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefreshRequest'
+        required: true
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenRefresh'
+          description: ''
+  /api/v1/auth/users/:
+    get:
+      operationId: auth_users_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
+      - in: query
+        name: role
+        schema:
+          type: string
+          enum:
+          - ADMINISTRATEUR
+          - AGENT_COMPAGNIE
+          - COMPAGNIE
+          - VOYAGEUR
+        description: 'Filtrer par rôle : VOYAGEUR, COMPAGNIE, AGENT_COMPAGNIE ou ADMINISTRATEUR.'
+      tags:
+      - auth
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAdminUserListList'
+          description: ''
+  /api/v1/bagages/:
+    get:
+      operationId: bagages_list
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bagage'
+          description: ''
+    post:
+      operationId: bagages_create
+      tags:
+      - bagages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BagageCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BagageCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BagageCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BagageCreate'
+          description: ''
+  /api/v1/bagages/{id}/:
+    get:
+      operationId: bagages_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bagage'
+          description: ''
+  /api/v1/bagages/{id}/paiement-frais/:
+    post:
+      operationId: bagages_paiement_frais_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bagage'
+          description: ''
+  /api/v1/bagages/{id}/restitution/:
+    post:
+      operationId: bagages_restitution_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bagage'
+          description: ''
+  /api/v1/bagages/tarifs/:
+    get:
+      operationId: bagages_tarifs_list
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TarifBagage'
+          description: ''
+    post:
+      operationId: bagages_tarifs_create
+      tags:
+      - bagages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifBagage'
+          description: ''
+  /api/v1/bagages/tarifs/{id}/:
+    get:
+      operationId: bagages_tarifs_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifBagage'
+          description: ''
+    put:
+      operationId: bagages_tarifs_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TarifBagageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifBagage'
+          description: ''
+    patch:
+      operationId: bagages_tarifs_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedTarifBagageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedTarifBagageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedTarifBagageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TarifBagage'
+          description: ''
+    delete:
+      operationId: bagages_tarifs_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - bagages
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/billets/:
+    get:
+      operationId: billets_list
+      description: Liste paginée des billets du voyageur connecté. Un agent de compagnie
+        ayant la permission VALIDER_EMBARQUEMENT voit uniquement les billets de sa
+        compagnie; le QR code secret n’est pas inclus dans cette liste.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
+      tags:
+      - billets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedBilletCompagnieList'
+          description: ''
+  /api/v1/billets/{id}/:
+    get:
+      operationId: billets_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BilletElectronique'
+          description: ''
+  /api/v1/billets/embarquement/:
+    post:
+      operationId: billets_embarquement_create
+      tags:
+      - billets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BilletScan'
+          description: ''
+  /api/v1/billets/scan/:
+    post:
+      operationId: billets_scan_create
+      tags:
+      - billets
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/BilletScanRequestRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BilletScan'
+          description: ''
+  /api/v1/billets/voyages/{voyage_id}/depart/:
+    post:
+      operationId: billets_voyages_depart_create
+      description: Enregistre le départ réel d’un voyage de la compagnie de l’agent.
+        Les billets encore VALIDE passent immédiatement à NON_UTILISE; ceux déjà EMBARQUE
+        restent EMBARQUE.
+      parameters:
+      - in: path
+        name: voyage_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - billets
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VoyageDepart'
+          description: ''
+  /api/v1/compagnies/activate/:
+    get:
+      operationId: compagnies_activate_retrieve
+      parameters:
+      - in: query
+        name: token
+        schema:
+          type: string
+        required: true
+      tags:
+      - compagnies
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyActivationResponse'
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyActivationError'
+          description: ''
+  /api/v1/compagnies/agents/:
+    get:
+      operationId: compagnies_agents_list
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
+      tags:
+      - compagnies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedAgentList'
+          description: ''
+    post:
+      operationId: compagnies_agents_create
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgentCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgentCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCreate'
+          description: ''
+  /api/v1/compagnies/agents/{id}/:
+    get:
+      operationId: compagnies_agents_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - compagnies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+          description: ''
+    put:
+      operationId: compagnies_agents_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/AgentUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/AgentUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentUpdate'
+          description: ''
+    patch:
+      operationId: compagnies_agents_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAgentUpdateRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAgentUpdateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAgentUpdateRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentUpdate'
+          description: ''
+    delete:
+      operationId: compagnies_agents_destroy
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - compagnies
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/compagnies/me/:
+    get:
+      operationId: compagnies_me_retrieve
+      tags:
+      - compagnies
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyProfile'
+          description: ''
+    put:
+      operationId: compagnies_me_update
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyProfileRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyProfile'
+          description: ''
+    patch:
+      operationId: compagnies_me_partial_update
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyProfileRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyProfileRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyProfileRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyProfile'
+          description: ''
+  /api/v1/compagnies/register/:
+    post:
+      operationId: compagnies_register_create
+      tags:
+      - compagnies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyRegistrationRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompanyRegistration'
+          description: ''
+  /api/v1/notifications/:
+    get:
+      operationId: notifications_list
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/{id}/lire/:
+    post:
+      operationId: notifications_lire_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Notification'
+          description: ''
+  /api/v1/notifications/lire-tout/:
+    post:
+      operationId: notifications_lire_tout_create
+      tags:
+      - notifications
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationsReadAllResponse'
+          description: ''
+  /api/v1/paiements/:
+    get:
+      operationId: paiements_list
+      description: Liste paginée des paiements du voyageur connecté ou des paiements
+        des voyages de la compagnie active connectée. Les agents n’y ont pas accès.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
+      tags:
+      - paiements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPaiementListList'
+          description: ''
+  /api/v1/paiements/{id_paiement}/:
+    get:
+      operationId: paiements_retrieve
+      parameters:
+      - in: path
+        name: id_paiement
+        schema:
+          type: string
+          format: uuid
+        description: Un(une) Chaîne UUID identifiant ce(cette) paiement.
+        required: true
+      tags:
+      - paiements
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Paiement'
+          description: ''
+  /api/v1/paiements/reservations/{reservation_id}/initier/:
+    post:
+      operationId: paiements_reservations_initier_create
+      description: Crée ou reprend une tentative de paiement pour une réservation
+        du voyageur connecté. La réponse inclut payment_url pour rediriger le voyageur
+        vers la page sécurisée FedaPay.
+      parameters:
+      - in: path
+        name: reservation_id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - paiements
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaiementCheckout'
+          description: ''
+  /api/v1/reservations/:
+    get:
+      operationId: reservations_list
+      description: 'Retourne les réservations paginées du voyageur connecté ou celles
+        des voyages de sa compagnie. Un agent ne peut les consulter que s’il a la
+        permission ENREGISTRER_BAGAGE ou CONSULTER_BAGAGES. Paramètres de pagination
+        : page et page_size (maximum 100).'
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: Un numéro de page de l'ensemble des résultats.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Nombre de résultats à retourner par page.
+        schema:
+          type: integer
+      tags:
+      - reservations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReservationList'
+          description: ''
+    post:
+      operationId: reservations_create
+      tags:
+      - reservations
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservationCreateRequest'
+            examples:
+              RéserverTroisPassagers:
+                value:
+                  voyage_id: 3004343b-b4a2-4225-9a9a-c972c25851e6
+                  passagers:
+                  - Jean
+                  - Kévin
+                  - Julien
+                summary: Réserver trois passagers
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ReservationCreateRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ReservationCreateRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservationCreate'
+          description: ''
+  /api/v1/reservations/{id}/:
+    get:
+      operationId: reservations_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reservations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/reservations/{id}/cancel/:
+    post:
+      operationId: reservations_cancel_create
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - reservations
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Reservation'
+          description: ''
+  /api/v1/schema/:
+    get:
+      operationId: schema_retrieve
+      description: |-
+        OpenApi3 schema for this API. Format can be selected via content negotiation.
+
+        - YAML: application/vnd.oai.openapi
+        - JSON: application/vnd.oai.openapi+json
+      parameters:
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - json
+          - yaml
+      - in: query
+        name: lang
+        schema:
+          type: string
+          enum:
+          - af
+          - ar
+          - ar-dz
+          - ast
+          - az
+          - be
+          - bg
+          - bn
+          - br
+          - bs
+          - ca
+          - ckb
+          - cs
+          - cy
+          - da
+          - de
+          - dsb
+          - el
+          - en
+          - en-au
+          - en-gb
+          - eo
+          - es
+          - es-ar
+          - es-co
+          - es-mx
+          - es-ni
+          - es-ve
+          - et
+          - eu
+          - fa
+          - fi
+          - fr
+          - fy
+          - ga
+          - gd
+          - gl
+          - he
+          - hi
+          - hr
+          - hsb
+          - hu
+          - hy
+          - ia
+          - id
+          - ig
+          - io
+          - is
+          - it
+          - ja
+          - ka
+          - kab
+          - kk
+          - km
+          - kn
+          - ko
+          - ky
+          - lb
+          - lt
+          - lv
+          - mk
+          - ml
+          - mn
+          - mr
+          - ms
+          - my
+          - nb
+          - ne
+          - nl
+          - nn
+          - os
+          - pa
+          - pl
+          - pt
+          - pt-br
+          - ro
+          - ru
+          - sk
+          - sl
+          - sq
+          - sr
+          - sr-latn
+          - sv
+          - sw
+          - ta
+          - te
+          - tg
+          - th
+          - tk
+          - tr
+          - tt
+          - udm
+          - ug
+          - uk
+          - ur
+          - uz
+          - vi
+          - zh-hans
+          - zh-hant
+      tags:
+      - schema
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/vnd.oai.openapi:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/yaml:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/vnd.oai.openapi+json:
+              schema:
+                type: object
+                additionalProperties: {}
+            application/json:
+              schema:
+                type: object
+                additionalProperties: {}
+          description: ''
+  /api/v1/villes/:
+    get:
+      operationId: villes_list
+      tags:
+      - villes
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Ville'
+          description: ''
+  /api/v1/voyages/:
+    get:
+      operationId: voyages_list
+      tags:
+      - voyages
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Voyage'
+          description: ''
+    post:
+      operationId: voyages_create
+      tags:
+      - voyages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+          description: ''
+  /api/v1/voyages/{id}/:
+    get:
+      operationId: voyages_retrieve
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - voyages
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+          description: ''
+    put:
+      operationId: voyages_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - voyages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/VoyageRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+          description: ''
+    patch:
+      operationId: voyages_partial_update
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+          format: uuid
+        required: true
+      tags:
+      - voyages
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVoyageRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVoyageRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVoyageRequest'
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Voyage'
+          description: ''
+components:
+  schemas:
+    AdminAgentSummary:
+      type: object
+      properties:
+        compagnie_id:
+          type: string
+          format: uuid
+          readOnly: true
+        compagnie_nom:
+          type: string
+          readOnly: true
+          nullable: true
+      required:
+      - compagnie_id
+      - compagnie_nom
+    AdminCompanySummary:
+      type: object
+      properties:
+        raison_sociale:
+          type: string
+          nullable: true
+          maxLength: 150
+        nom_commercial:
+          type: string
+          nullable: true
+          maxLength: 150
+        nif:
+          nullable: true
+          oneOf:
+          - type: string
+            pattern: ^[0-9]{1,10}$
+            maxLength: 10
+          - type: string
+            maxLength: 0
+        rccm:
+          nullable: true
+          oneOf:
+          - type: string
+            pattern: ^TG-[A-Za-z0-9-]+$
+            maxLength: 50
+          - type: string
+            maxLength: 0
+        telephone_principal:
+          type: string
+          readOnly: true
+        telephone_secondaire:
+          type: string
+          maxLength: 30
+        statut:
+          $ref: '#/components/schemas/Statut639Enum'
+      required:
+      - telephone_principal
+    AdminUserList:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        nom:
+          type: string
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        role:
+          $ref: '#/components/schemas/RoleEnum'
+        is_active:
+          type: boolean
+        must_change_password:
+          type: boolean
+        compagnie:
+          allOf:
+          - $ref: '#/components/schemas/AdminCompanySummary'
+          readOnly: true
+          nullable: true
+        agent:
+          allOf:
+          - $ref: '#/components/schemas/AdminAgentSummary'
+          readOnly: true
+          nullable: true
+      required:
+      - agent
+      - compagnie
+      - email
+      - id
+      - nom
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        nom:
+          type: string
+          readOnly: true
+        prenoms:
+          type: string
+          readOnly: true
+        telephone:
+          type: string
+          readOnly: true
+        permissions:
+          type: array
+          items:
+            type: string
+          readOnly: true
+      required:
+      - email
+      - id
+      - nom
+      - permissions
+      - prenoms
+      - telephone
+    AgentCreate:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        nom:
+          type: string
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionsEnum'
+      required:
+      - email
+      - nom
+      - permissions
+    AgentCreateRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        temporary_password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionsEnum'
+      required:
+      - email
+      - nom
+      - permissions
+      - temporary_password
+    AgentUpdate:
+      type: object
+      properties:
+        nom:
+          type: string
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionsEnum'
+    AgentUpdateRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionsEnum'
+    Bagage:
+      type: object
+      properties:
+        id_bagage:
+          type: string
+          format: uuid
+          readOnly: true
+        reservation:
+          type: string
+          format: uuid
+        reservation_reference:
+          type: string
+          readOnly: true
+        description:
+          type: string
+        poids:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        poids_min_applique:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+          nullable: true
+        poids_max_applique:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+          nullable: true
+        prix_tarif_applique:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+          nullable: true
+        tarif_special:
+          type: boolean
+        motif_tarif_special:
+          type: string
+          maxLength: 255
+        frais_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+        frais_payes:
+          type: boolean
+        date_paiement_frais:
+          type: string
+          format: date-time
+          nullable: true
+        statut:
+          $ref: '#/components/schemas/BagageStatutEnum'
+        date_restitution:
+          type: string
+          format: date-time
+          nullable: true
+        enregistre_par_email:
+          type: string
+          format: email
+          readOnly: true
+        restitue_par_email:
+          type: string
+          format: email
+          readOnly: true
+        date_creation:
+          type: string
+          format: date-time
+        photos:
+          type: array
+          items:
+            $ref: '#/components/schemas/PhotoBagage'
+          readOnly: true
+      required:
+      - enregistre_par_email
+      - id_bagage
+      - photos
+      - poids
+      - reservation
+      - reservation_reference
+      - restitue_par_email
+    BagageCreate:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        poids:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        description:
+          type: string
+        frais_special:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+        motif_tarif_special:
+          type: string
+      required:
+      - poids
+      - reservation_id
+    BagageCreateRequest:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+          format: uuid
+        poids:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        description:
+          type: string
+        frais_special:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+        motif_tarif_special:
+          type: string
+        photos:
+          type: array
+          items:
+            type: string
+            format: binary
+          writeOnly: true
+          minItems: 1
+      required:
+      - photos
+      - poids
+      - reservation_id
+    BagageStatutEnum:
+      enum:
+      - ENREGISTRE
+      - RESTITUE
+      type: string
+      description: |-
+        * `ENREGISTRE` - Enregistré
+        * `RESTITUE` - Restitué
+    BilletCompagnie:
+      type: object
+      properties:
+        id_billet:
+          type: string
+          format: uuid
+          readOnly: true
+        reservation_reference:
+          type: string
+          readOnly: true
+        nom_passager:
+          type: string
+          readOnly: true
+        numero_siege:
+          type: string
+          readOnly: true
+        voyage:
+          allOf:
+          - $ref: '#/components/schemas/Voyage'
+          readOnly: true
+        code_billet:
+          type: string
+          maxLength: 100
+        statut:
+          $ref: '#/components/schemas/StatutA71Enum'
+        date_creation:
+          type: string
+          format: date-time
+        date_embarquement:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id_billet
+      - nom_passager
+      - numero_siege
+      - reservation_reference
+      - voyage
+    BilletElectronique:
+      type: object
+      properties:
+        id_billet:
+          type: string
+          format: uuid
+          readOnly: true
+        reservation_reference:
+          type: string
+          readOnly: true
+        nom_passager:
+          type: string
+          readOnly: true
+        numero_siege:
+          type: string
+          readOnly: true
+        voyage:
+          allOf:
+          - $ref: '#/components/schemas/Voyage'
+          readOnly: true
+        code_billet:
+          type: string
+          maxLength: 100
+        code_qr:
+          type: string
+          maxLength: 255
+        statut:
+          $ref: '#/components/schemas/StatutA71Enum'
+        date_creation:
+          type: string
+          format: date-time
+        date_embarquement:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id_billet
+      - nom_passager
+      - numero_siege
+      - reservation_reference
+      - voyage
+    BilletScan:
+      type: object
+      properties:
+        id_billet:
+          type: string
+          format: uuid
+          readOnly: true
+        reservation_reference:
+          type: string
+          readOnly: true
+        nom_passager:
+          type: string
+          readOnly: true
+        numero_siege:
+          type: string
+          readOnly: true
+        voyage:
+          allOf:
+          - $ref: '#/components/schemas/BilletScanVoyage'
+          readOnly: true
+        code_billet:
+          type: string
+          maxLength: 100
+        statut:
+          $ref: '#/components/schemas/StatutA71Enum'
+        date_embarquement:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id_billet
+      - nom_passager
+      - numero_siege
+      - reservation_reference
+      - voyage
+    BilletScanRequestRequest:
+      type: object
+      properties:
+        code_qr:
+          type: string
+          minLength: 1
+          maxLength: 255
+      required:
+      - code_qr
+    BilletScanVoyage:
+      type: object
+      properties:
+        compagnie:
+          type: string
+        ville_depart:
+          type: string
+        ville_arrivee:
+          type: string
+        date_depart:
+          type: string
+          format: date
+        heure_depart:
+          type: string
+          format: time
+      required:
+      - compagnie
+      - date_depart
+      - heure_depart
+      - ville_arrivee
+      - ville_depart
+    CompanyActivationError:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    CompanyActivationResponse:
+      type: object
+      properties:
+        detail:
+          type: string
+      required:
+      - detail
+    CompanyProfile:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          readOnly: true
+        raison_sociale:
+          type: string
+          readOnly: true
+          nullable: true
+        nom_commercial:
+          type: string
+          readOnly: true
+          nullable: true
+        telephone:
+          type: string
+          readOnly: true
+        telephone_secondaire:
+          type: string
+          readOnly: true
+        nif:
+          type: string
+          readOnly: true
+          nullable: true
+        rccm:
+          type: string
+          readOnly: true
+          nullable: true
+        logo:
+          type: string
+          format: uri
+          nullable: true
+        description:
+          type: string
+        adresse:
+          type: string
+          maxLength: 255
+        statut:
+          allOf:
+          - $ref: '#/components/schemas/Statut639Enum'
+          readOnly: true
+      required:
+      - email
+      - nif
+      - nom_commercial
+      - raison_sociale
+      - rccm
+      - statut
+      - telephone
+      - telephone_secondaire
+    CompanyProfileRequest:
+      type: object
+      properties:
+        logo:
+          type: string
+          format: binary
+          nullable: true
+        description:
+          type: string
+        adresse:
+          type: string
+          maxLength: 255
+    CompanyRegistration:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        raison_sociale:
+          type: string
+          maxLength: 150
+        nom_commercial:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        telephone_secondaire:
+          type: string
+          maxLength: 30
+        nif:
+          type: string
+          maxLength: 10
+          pattern: ^[0-9]{1,10}$
+        rccm:
+          type: string
+          maxLength: 50
+        logo:
+          type: string
+          format: uri
+          nullable: true
+          description: Facultatif. Peut être omis lors de l’inscription.
+        carte_cfe:
+          type: string
+          format: uri
+        piece_identite_gerant:
+          type: string
+          format: uri
+        description:
+          type: string
+        adresse:
+          type: string
+          maxLength: 255
+      required:
+      - carte_cfe
+      - email
+      - nif
+      - nom_commercial
+      - piece_identite_gerant
+      - raison_sociale
+      - rccm
+      - telephone
+    CompanyRegistrationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        raison_sociale:
+          type: string
+          minLength: 1
+          maxLength: 150
+        nom_commercial:
+          type: string
+          minLength: 1
+          maxLength: 150
+        telephone:
+          type: string
+          minLength: 1
+          maxLength: 30
+        telephone_secondaire:
+          type: string
+          maxLength: 30
+        nif:
+          type: string
+          minLength: 1
+          maxLength: 10
+          pattern: ^[0-9]{1,10}$
+        rccm:
+          type: string
+          minLength: 1
+          maxLength: 50
+        logo:
+          type: string
+          format: binary
+          nullable: true
+          description: Facultatif. Peut être omis lors de l’inscription.
+        carte_cfe:
+          type: string
+          format: binary
+        piece_identite_gerant:
+          type: string
+          format: binary
+        description:
+          type: string
+        adresse:
+          type: string
+          maxLength: 255
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password_confirmation:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - carte_cfe
+      - email
+      - nif
+      - nom_commercial
+      - password
+      - password_confirmation
+      - piece_identite_gerant
+      - raison_sociale
+      - rccm
+      - telephone
+    LogoutRequestRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    Notification:
+      type: object
+      properties:
+        id_notification:
+          type: string
+          format: uuid
+          readOnly: true
+        type:
+          allOf:
+          - $ref: '#/components/schemas/TypeEnum'
+          readOnly: true
+        titre:
+          type: string
+          readOnly: true
+        message:
+          type: string
+          readOnly: true
+        lue:
+          type: boolean
+          readOnly: true
+        date_lecture:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        date_creation:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - date_creation
+      - date_lecture
+      - id_notification
+      - lue
+      - message
+      - titre
+      - type
+    NotificationsReadAllResponse:
+      type: object
+      properties:
+        updated:
+          type: integer
+      required:
+      - updated
+    PaginatedAdminUserListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUserList'
+    PaginatedAgentList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Agent'
+    PaginatedBilletCompagnieList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/BilletCompagnie'
+    PaginatedPaiementListList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/PaiementList'
+    PaginatedReservationList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Reservation'
+    Paiement:
+      type: object
+      properties:
+        id_paiement:
+          type: string
+          format: uuid
+          readOnly: true
+        reference_interne:
+          type: string
+          maxLength: 64
+        montant:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        statut:
+          $ref: '#/components/schemas/StatutEc9Enum'
+        date_creation:
+          type: string
+          format: date-time
+        date_confirmation:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - id_paiement
+      - montant
+    PaiementCheckout:
+      type: object
+      properties:
+        id_paiement:
+          type: string
+          format: uuid
+        reference_interne:
+          type: string
+        montant:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        statut:
+          $ref: '#/components/schemas/StatutEc9Enum'
+        date_creation:
+          type: string
+          format: date-time
+        date_confirmation:
+          type: string
+          format: date-time
+          nullable: true
+        payment_url:
+          type: string
+          format: uri
+      required:
+      - date_confirmation
+      - date_creation
+      - id_paiement
+      - montant
+      - payment_url
+      - reference_interne
+      - statut
+    PaiementList:
+      type: object
+      properties:
+        id_paiement:
+          type: string
+          format: uuid
+          readOnly: true
+        reference_interne:
+          type: string
+          maxLength: 64
+        montant:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        statut:
+          $ref: '#/components/schemas/StatutEc9Enum'
+        date_creation:
+          type: string
+          format: date-time
+        date_confirmation:
+          type: string
+          format: date-time
+          nullable: true
+        reservation_reference:
+          type: string
+          readOnly: true
+        id_voyage:
+          type: string
+          format: uuid
+          readOnly: true
+        ville_depart_nom:
+          type: string
+          readOnly: true
+        ville_arrivee_nom:
+          type: string
+          readOnly: true
+        date_depart:
+          type: string
+          format: date
+          readOnly: true
+      required:
+      - date_depart
+      - id_paiement
+      - id_voyage
+      - montant
+      - reservation_reference
+      - ville_arrivee_nom
+      - ville_depart_nom
+    PasswordChangeRequestRequest:
+      type: object
+      properties:
+        old_password:
+          type: string
+          minLength: 1
+          description: Pour un agent, utiliser le mot de passe temporaire remis par
+            sa compagnie.
+        new_password:
+          type: string
+          minLength: 1
+        password_confirmation:
+          type: string
+          minLength: 1
+      required:
+      - new_password
+      - old_password
+      - password_confirmation
+    PatchedAgentUpdateRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        is_active:
+          type: boolean
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/PermissionsEnum'
+    PatchedCompanyProfileRequest:
+      type: object
+      properties:
+        logo:
+          type: string
+          format: binary
+          nullable: true
+        description:
+          type: string
+        adresse:
+          type: string
+          maxLength: 255
+    PatchedTarifBagageRequest:
+      type: object
+      properties:
+        poids_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        poids_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+    PatchedUserProfileRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        photo_profil:
+          type: string
+          format: binary
+          nullable: true
+    PatchedVoyageRequest:
+      type: object
+      properties:
+        ville_depart:
+          type: string
+          format: uuid
+        ville_arrivee:
+          type: string
+          format: uuid
+        date_depart:
+          type: string
+          format: date
+        heure_depart:
+          type: string
+          format: time
+        place_totale:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        image:
+          type: string
+          format: binary
+          nullable: true
+        statut:
+          $ref: '#/components/schemas/VoyageStatutEnum'
+    PermissionsEnum:
+      enum:
+      - ENREGISTRER_BAGAGE
+      - SCANNER_BILLET
+      - VALIDER_EMBARQUEMENT
+      - CONSULTER_BAGAGES
+      - RESTITUER_BAGAGE
+      type: string
+      description: |-
+        * `ENREGISTRER_BAGAGE` - Enregistrer un bagage
+        * `SCANNER_BILLET` - Scanner un billet
+        * `VALIDER_EMBARQUEMENT` - Valider un embarquement
+        * `CONSULTER_BAGAGES` - Consulter les bagages
+        * `RESTITUER_BAGAGE` - Restituer un bagage
+    PhotoBagage:
+      type: object
+      properties:
+        id_photobagage:
+          type: string
+          format: uuid
+          readOnly: true
+        url:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - id_photobagage
+      - url
+    PlaceReservee:
+      type: object
+      properties:
+        id_place:
+          type: string
+          format: uuid
+          readOnly: true
+        numero_siege:
+          type: string
+          maxLength: 30
+        nom_passager:
+          type: string
+          maxLength: 150
+      required:
+      - id_place
+      - nom_passager
+      - numero_siege
+    Reservation:
+      type: object
+      properties:
+        id_reservation:
+          type: string
+          format: uuid
+          readOnly: true
+        reference:
+          type: string
+          maxLength: 50
+        voyage:
+          allOf:
+          - $ref: '#/components/schemas/Voyage'
+          readOnly: true
+        date_reservation:
+          type: string
+          format: date-time
+        date_expiration:
+          type: string
+          format: date-time
+          nullable: true
+        montant_total:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        statut:
+          $ref: '#/components/schemas/ReservationStatutEnum'
+        places:
+          type: array
+          items:
+            $ref: '#/components/schemas/PlaceReservee'
+          readOnly: true
+      required:
+      - id_reservation
+      - montant_total
+      - places
+      - reference
+      - voyage
+    ReservationCreate:
+      type: object
+      properties:
+        voyage_id:
+          type: string
+          format: uuid
+        passagers:
+          type: array
+          items:
+            type: string
+            maxLength: 150
+          description: Un nom complet par élément du tableau. Pour trois passagers,
+            envoyer ["Jean", "Kévin", "Julien"], et non une seule valeur séparée par
+            des virgules.
+          minItems: 1
+      required:
+      - passagers
+      - voyage_id
+    ReservationCreateRequest:
+      type: object
+      properties:
+        voyage_id:
+          type: string
+          format: uuid
+        passagers:
+          type: array
+          items:
+            type: string
+            minLength: 1
+            maxLength: 150
+          description: Un nom complet par élément du tableau. Pour trois passagers,
+            envoyer ["Jean", "Kévin", "Julien"], et non une seule valeur séparée par
+            des virgules.
+          minItems: 1
+      required:
+      - passagers
+      - voyage_id
+    ReservationStatutEnum:
+      enum:
+      - EN_ATTENTE_PAIEMENT
+      - PAYEE
+      - EXPIREE
+      - ANNULEE
+      type: string
+      description: |-
+        * `EN_ATTENTE_PAIEMENT` - En attente de paiement
+        * `PAYEE` - Payée
+        * `EXPIREE` - Expirée
+        * `ANNULEE` - Annulée
+    RoleEnum:
+      enum:
+      - VOYAGEUR
+      - COMPAGNIE
+      - AGENT_COMPAGNIE
+      - ADMINISTRATEUR
+      type: string
+      description: |-
+        * `VOYAGEUR` - Voyageur
+        * `COMPAGNIE` - Compagnie
+        * `AGENT_COMPAGNIE` - Agent de compagnie
+        * `ADMINISTRATEUR` - Administrateur
+    Statut639Enum:
+      enum:
+      - EN_ATTENTE_VALIDATION
+      - EN_ATTENTE_ACTIVATION
+      - ACTIVE
+      - DESACTIVE
+      - REFUSEE
+      type: string
+      description: |-
+        * `EN_ATTENTE_VALIDATION` - En attente de validation
+        * `EN_ATTENTE_ACTIVATION` - En attente d’activation
+        * `ACTIVE` - Active
+        * `DESACTIVE` - Désactivée
+        * `REFUSEE` - Refusée
+    StatutA71Enum:
+      enum:
+      - VALIDE
+      - EMBARQUE
+      - NON_UTILISE
+      type: string
+      description: |-
+        * `VALIDE` - Valide
+        * `EMBARQUE` - Embarqué
+        * `NON_UTILISE` - Non utilisé
+    StatutEc9Enum:
+      enum:
+      - EN_ATTENTE
+      - CONFIRME
+      - REJETE
+      - ECHEC
+      - A_RECONCILIER
+      - REMBOURSE
+      type: string
+      description: |-
+        * `EN_ATTENTE` - En attente
+        * `CONFIRME` - Confirmé
+        * `REJETE` - Rejeté
+        * `ECHEC` - Échec
+        * `A_RECONCILIER` - À réconcilier
+        * `REMBOURSE` - Remboursé
+    TarifBagage:
+      type: object
+      properties:
+        id_tarif:
+          type: string
+          format: uuid
+          readOnly: true
+        poids_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        poids_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+      required:
+      - id_tarif
+      - poids_max
+      - poids_min
+      - prix
+    TarifBagageRequest:
+      type: object
+      properties:
+        poids_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        poids_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,7}(?:\.\d{0,0})?$
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,10}(?:\.\d{0,0})?$
+      required:
+      - poids_max
+      - poids_min
+      - prix
+    TokenObtainPair:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+    TokenObtainPairRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - password
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
+    TokenRefreshRequest:
+      type: object
+      properties:
+        refresh:
+          type: string
+          minLength: 1
+      required:
+      - refresh
+    TypeEnum:
+      enum:
+      - RESERVATION
+      - PAIEMENT
+      - BILLET
+      - VOYAGE
+      - BAGAGE
+      type: string
+      description: |-
+        * `RESERVATION` - Réservation
+        * `PAIEMENT` - Paiement
+        * `BILLET` - Billet
+        * `VOYAGE` - Voyage
+        * `BAGAGE` - Bagage
+    UserProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          readOnly: true
+        nom:
+          type: string
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        photo_profil:
+          type: string
+          format: uri
+          nullable: true
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+        must_change_password:
+          type: boolean
+          readOnly: true
+      required:
+      - email
+      - id
+      - must_change_password
+      - nom
+      - role
+    UserProfileRequest:
+      type: object
+      properties:
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        photo_profil:
+          type: string
+          format: binary
+          nullable: true
+      required:
+      - nom
+    UserRegistration:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        nom:
+          type: string
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        role:
+          allOf:
+          - $ref: '#/components/schemas/RoleEnum'
+          readOnly: true
+      required:
+      - email
+      - id
+      - nom
+      - role
+    UserRegistrationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+          maxLength: 254
+        nom:
+          type: string
+          minLength: 1
+          maxLength: 100
+        prenoms:
+          type: string
+          maxLength: 150
+        telephone:
+          type: string
+          maxLength: 30
+        password:
+          type: string
+          writeOnly: true
+          minLength: 1
+        password_confirmation:
+          type: string
+          writeOnly: true
+          minLength: 1
+      required:
+      - email
+      - nom
+      - password
+      - password_confirmation
+    Ville:
+      type: object
+      properties:
+        id_ville:
+          type: string
+          format: uuid
+          readOnly: true
+        nom:
+          type: string
+          maxLength: 120
+      required:
+      - id_ville
+      - nom
+    Voyage:
+      type: object
+      properties:
+        id_voyage:
+          type: string
+          format: uuid
+          readOnly: true
+        compagnie:
+          type: string
+          format: uuid
+          readOnly: true
+        compagnie_nom:
+          type: string
+          readOnly: true
+        ville_depart:
+          type: string
+          format: uuid
+        ville_depart_nom:
+          type: string
+          readOnly: true
+        ville_arrivee:
+          type: string
+          format: uuid
+        ville_arrivee_nom:
+          type: string
+          readOnly: true
+        date_depart:
+          type: string
+          format: date
+        heure_depart:
+          type: string
+          format: time
+        date_depart_effective:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        place_totale:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+        places_disponibles:
+          type: integer
+          readOnly: true
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        image:
+          type: string
+          format: uri
+          nullable: true
+        statut:
+          $ref: '#/components/schemas/VoyageStatutEnum'
+      required:
+      - compagnie
+      - compagnie_nom
+      - date_depart
+      - date_depart_effective
+      - heure_depart
+      - id_voyage
+      - place_totale
+      - places_disponibles
+      - prix
+      - ville_arrivee
+      - ville_arrivee_nom
+      - ville_depart
+      - ville_depart_nom
+    VoyageDepart:
+      type: object
+      properties:
+        id_voyage:
+          type: string
+          format: uuid
+        date_depart_effective:
+          type: string
+          format: date-time
+        depart_effectue_par:
+          type: string
+          format: uuid
+        billets_non_utilises:
+          type: integer
+      required:
+      - billets_non_utilises
+      - date_depart_effective
+      - depart_effectue_par
+      - id_voyage
+    VoyageRequest:
+      type: object
+      properties:
+        ville_depart:
+          type: string
+          format: uuid
+        ville_arrivee:
+          type: string
+          format: uuid
+        date_depart:
+          type: string
+          format: date
+        heure_depart:
+          type: string
+          format: time
+        place_totale:
+          type: integer
+          maximum: 9223372036854775807
+          minimum: 1
+          format: int64
+        prix:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,12}(?:\.\d{0,0})?$
+        image:
+          type: string
+          format: binary
+          nullable: true
+        statut:
+          $ref: '#/components/schemas/VoyageStatutEnum'
+      required:
+      - date_depart
+      - heure_depart
+      - place_totale
+      - prix
+      - ville_arrivee
+      - ville_depart
+    VoyageStatutEnum:
+      enum:
+      - PUBLIE
+      - ARCHIVE
+      - EXPIREE
+      - ANNULEE
+      type: string
+      description: |-
+        * `PUBLIE` - Publié
+        * `ARCHIVE` - Archivé
+        * `EXPIREE` - Expiré
+        * `ANNULEE` - Annulé
+  securitySchemes:
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

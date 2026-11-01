@@ -90,7 +90,8 @@ class Paiement(models.Model):
 class BilletElectronique(models.Model):
     class Statut(models.TextChoices):
         VALIDE = "VALIDE", "Valide"
-        EXPIRE = "EXPIRE", "Expiré"
+        EMBARQUE = "EMBARQUE", "Embarqué"
+        NON_UTILISE = "NON_UTILISE", "Non utilisé"
 
     id_billet = models.UUIDField(
         primary_key=True,

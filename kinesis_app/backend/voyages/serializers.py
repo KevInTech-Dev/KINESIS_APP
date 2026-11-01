@@ -42,13 +42,19 @@ class VoyageSerializer(serializers.ModelSerializer):
             "ville_arrivee_nom",
             "date_depart",
             "heure_depart",
+            "date_depart_effective",
             "place_totale",
             "places_disponibles",
             "prix",
             "image",
             "statut",
         )
-        read_only_fields = ("id_voyage", "compagnie", "compagnie_nom")
+        read_only_fields = (
+            "id_voyage",
+            "compagnie",
+            "compagnie_nom",
+            "date_depart_effective",
+        )
 
     def get_places_disponibles(self, obj) -> int:
         occupied = getattr(obj, "_places_occupees", None)
@@ -62,15 +68,21 @@ class VoyageSerializer(serializers.ModelSerializer):
                 reservation__statut="EN_ATTENTE_PAIEMENT",
                 reservation__date_expiration__gt=now,
             )
-            occupied = PlaceReservee.objects.filter(
-                voyage=obj,
-                liberee=False,
-            ).filter(active_holds).count()
+            occupied = (
+                PlaceReservee.objects.filter(
+                    voyage=obj,
+                    liberee=False,
+                )
+                .filter(active_holds)
+                .count()
+            )
         return max(obj.place_totale - occupied, 0)
 
     def validate_place_totale(self, value):
         if value <= 0:
-            raise serializers.ValidationError("La capacité doit être supérieure à zéro.")
+            raise serializers.ValidationError(
+                "La capacité doit être supérieure à zéro."
+            )
         if self.instance:
             from reservations.models import PlaceReservee
 
@@ -81,10 +93,14 @@ class VoyageSerializer(serializers.ModelSerializer):
                 reservation__statut="EN_ATTENTE_PAIEMENT",
                 reservation__date_expiration__gt=now,
             )
-            reserved = PlaceReservee.objects.filter(
-                voyage=self.instance,
-                liberee=False,
-            ).filter(active_holds).count()
+            reserved = (
+                PlaceReservee.objects.filter(
+                    voyage=self.instance,
+                    liberee=False,
+                )
+                .filter(active_holds)
+                .count()
+            )
             if value < reserved:
                 raise serializers.ValidationError(
                     "La capacité ne peut pas être inférieure aux places réservées."
@@ -102,12 +118,16 @@ class VoyageSerializer(serializers.ModelSerializer):
                 {"ville_arrivee": "La ville d’arrivée doit différer du départ."}
             )
 
-        date_depart = attrs.get("date_depart", getattr(self.instance, "date_depart", None))
+        date_depart = attrs.get(
+            "date_depart", getattr(self.instance, "date_depart", None)
+        )
         heure_depart = attrs.get(
             "heure_depart",
             getattr(self.instance, "heure_depart", None),
         )
-        statut = attrs.get("statut", getattr(self.instance, "statut", Voyage.Statut.PUBLIE))
+        statut = attrs.get(
+            "statut", getattr(self.instance, "statut", Voyage.Statut.PUBLIE)
+        )
         if date_depart and heure_depart and statut == Voyage.Statut.PUBLIE:
             depart_datetime = timezone.make_aware(
                 datetime.combine(date_depart, heure_depart),

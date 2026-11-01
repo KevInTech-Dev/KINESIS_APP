@@ -88,6 +88,7 @@ class ApiRouteSmokeTests(APITestCase):
             ("billet-detail", "get", {"pk": identifier}),
             ("billet-scan", "post", {}),
             ("billet-embarquement", "post", {}),
+            ("voyage-departure", "post", {"voyage_id": identifier}),
             ("tarif-bagage-list", "get", {}),
             ("tarif-bagage-detail", "get", {"pk": identifier}),
             ("bagage-list", "get", {}),
@@ -193,7 +194,9 @@ class AdminAndReservationSchemaTests(APITestCase):
 
     def test_admin_user_listing_documents_role_filter_and_pagination(self):
         operation = self.schema["paths"]["/api/v1/auth/users/"]["get"]
-        parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
+        parameters = {
+            parameter["name"]: parameter for parameter in operation["parameters"]
+        }
 
         self.assertIn("role", parameters)
         self.assertIn("page", parameters)

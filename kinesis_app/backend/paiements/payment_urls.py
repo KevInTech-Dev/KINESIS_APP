@@ -1,8 +1,14 @@
 from django.urls import path
 
-from .views import FedaPayWebhookView, PaiementAttemptView, PaiementDetailView
+from .views import (
+    FedaPayWebhookView,
+    PaiementAttemptView,
+    PaiementDetailView,
+    PaiementListView,
+)
 
 urlpatterns = [
+    path("", PaiementListView.as_view(), name="payment-list"),
     path(
         "reservations/<uuid:reservation_id>/initier/",
         PaiementAttemptView.as_view(),

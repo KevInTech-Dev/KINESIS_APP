@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
+from django.core.management import call_command
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -270,10 +271,11 @@ class PaiementApiTests(APITestCase):
             nom="Transport",
             role=User.Role.COMPAGNIE,
         )
-        company = Compagnie.objects.create(
+        self.company = Compagnie.objects.create(
             utilisateur=company_user,
             statut=Compagnie.Statut.ACTIVE,
         )
+        self.company_user = company_user
         self.traveler = User.objects.create_user(
             email="paiement-voyageur@example.com",
             password=self.password,
@@ -285,7 +287,7 @@ class PaiementApiTests(APITestCase):
         departure = Ville.objects.create(nom="Lome")
         arrival = Ville.objects.create(nom="Kara")
         voyage = Voyage.objects.create(
-            compagnie=company,
+            compagnie=self.company,
             ville_depart=departure,
             ville_arrivee=arrival,
             date_depart=timezone.localdate() + timedelta(days=2),
@@ -409,6 +411,101 @@ class PaiementApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
+    def test_payment_list_is_paginated_and_limited_to_traveler(self):
+        Paiement.objects.create(
+            reservation=self.reservation,
+            montant=self.reservation.montant_total,
+            statut=Paiement.Statut.CONFIRME,
+        )
+        Paiement.objects.create(
+            reservation=self.reservation,
+            montant=self.reservation.montant_total,
+            statut=Paiement.Statut.REJETE,
+        )
+        other_traveler = User.objects.create_user(
+            email="autre-paiement-voyageur@example.com",
+            password=self.password,
+            nom="Autre",
+            role=User.Role.VOYAGEUR,
+        )
+        other_reservation = create_reservation(
+            voyageur=other_traveler,
+            voyage_id=self.reservation.voyage_id,
+            passenger_names=["Autre passager"],
+        )
+        Paiement.objects.create(
+            reservation=other_reservation,
+            montant=other_reservation.montant_total,
+        )
+
+        response = self.client.get(reverse("payment-list"), {"page_size": 1})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertIsNotNone(response.data["next"])
+        self.assertEqual(
+            response.data["results"][0]["reservation_reference"],
+            self.reservation.reference,
+        )
+
+    def test_company_lists_only_payments_for_its_trips(self):
+        payment = Paiement.objects.create(
+            reservation=self.reservation,
+            montant=self.reservation.montant_total,
+        )
+        other_company_user = User.objects.create_user(
+            email="autre-compagnie-paiement@example.com",
+            password=self.password,
+            nom="Autre compagnie",
+            role=User.Role.COMPAGNIE,
+        )
+        other_company = Compagnie.objects.create(
+            utilisateur=other_company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        other_voyage = Voyage.objects.create(
+            compagnie=other_company,
+            ville_depart=self.reservation.voyage.ville_depart,
+            ville_arrivee=self.reservation.voyage.ville_arrivee,
+            date_depart=timezone.localdate() + timedelta(days=3),
+            heure_depart=time(10, 0),
+            place_totale=1,
+            prix="5000",
+        )
+        other_reservation = create_reservation(
+            voyageur=self.traveler,
+            voyage_id=other_voyage.pk,
+            passenger_names=["Jane Doe"],
+        )
+        Paiement.objects.create(
+            reservation=other_reservation,
+            montant=other_reservation.montant_total,
+        )
+        self.client.force_authenticate(user=self.company_user)
+
+        response = self.client.get(reverse("payment-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["id_paiement"],
+            str(payment.pk),
+        )
+
+    def test_agents_cannot_list_payments(self):
+        agent_user = User.objects.create_user(
+            email="agent-paiement@example.com",
+            password=self.password,
+            nom="Agent",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        self.client.force_authenticate(user=agent_user)
+
+        response = self.client.get(reverse("payment-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class FedaPayGatewayTests(TestCase):
     @override_settings(
@@ -457,9 +554,15 @@ class FedaPayGatewayTests(TestCase):
             reservation=reservation,
         )
         request_json.side_effect = [
-            {"data": {"id": 12345, "amount": 5000}},
+            {
+                "klass": "v1/transaction",
+                "v1/transaction": {"id": 12345, "amount": 5000},
+            },
             {"url": "https://checkout.fedapay.com/example"},
-            {"data": {"id": 12345, "status": "pending"}},
+            {
+                "klass": "v1/transaction",
+                "v1/transaction": {"id": 12345, "status": "pending"},
+            },
         ]
 
         transaction_id = create_transaction(payment)
@@ -753,11 +856,84 @@ class BilletBoardingApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["nom_passager"], "Passager Test")
+        self.assertEqual(response.data["statut"], BilletElectronique.Statut.VALIDE)
         self.assertNotIn("code_qr", response.data)
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.date_embarquement)
 
+    def test_agent_with_boarding_permission_lists_company_tickets_without_qr(self):
+        self.agent.permissions.filter(
+            permission=PermissionAgent.Code.SCANNER_BILLET
+        ).delete()
+        other_company_user = User.objects.create_user(
+            email="autre-compagnie-billets@example.com",
+            password="Qx7!mR4#vN8p",
+            nom="Autre compagnie",
+            role=User.Role.COMPAGNIE,
+        )
+        other_company = Compagnie.objects.create(
+            utilisateur=other_company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        other_voyage = Voyage.objects.create(
+            compagnie=other_company,
+            ville_depart=self.ticket.place.voyage.ville_depart,
+            ville_arrivee=self.ticket.place.voyage.ville_arrivee,
+            date_depart=timezone.localdate() + timedelta(days=3),
+            heure_depart=time(10, 0),
+            place_totale=1,
+            prix="5000",
+        )
+        other_traveler = User.objects.create_user(
+            email="autre-voyageur-billet@example.com",
+            password="Qx7!mR4#vN8p",
+            nom="Autre voyageur",
+        )
+        other_reservation = Reservation.objects.create(
+            reference="RES-OTHER-COMPANY",
+            voyageur=other_traveler,
+            voyage=other_voyage,
+            montant_total=5000,
+            statut=Reservation.Statut.PAYEE,
+        )
+        other_place = PlaceReservee.objects.create(
+            reservation=other_reservation,
+            voyage=other_voyage,
+            numero_siege="S001",
+            nom_passager="Autre passager",
+        )
+        BilletElectronique.objects.create(place=other_place)
+
+        response = self.client.get(reverse("billet-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(
+            response.data["results"][0]["id_billet"],
+            str(self.ticket.pk),
+        )
+        self.assertNotIn("code_qr", response.data["results"][0])
+
+    def test_agent_without_boarding_permission_cannot_list_tickets(self):
+        self.agent.permissions.filter(
+            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT
+        ).delete()
+
+        response = self.client.get(reverse("billet-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
     def test_boarding_is_audited_and_cannot_be_repeated(self):
+        departure = timezone.localtime() + timedelta(hours=1)
+        voyage = self.ticket.place.voyage
+        voyage.date_depart = departure.date()
+        voyage.heure_depart = departure.time().replace(
+            tzinfo=None,
+            second=0,
+            microsecond=0,
+        )
+        voyage.save(update_fields=("date_depart", "heure_depart"))
+
         response = self.client.post(
             reverse("billet-embarquement"),
             {"code_qr": self.ticket.code_qr},
@@ -765,9 +941,11 @@ class BilletBoardingApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["statut"], BilletElectronique.Statut.EMBARQUE)
         self.ticket.refresh_from_db()
         self.assertIsNotNone(self.ticket.date_embarquement)
         self.assertEqual(self.ticket.embarque_par, self.agent_user)
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.EMBARQUE)
 
         duplicate_response = self.client.post(
             reverse("billet-embarquement"),
@@ -775,6 +953,127 @@ class BilletBoardingApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(duplicate_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("déjà été utilisé", str(duplicate_response.data["code_qr"]))
+
+    def test_boarding_after_scheduled_time_is_allowed_until_actual_departure(self):
+        voyage = self.ticket.place.voyage
+        voyage.date_depart = timezone.localdate()
+        voyage.heure_depart = (
+            (timezone.localtime() - timedelta(hours=1))
+            .time()
+            .replace(tzinfo=None, second=0, microsecond=0)
+        )
+        voyage.save(update_fields=("date_depart", "heure_depart"))
+
+        response = self.client.post(
+            reverse("billet-embarquement"),
+            {"code_qr": self.ticket.code_qr},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["statut"], BilletElectronique.Statut.EMBARQUE)
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.EMBARQUE)
+
+    def test_registering_actual_departure_marks_remaining_tickets_unused(self):
+        voyage = self.ticket.place.voyage
+        voyage.date_depart = timezone.localdate()
+        voyage.save(update_fields=("date_depart",))
+        response = self.client.post(
+            reverse(
+                "voyage-departure",
+                kwargs={"voyage_id": self.ticket.place.voyage_id},
+            ),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["billets_non_utilises"], 1)
+        self.assertEqual(
+            response.data["depart_effectue_par"],
+            str(self.agent_user.pk),
+        )
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.NON_UTILISE)
+
+        boarding_response = self.client.post(
+            reverse("billet-embarquement"),
+            {"code_qr": self.ticket.code_qr},
+            format="json",
+        )
+        self.assertEqual(boarding_response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        repeated_response = self.client.post(
+            reverse(
+                "voyage-departure",
+                kwargs={"voyage_id": self.ticket.place.voyage_id},
+            ),
+            {},
+            format="json",
+        )
+        self.assertEqual(repeated_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(repeated_response.data["billets_non_utilises"], 0)
+
+    def test_registering_actual_departure_preserves_already_boarded_tickets(self):
+        voyage = self.ticket.place.voyage
+        voyage.date_depart = timezone.localdate()
+        voyage.save(update_fields=("date_depart",))
+        self.ticket.statut = BilletElectronique.Statut.EMBARQUE
+        self.ticket.date_embarquement = timezone.now()
+        self.ticket.embarque_par = self.agent_user
+        self.ticket.save(update_fields=("statut", "date_embarquement", "embarque_par"))
+        reservation = self.ticket.place.reservation
+        other_place = PlaceReservee.objects.create(
+            reservation=reservation,
+            voyage=self.ticket.place.voyage,
+            numero_siege="S002",
+            nom_passager="Passager non embarqué",
+        )
+        other_ticket = BilletElectronique.objects.create(place=other_place)
+
+        response = self.client.post(
+            reverse(
+                "voyage-departure",
+                kwargs={"voyage_id": self.ticket.place.voyage_id},
+            ),
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["billets_non_utilises"], 1)
+        self.ticket.refresh_from_db()
+        other_ticket.refresh_from_db()
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.EMBARQUE)
+        self.assertEqual(other_ticket.statut, BilletElectronique.Statut.NON_UTILISE)
+
+    def test_expiration_command_reconciles_tickets_after_actual_departure(self):
+        voyage = self.ticket.place.voyage
+        voyage.date_depart_effective = timezone.now() - timedelta(minutes=1)
+        voyage.save(update_fields=("date_depart_effective",))
+
+        call_command("expire_unused_tickets")
+
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.NON_UTILISE)
+
+    def test_boarding_is_rejected_before_departure_day(self):
+        response = self.client.post(
+            reverse("billet-embarquement"),
+            {"code_qr": self.ticket.code_qr},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn(
+            "n’est pas encore ouvert",
+            str(response.data["code_qr"]),
+        )
+        self.ticket.refresh_from_db()
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.VALIDE)
+        self.assertIsNone(self.ticket.date_embarquement)
 
     def test_scanning_permission_does_not_grant_boarding_permission(self):
         self.agent.permissions.filter(

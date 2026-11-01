@@ -19,6 +19,33 @@ def has_ticket_permission(user, permission):
     )
 
 
+def ticket_company_for_user(user):
+    if not user or not user.is_authenticated:
+        return None
+    try:
+        agent = user.profil_agent
+    except AgentCompagnie.DoesNotExist:
+        return None
+    if agent.compagnie.statut != Compagnie.Statut.ACTIVE:
+        return None
+    return agent.compagnie
+
+
+class CanListPayments(BasePermission):
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or not user.is_authenticated:
+            return False
+        if user.role == Utilisateur.Role.VOYAGEUR:
+            return True
+        if user.role != Utilisateur.Role.COMPAGNIE:
+            return False
+        try:
+            return user.profil_compagnie.statut == Compagnie.Statut.ACTIVE
+        except Compagnie.DoesNotExist:
+            return False
+
+
 class IsVoyageur(BasePermission):
     def has_permission(self, request, view):
         return (
@@ -41,6 +68,14 @@ class CanValidateBoarding(BasePermission):
             request.user,
             PermissionAgent.Code.SCANNER_BILLET,
         ) and has_ticket_permission(
+            request.user,
+            PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+        )
+
+
+class CanListBoardingTickets(BasePermission):
+    def has_permission(self, request, view):
+        return has_ticket_permission(
             request.user,
             PermissionAgent.Code.VALIDER_EMBARQUEMENT,
         )

@@ -1,4 +1,3 @@
-from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
@@ -11,6 +10,7 @@ from notifications.models import Notification
 from reservations.models import PlaceReservee, Reservation
 from reservations.services import RESERVATION_HOLD_DURATION, expire_overdue_reservations
 from utilisateurs.models import Utilisateur
+from voyages.models import Voyage
 
 from .fedapay import create_payment_link, create_transaction
 from .models import BilletElectronique, Paiement
@@ -379,31 +379,32 @@ def _get_ticket_for_company(*, code_qr, company, lock=False):
     return ticket
 
 
-def _validate_boarding_ticket(ticket, now):
+def _validate_boarding_ticket(ticket):
     reservation = ticket.place.reservation
     if reservation.statut != Reservation.Statut.PAYEE:
         raise ValidationError({"code_qr": "Le billet n’est pas payé."})
+    if ticket.statut == BilletElectronique.Statut.EMBARQUE:
+        raise ValidationError({"code_qr": "Ce billet a déjà été utilisé."})
+    if ticket.statut == BilletElectronique.Statut.NON_UTILISE:
+        raise ValidationError(
+            {"code_qr": "Ce billet n’a pas été utilisé avant le départ réel."}
+        )
     if ticket.statut != BilletElectronique.Statut.VALIDE:
         raise ValidationError({"code_qr": "Le billet est expiré ou invalide."})
     if ticket.date_embarquement is not None:
         raise ValidationError({"code_qr": "Ce billet a déjà été utilisé."})
 
-    voyage = reservation.voyage
-    departure = timezone.make_aware(
-        datetime.combine(voyage.date_depart, voyage.heure_depart),
-        timezone.get_current_timezone(),
-    )
-    if departure <= now:
-        raise ValidationError({"code_qr": "Le billet de ce voyage est expiré."})
+    if reservation.voyage.date_depart_effective is not None:
+        raise ValidationError({"code_qr": "Le voyage a déjà quitté la gare."})
 
 
-def scan_ticket(*, actor, code_qr, now=None):
+def scan_ticket(*, actor, code_qr):
     company = _company_for_ticket_permission(
         actor,
         PermissionAgent.Code.SCANNER_BILLET,
     )
     ticket = _get_ticket_for_company(code_qr=code_qr, company=company)
-    _validate_boarding_ticket(ticket, now or timezone.now())
+    _validate_boarding_ticket(ticket)
     return ticket
 
 
@@ -419,13 +420,77 @@ def validate_ticket_boarding(*, actor, code_qr, now=None):
     now = now or timezone.now()
 
     with transaction.atomic():
+        ticket = _get_ticket_for_company(code_qr=code_qr, company=company)
+        voyage = Voyage.objects.select_for_update().get(
+            pk=ticket.place.reservation.voyage_id,
+        )
         ticket = _get_ticket_for_company(
             code_qr=code_qr,
             company=company,
             lock=True,
         )
-        _validate_boarding_ticket(ticket, now)
+        _validate_boarding_ticket(ticket)
+        if timezone.localtime(now).date() < voyage.date_depart:
+            raise ValidationError(
+                {"code_qr": "L’embarquement n’est pas encore ouvert pour ce voyage."}
+            )
         ticket.date_embarquement = now
         ticket.embarque_par = actor
-        ticket.save(update_fields=("date_embarquement", "embarque_par"))
+        ticket.statut = BilletElectronique.Statut.EMBARQUE
+        ticket.save(update_fields=("statut", "date_embarquement", "embarque_par"))
         return ticket
+
+
+def register_voyage_departure(*, actor, voyage_id, now=None):
+    company = _company_for_ticket_permission(
+        actor,
+        PermissionAgent.Code.SCANNER_BILLET,
+    )
+    _company_for_ticket_permission(
+        actor,
+        PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+    )
+    now = now or timezone.now()
+
+    with transaction.atomic():
+        voyage = (
+            Voyage.objects.select_for_update()
+            .filter(pk=voyage_id, compagnie=company)
+            .first()
+        )
+        if voyage is None:
+            raise ValidationError({"voyage": "Voyage introuvable ou hors périmètre."})
+        if voyage.statut == Voyage.Statut.ANNULEE:
+            raise ValidationError(
+                {"voyage": "Un voyage annulé ne peut pas être déclaré parti."}
+            )
+        if voyage.date_depart_effective is not None:
+            return voyage, 0
+        if timezone.localtime(now).date() < voyage.date_depart:
+            raise ValidationError(
+                {
+                    "voyage": "Le départ réel ne peut pas être enregistré avant le jour prévu."
+                }
+            )
+
+        voyage.date_depart_effective = now
+        voyage.depart_effectue_par = actor
+        voyage.save(update_fields=("date_depart_effective", "depart_effectue_par"))
+        expired_count = expire_unused_tickets_after_departure(
+            now=now,
+            voyage_id=voyage.pk,
+        )
+        return voyage, expired_count
+
+
+def expire_unused_tickets_after_departure(*, now=None, voyage_id=None):
+    now = now or timezone.now()
+    tickets = BilletElectronique.objects.filter(
+        statut=BilletElectronique.Statut.VALIDE,
+        date_embarquement__isnull=True,
+        place__reservation__statut=Reservation.Statut.PAYEE,
+        place__reservation__voyage__date_depart_effective__lte=now,
+    )
+    if voyage_id is not None:
+        tickets = tickets.filter(place__reservation__voyage_id=voyage_id)
+    return tickets.update(statut=BilletElectronique.Statut.NON_UTILISE)
