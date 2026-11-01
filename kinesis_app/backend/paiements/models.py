@@ -25,6 +25,7 @@ class Paiement(models.Model):
         CONFIRME = "CONFIRME", "Confirmé"
         REJETE = "REJETE", "Rejeté"
         ECHEC = "ECHEC", "Échec"
+        A_RECONCILIER = "A_RECONCILIER", "À réconcilier"
         REMBOURSE = "REMBOURSE", "Remboursé"
 
     id_paiement = models.UUIDField(
@@ -42,7 +43,7 @@ class Paiement(models.Model):
         unique=True,
         default=generate_payment_reference,
     )
-    reference_paygate = models.CharField(
+    reference_fedapay = models.CharField(
         max_length=128,
         unique=True,
         null=True,

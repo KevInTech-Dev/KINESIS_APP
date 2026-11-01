@@ -4,11 +4,13 @@ from django.core.signing import BadSignature, SignatureExpired
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import generics, serializers
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework import generics, parsers, serializers
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
+
+from config.pagination import StandardResultsSetPagination
 
 from .models import AgentCompagnie, Compagnie
 from .permissions import IsActiveCompany
@@ -27,6 +29,7 @@ class CompanyRegistrationView(generics.CreateAPIView):
     queryset = Compagnie.objects.all()
     serializer_class = CompanyRegistrationSerializer
     permission_classes = [AllowAny]
+    parser_classes = (parsers.JSONParser, parsers.FormParser, parsers.MultiPartParser)
 
 
 class CompanyActivationView(APIView):
@@ -86,6 +89,7 @@ class CompanyActivationView(APIView):
 class MyCompanyView(generics.RetrieveUpdateAPIView):
     serializer_class = CompanyProfileSerializer
     permission_classes = [IsActiveCompany]
+    parser_classes = (parsers.JSONParser, parsers.FormParser, parsers.MultiPartParser)
 
     def get_object(self):
         return self.request.user.profil_compagnie
@@ -93,12 +97,14 @@ class MyCompanyView(generics.RetrieveUpdateAPIView):
 
 class AgentListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsActiveCompany]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         return (
             AgentCompagnie.objects.filter(compagnie=self.request.user.profil_compagnie)
             .select_related("utilisateur")
             .prefetch_related("permissions")
+            .order_by("utilisateur__email", "utilisateur_id")
         )
 
     def get_serializer_class(self):

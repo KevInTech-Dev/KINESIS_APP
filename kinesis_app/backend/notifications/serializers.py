@@ -4,6 +4,8 @@ from .models import Notification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
+    lue = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = Notification
         fields = (
@@ -12,6 +14,7 @@ class NotificationSerializer(serializers.ModelSerializer):
             "titre",
             "message",
             "lue",
+            "date_lecture",
             "date_creation",
         )
         read_only_fields = fields

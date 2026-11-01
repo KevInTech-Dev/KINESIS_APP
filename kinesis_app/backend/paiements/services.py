@@ -1,7 +1,9 @@
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.exceptions import PermissionDenied, ValidationError
 
 from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
@@ -10,6 +12,7 @@ from reservations.models import PlaceReservee, Reservation
 from reservations.services import RESERVATION_HOLD_DURATION, expire_overdue_reservations
 from utilisateurs.models import Utilisateur
 
+from .fedapay import create_payment_link, create_transaction
 from .models import BilletElectronique, Paiement
 
 
@@ -33,7 +36,9 @@ def start_payment_attempt(*, reservation_id, voyageur, now=None):
             raise ValidationError({"reservation": "Le délai de réservation a expiré."})
         if reservation.montant_total <= 0:
             raise ValidationError(
-                {"reservation": "Le montant doit être positif pour un paiement PayGate."}
+                {
+                    "reservation": "Le montant doit être positif pour un paiement FedaPay."
+                }
             )
 
         existing = Paiement.objects.filter(
@@ -52,71 +57,194 @@ def start_payment_attempt(*, reservation_id, voyageur, now=None):
         )
 
 
-def apply_verified_paygate_event(
+def create_fedapay_checkout(*, paiement_id):
+    with transaction.atomic():
+        payment = (
+            Paiement.objects.select_for_update()
+            .select_related("reservation__voyageur")
+            .get(pk=paiement_id)
+        )
+        if payment.statut != Paiement.Statut.EN_ATTENTE:
+            raise ValidationError({"paiement": "Ce paiement n’est plus en attente."})
+        if not payment.reference_fedapay:
+            payment.reference_fedapay = create_transaction(payment)
+            payment.save(update_fields=("reference_fedapay",))
+        transaction_id = payment.reference_fedapay
+
+    return payment, create_payment_link(transaction_id)
+
+
+def _sanitize_fedapay_response(provider_transaction):
+    allowed_fields = (
+        "id",
+        "reference",
+        "status",
+        "amount",
+        "currency_id",
+        "approved_at",
+        "canceled_at",
+        "declined_at",
+    )
+    return {
+        key: provider_transaction[key]
+        for key in allowed_fields
+        if key in provider_transaction
+    }
+
+
+def _reconcile_mismatched_fedapay_payment(*, payment, provider_transaction):
+    event_id = f"transaction.approved:{payment.reference_fedapay}"
+    confirmed_at = parse_datetime(provider_transaction.get("approved_at") or "")
+    confirmation_time = confirmed_at or timezone.now()
+    with transaction.atomic():
+        reservation = Reservation.objects.select_for_update().get(
+            paiements__pk=payment.pk,
+        )
+        payment = Paiement.objects.select_for_update().get(pk=payment.pk)
+        if payment.statut in (
+            Paiement.Statut.CONFIRME,
+            Paiement.Statut.A_RECONCILIER,
+        ):
+            return payment
+
+        if (
+            reservation.statut == Reservation.Statut.EN_ATTENTE_PAIEMENT
+            and reservation.date_expiration is not None
+            and confirmation_time >= reservation.date_expiration
+        ):
+            reservation.statut = Reservation.Statut.EXPIREE
+            reservation.save(update_fields=("statut",))
+            PlaceReservee.objects.filter(
+                reservation=reservation,
+                liberee=False,
+            ).update(liberee=True)
+
+        payment.statut = Paiement.Statut.A_RECONCILIER
+        payment.cle_evenement_fournisseur = event_id
+        payment.reponse_fournisseur = _sanitize_fedapay_response(provider_transaction)
+        payment.date_confirmation = confirmation_time
+        payment.save(
+            update_fields=(
+                "statut",
+                "cle_evenement_fournisseur",
+                "reponse_fournisseur",
+                "date_confirmation",
+            )
+        )
+        Notification.objects.create(
+            utilisateur=reservation.voyageur,
+            type=Notification.Type.PAIEMENT,
+            titre="Paiement à réconcilier",
+            message=(
+                f"FedaPay a confirmé un montant différent pour la réservation "
+                f"{reservation.reference}. Aucun billet n’a été émis. Le paiement "
+                "doit être vérifié manuellement."
+            ),
+        )
+    return payment
+
+
+def apply_verified_fedapay_event(
     *,
     paiement_id,
-    reference_paygate,
+    reference_fedapay,
     event_id,
     montant,
     response_data,
     confirmed_at=None,
 ):
-    """Apply provider data only after a PayGate adapter has authenticated it."""
-    if not reference_paygate or not event_id:
+    """Apply provider data only after its signature and transaction are verified."""
+    if not reference_fedapay or not event_id:
         raise ValidationError("La référence et l’identifiant d’événement sont requis.")
 
     with transaction.atomic():
-        payment_ref = Paiement.objects.filter(pk=paiement_id).values(
-            "reservation_id",
-            "reservation__voyage_id",
-        ).first()
-        if payment_ref is None:
-            raise ValidationError({"paiement": "Paiement introuvable."})
-
-        voyage_id = payment_ref["reservation__voyage_id"]
-        from voyages.models import Voyage
-
         reservation = Reservation.objects.select_for_update().get(
-            pk=payment_ref["reservation_id"]
+            paiements__pk=paiement_id,
         )
         payment = Paiement.objects.select_for_update().get(pk=paiement_id)
+        if payment.reference_fedapay != reference_fedapay:
+            raise ValidationError(
+                {"reference_fedapay": "La référence FedaPay ne correspond pas."}
+            )
 
         duplicate_event = Paiement.objects.filter(
             cle_evenement_fournisseur=event_id
         ).first()
         if duplicate_event:
-            if duplicate_event.pk == payment.pk and payment.statut == Paiement.Statut.CONFIRME:
+            if duplicate_event.pk == payment.pk and payment.statut in (
+                Paiement.Statut.CONFIRME,
+                Paiement.Statut.A_RECONCILIER,
+            ):
                 return payment
             raise ValidationError({"event_id": "Cet événement a déjà été traité."})
 
         if payment.statut == Paiement.Statut.CONFIRME:
             if (
-                payment.reference_paygate == reference_paygate
+                payment.reference_fedapay == reference_fedapay
                 and payment.montant == montant
             ):
                 return payment
             raise ValidationError({"paiement": "Ce paiement est déjà confirmé."})
-        if payment.statut != Paiement.Statut.EN_ATTENTE:
-            raise ValidationError({"paiement": "Ce paiement n’est plus en attente."})
-        if reservation.statut != Reservation.Statut.EN_ATTENTE_PAIEMENT:
-            raise ValidationError(
-                {"reservation": "La réservation n’attend plus un paiement."}
-            )
-        if reservation.date_expiration is None or reservation.date_expiration <= timezone.now():
-            raise ValidationError(
-                {"reservation": "La réservation a expiré; le paiement doit être réconcilié."}
-            )
         if payment.montant != montant:
             raise ValidationError({"montant": "Le montant confirmé ne correspond pas."})
 
-        payment.reference_paygate = reference_paygate
+        if payment.statut in (
+            Paiement.Statut.CONFIRME,
+            Paiement.Statut.A_RECONCILIER,
+        ):
+            return payment
+
+        now = timezone.now()
+        confirmation_time = confirmed_at or now
+        reservation_expired = (
+            reservation.date_expiration is None
+            or confirmation_time >= reservation.date_expiration
+            or reservation.statut != Reservation.Statut.EN_ATTENTE_PAIEMENT
+        )
+        if payment.statut != Paiement.Statut.EN_ATTENTE or reservation_expired:
+            if (
+                reservation.statut == Reservation.Statut.EN_ATTENTE_PAIEMENT
+                and reservation.date_expiration is not None
+                and confirmation_time >= reservation.date_expiration
+            ):
+                reservation.statut = Reservation.Statut.EXPIREE
+                reservation.save(update_fields=("statut",))
+                PlaceReservee.objects.filter(
+                    reservation=reservation,
+                    liberee=False,
+                ).update(liberee=True)
+
+            payment.statut = Paiement.Statut.A_RECONCILIER
+            payment.cle_evenement_fournisseur = event_id
+            payment.reponse_fournisseur = _sanitize_fedapay_response(response_data)
+            payment.date_confirmation = confirmation_time
+            payment.save(
+                update_fields=(
+                    "statut",
+                    "cle_evenement_fournisseur",
+                    "reponse_fournisseur",
+                    "date_confirmation",
+                )
+            )
+            Notification.objects.create(
+                utilisateur=reservation.voyageur,
+                type=Notification.Type.PAIEMENT,
+                titre="Paiement à réconcilier",
+                message=(
+                    f"FedaPay a confirmé le paiement de la réservation "
+                    f"{reservation.reference}, mais celle-ci n’est plus valide. "
+                    "Aucun billet n’a été émis. Le paiement doit être vérifié "
+                    "manuellement."
+                ),
+            )
+            return payment
+
         payment.cle_evenement_fournisseur = event_id
-        payment.reponse_fournisseur = response_data
-        payment.date_confirmation = confirmed_at or timezone.now()
+        payment.reponse_fournisseur = _sanitize_fedapay_response(response_data)
+        payment.date_confirmation = confirmation_time
         payment.statut = Paiement.Statut.CONFIRME
         payment.save(
             update_fields=(
-                "reference_paygate",
                 "cle_evenement_fournisseur",
                 "reponse_fournisseur",
                 "date_confirmation",
@@ -142,6 +270,75 @@ def apply_verified_paygate_event(
             ),
         )
         return payment
+
+
+def sync_fedapay_transaction(*, payment, provider_transaction):
+    if str(provider_transaction.get("id")) != payment.reference_fedapay:
+        raise ValidationError(
+            {"transaction": "La transaction FedaPay ne correspond pas au paiement."}
+        )
+
+    try:
+        amount = Decimal(str(provider_transaction["amount"]))
+    except (KeyError, InvalidOperation, TypeError, ValueError) as error:
+        raise ValidationError(
+            {"transaction": "Le montant de la transaction FedaPay est invalide."}
+        ) from error
+    status = provider_transaction.get("status")
+    if amount != payment.montant:
+        if status == "approved":
+            return _reconcile_mismatched_fedapay_payment(
+                payment=payment,
+                provider_transaction=provider_transaction,
+            )
+        raise ValidationError(
+            {"transaction": "Le montant confirmé ne correspond pas au paiement."}
+        )
+
+    if status not in ("approved", "declined", "canceled"):
+        return payment
+
+    event_id = f"transaction.{status}:{payment.reference_fedapay}"
+    if status == "approved":
+        confirmed_at = parse_datetime(
+            provider_transaction.get("approved_at") or "",
+        )
+        return apply_verified_fedapay_event(
+            paiement_id=payment.pk,
+            reference_fedapay=payment.reference_fedapay,
+            event_id=event_id,
+            montant=amount,
+            response_data=provider_transaction,
+            confirmed_at=confirmed_at,
+        )
+
+    with transaction.atomic():
+        payment = Paiement.objects.select_for_update().get(pk=payment.pk)
+        if payment.statut != Paiement.Statut.EN_ATTENTE:
+            return payment
+        payment.statut = (
+            Paiement.Statut.REJETE if status == "declined" else Paiement.Statut.ECHEC
+        )
+        payment.cle_evenement_fournisseur = event_id
+        payment.reponse_fournisseur = _sanitize_fedapay_response(provider_transaction)
+        payment.save(
+            update_fields=(
+                "statut",
+                "cle_evenement_fournisseur",
+                "reponse_fournisseur",
+            )
+        )
+    return payment
+
+
+def refresh_fedapay_payment(*, payment):
+    from .fedapay import retrieve_transaction
+
+    provider_transaction = retrieve_transaction(payment.reference_fedapay)
+    return sync_fedapay_transaction(
+        payment=payment,
+        provider_transaction=provider_transaction,
+    )
 
 
 def _company_for_ticket_permission(actor, permission):

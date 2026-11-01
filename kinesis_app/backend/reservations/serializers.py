@@ -35,6 +35,11 @@ class ReservationCreateSerializer(serializers.Serializer):
     passagers = serializers.ListField(
         child=serializers.CharField(max_length=150, trim_whitespace=True),
         min_length=1,
+        help_text=(
+            "Un nom complet par élément du tableau. Pour trois passagers, "
+            "envoyer [\"Jean\", \"Kévin\", \"Julien\"], et non une seule "
+            "valeur séparée par des virgules."
+        ),
     )
 
     def validate_passagers(self, value):

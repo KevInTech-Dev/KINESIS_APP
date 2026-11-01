@@ -2,7 +2,30 @@ from rest_framework import serializers
 
 from voyages.serializers import VoyageSerializer
 
-from .models import BilletElectronique
+from .models import BilletElectronique, Paiement
+
+
+class PaiementSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Paiement
+        fields = (
+            "id_paiement",
+            "reference_interne",
+            "montant",
+            "statut",
+            "date_creation",
+            "date_confirmation",
+        )
+
+
+class PaiementCheckoutSerializer(serializers.Serializer):
+    id_paiement = serializers.UUIDField()
+    reference_interne = serializers.CharField()
+    montant = serializers.DecimalField(max_digits=12, decimal_places=0)
+    statut = serializers.ChoiceField(choices=Paiement.Statut.choices)
+    date_creation = serializers.DateTimeField()
+    date_confirmation = serializers.DateTimeField(allow_null=True)
+    payment_url = serializers.URLField()
 
 
 class BilletElectroniqueSerializer(serializers.ModelSerializer):

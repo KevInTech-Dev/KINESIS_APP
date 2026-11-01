@@ -26,17 +26,21 @@ class Notification(models.Model):
     type = models.CharField(max_length=20, choices=Type.choices)
     titre = models.CharField(max_length=120)
     message = models.TextField()
-    lue = models.BooleanField(default=False)
+    date_lecture = models.DateTimeField(null=True, blank=True)
     date_creation = models.DateTimeField(default=timezone.now)
 
     class Meta:
         ordering = ("-date_creation",)
         indexes = [
             models.Index(
-                fields=("utilisateur", "lue", "date_creation"),
+                fields=("utilisateur", "date_lecture", "date_creation"),
                 name="notif_user_read_date_idx",
             ),
         ]
+
+    @property
+    def lue(self):
+        return self.date_lecture is not None
 
     def __str__(self):
         return f"{self.titre} - utilisateur {self.utilisateur_id}"

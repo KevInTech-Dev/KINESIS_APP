@@ -1,12 +1,75 @@
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
+from compagnies.models import AgentCompagnie, Compagnie
+
 from .models import Utilisateur
+
+
+class AdminCompanySummarySerializer(serializers.ModelSerializer):
+    telephone_principal = serializers.CharField(
+        source="utilisateur.telephone",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Compagnie
+        fields = (
+            "raison_sociale",
+            "nom_commercial",
+            "nif",
+            "rccm",
+            "telephone_principal",
+            "telephone_secondaire",
+            "statut",
+        )
+
+
+class AdminAgentSummarySerializer(serializers.ModelSerializer):
+    compagnie_id = serializers.UUIDField(read_only=True)
+    compagnie_nom = serializers.CharField(
+        source="compagnie.nom_commercial",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = AgentCompagnie
+        fields = ("compagnie_id", "compagnie_nom")
+
+
+class AdminUserListSerializer(serializers.ModelSerializer):
+    compagnie = AdminCompanySummarySerializer(
+        source="profil_compagnie",
+        read_only=True,
+        allow_null=True,
+    )
+    agent = AdminAgentSummarySerializer(
+        source="profil_agent",
+        read_only=True,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = Utilisateur
+        fields = (
+            "id",
+            "email",
+            "nom",
+            "prenoms",
+            "telephone",
+            "role",
+            "is_active",
+            "must_change_password",
+            "compagnie",
+            "agent",
+        )
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirmation = serializers.CharField(write_only=True)
+    prenoms = serializers.CharField(max_length=150, required=False, allow_blank=True)
 
     class Meta:
         model = Utilisateur
@@ -56,6 +119,8 @@ class LogoutRequestSerializer(serializers.Serializer):
 
 
 class PasswordChangeRequestSerializer(serializers.Serializer):
-    old_password = serializers.CharField()
+    old_password = serializers.CharField(
+        help_text="Pour un agent, utiliser le mot de passe temporaire remis par sa compagnie."
+    )
     new_password = serializers.CharField()
     password_confirmation = serializers.CharField()

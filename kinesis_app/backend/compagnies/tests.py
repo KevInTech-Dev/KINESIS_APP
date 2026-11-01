@@ -1,18 +1,29 @@
+from io import BytesIO
+from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
+
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
-from urllib.parse import parse_qs, urlparse
-from unittest.mock import patch
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
 from .models import AgentCompagnie, Compagnie, PermissionAgent
-
+from .serializers import CompanyRegistrationSerializer
+from .storage import AuthenticatedCompanyDocumentStorage
 
 User = get_user_model()
+
+
+def make_test_image(name):
+    buffer = BytesIO()
+    Image.new("RGB", (2, 2), color="red").save(buffer, format="PNG")
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type="image/png")
 
 
 class CompagnieModelTests(TestCase):
@@ -60,6 +71,85 @@ class CompagnieModelTests(TestCase):
                 permission=PermissionAgent.Code.SCANNER_BILLET,
             )
 
+    def test_company_documents_use_authenticated_cloudinary_assets(self):
+        with patch("compagnies.storage.cloudinary.uploader.upload") as upload:
+            upload.return_value = {"public_id": "compagnies/documents/carte"}
+            AuthenticatedCompanyDocumentStorage()._upload(
+                "compagnies/documents/carte.png",
+                make_test_image("carte.png"),
+            )
+
+        self.assertEqual(upload.call_args.kwargs["type"], "authenticated")
+        self.assertEqual(upload.call_args.kwargs["access_mode"], "authenticated")
+
+        with patch(
+            "compagnies.storage.cloudinary_url",
+            return_value=("https://cloudinary.example/signed-image", {}),
+        ) as cloudinary_url:
+            url = AuthenticatedCompanyDocumentStorage()._get_url(
+                "compagnies/documents/carte.png"
+            )
+
+        self.assertEqual(url, "https://cloudinary.example/signed-image")
+        self.assertEqual(cloudinary_url.call_args.kwargs["type"], "authenticated")
+        self.assertTrue(cloudinary_url.call_args.kwargs["sign_url"])
+
+    def test_company_admin_hides_user_relation_and_saves_primary_phone(self):
+        admin_user = User.objects.create_superuser(
+            email="admin@example.com",
+            password="Admin!Password-729",
+            nom="Admin",
+            prenoms="Kinesis",
+        )
+        company_user = User.objects.create_user(
+            email="company-admin@example.com",
+            password="Company!Password-729",
+            nom="Transport",
+            prenoms="",
+            telephone="+22890000000",
+            role=User.Role.COMPAGNIE,
+        )
+        company = Compagnie.objects.create(
+            utilisateur=company_user,
+            raison_sociale="Transport Togo SARL",
+            nom_commercial="Kinesis Transport",
+        )
+        self.client.force_login(admin_user)
+
+        change_url = reverse("admin:compagnies_compagnie_change", args=(company.pk,))
+        response = self.client.get(change_url)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'name="telephone_principal"')
+        self.assertNotContains(response, 'name="utilisateur"')
+        self.assertNotContains(response, "Utilisateur:")
+        admin_form = admin.site._registry[Compagnie]
+        self.assertFalse(
+            admin_form.has_add_permission(RequestFactory().get("/admin/"))
+        )
+
+        response = self.client.post(
+            change_url,
+            {
+                "raison_sociale": company.raison_sociale,
+                "nom_commercial": company.nom_commercial,
+                "nif": "",
+                "rccm": "",
+                "telephone_principal": "+22891112233",
+                "telephone_secondaire": "",
+                "logo": "",
+                "carte_cfe": "",
+                "piece_identite_gerant": "",
+                "description": "",
+                "adresse": "",
+                "_save": "Enregistrer",
+            },
+        )
+
+        self.assertEqual(response.status_code, 302)
+        company_user.refresh_from_db()
+        self.assertEqual(company_user.telephone, "+22891112233")
+
 
 class CompanyApiTests(APITestCase):
     password = "Qx7!mR4#vN8p"
@@ -80,19 +170,33 @@ class CompanyApiTests(APITestCase):
         return user, company
 
     def test_company_registration_stays_pending_and_cannot_login(self):
-        response = self.client.post(
-            reverse("company-register"),
-            {
-                "email": "nouvelle-compagnie@example.com",
-                "nom": "Transport",
-                "prenoms": "Kinesis",
-                "description": "Transport interurbain",
-                "adresse": "Lome",
-                "password": self.password,
-                "password_confirmation": self.password,
-            },
-            format="json",
-        )
+        with patch(
+            "compagnies.storage.AuthenticatedCompanyDocumentStorage.save",
+            side_effect=[
+                "compagnies/documents/carte-cfe.png",
+                "compagnies/documents/piece-identite.png",
+            ],
+        ):
+            response = self.client.post(
+                reverse("company-register"),
+                {
+                    "email": "nouvelle-compagnie@example.com",
+                    "raison_sociale": "Transport Togo SARL",
+                    "nom_commercial": "Kinesis Transport",
+                    "telephone": "+22890000000",
+                    "telephone_secondaire": "",
+                    "logo": "",
+                    "nif": "1234567890",
+                    "rccm": "tg-lfw-01-2023-b13-01282",
+                    "carte_cfe": make_test_image("carte-cfe.png"),
+                    "piece_identite_gerant": make_test_image("piece-identite.png"),
+                    "description": "Transport interurbain",
+                    "adresse": "Lome",
+                    "password": self.password,
+                    "password_confirmation": self.password,
+                },
+                format="multipart",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         company = Compagnie.objects.get(
@@ -100,6 +204,12 @@ class CompanyApiTests(APITestCase):
         )
         self.assertEqual(company.statut, Compagnie.Statut.EN_ATTENTE_VALIDATION)
         self.assertFalse(company.utilisateur.is_active)
+        self.assertEqual(company.utilisateur.prenoms, "")
+        self.assertEqual(company.utilisateur.nom, "Transport Togo SARL")
+        self.assertEqual(company.rccm, "TG-LFW-01-2023-B13-01282")
+        self.assertEqual(company.nif, "1234567890")
+        self.assertNotIn("carte_cfe", response.data)
+        self.assertNotIn("piece_identite_gerant", response.data)
 
         login_response = self.client.post(
             reverse("token-obtain-pair"),
@@ -107,6 +217,31 @@ class CompanyApiTests(APITestCase):
             format="json",
         )
         self.assertEqual(login_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_company_registration_validates_nif_and_rccm_formats(self):
+        invalid_numbers = (
+            {"nif": "12345678901", "rccm": "TG-LFW-01"},
+            {"nif": "12 34", "rccm": "TG-LFW-01"},
+            {"nif": "1234", "rccm": "LOM-01-2023"},
+            {"nif": "1234", "rccm": "TG-L@M-01"},
+        )
+
+        for values in invalid_numbers:
+            with self.subTest(values=values):
+                serializer = CompanyRegistrationSerializer(data=values)
+                self.assertFalse(serializer.is_valid())
+
+        nif_error = CompanyRegistrationSerializer(
+            data={"nif": "12345678901", "rccm": "TG-LFW-01"}
+        )
+        self.assertFalse(nif_error.is_valid())
+        self.assertIn("nif", nif_error.errors)
+
+        rccm_error = CompanyRegistrationSerializer(
+            data={"nif": "1234", "rccm": "TG-L@M-01"}
+        )
+        self.assertFalse(rccm_error.is_valid())
+        self.assertIn("rccm", rccm_error.errors)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_admin_approval_sends_one_time_activation_link(self):
@@ -222,6 +357,20 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(agent.permissions.count(), 2)
         self.assertTrue(agent.utilisateur.must_change_password)
         self.assertTrue(agent.utilisateur.check_password("Temporary!Password-729"))
+        self.assertEqual(response.data["id"], str(agent.utilisateur_id))
+
+        agent_login_response = self.client.post(
+            reverse("token-obtain-pair"),
+            {
+                "email": agent.utilisateur.email,
+                "password": "Temporary!Password-729",
+            },
+            format="json",
+        )
+        self.assertEqual(agent_login_response.status_code, status.HTTP_200_OK)
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
+        )
 
         update_response = self.client.patch(
             reverse("company-agent-detail", kwargs={"pk": agent.pk}),
@@ -252,6 +401,9 @@ class CompanyApiTests(APITestCase):
         profile_response = self.client.get(reverse("current-user"))
         self.assertEqual(profile_response.status_code, status.HTTP_403_FORBIDDEN)
 
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {agent_login_response.data['access']}"
+        )
         change_password_response = self.client.post(
             reverse("user-change-password"),
             {
@@ -268,8 +420,43 @@ class CompanyApiTests(APITestCase):
         agent_user.refresh_from_db()
         self.assertFalse(agent_user.must_change_password)
         self.assertTrue(agent_user.check_password("Permanent!Password-835"))
+        changed_password_login = self.client.post(
+            reverse("token-obtain-pair"),
+            {
+                "email": agent_user.email,
+                "password": "Permanent!Password-835",
+            },
+            format="json",
+        )
+        self.assertEqual(changed_password_login.status_code, status.HTTP_200_OK)
         profile_response = self.client.get(reverse("current-user"))
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+
+    def test_company_agent_list_includes_ids_and_uses_pagination(self):
+        company_user, company = self.create_active_company("pagination@example.com")
+        for index in range(2):
+            agent_user = User.objects.create_user(
+                email=f"agent-{index}@example.com",
+                password="Temporary!Password-729",
+                nom=f"Agent {index}",
+                prenoms="",
+                role=User.Role.AGENT_COMPAGNIE,
+            )
+            AgentCompagnie.objects.create(
+                utilisateur=agent_user,
+                compagnie=company,
+            )
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
+        )
+        response = self.client.get(reverse("company-agents"), {"page_size": 1})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        self.assertIsNotNone(response.data["next"])
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertIn("id", response.data["results"][0])
 
     def test_company_cannot_retrieve_another_company_agent(self):
         company_user, company = self.create_active_company("compagnie-a@example.com")

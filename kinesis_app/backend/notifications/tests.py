@@ -54,8 +54,10 @@ class NotificationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["lue"])
+        self.assertIsNotNone(response.data["date_lecture"])
         self.notification.refresh_from_db()
         self.assertTrue(self.notification.lue)
+        self.assertIsNotNone(self.notification.date_lecture)
 
     def test_user_cannot_mark_another_users_notification_as_read(self):
         other_notification = Notification.objects.create(
@@ -84,5 +86,8 @@ class NotificationApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["updated"], 2)
         self.assertFalse(
-            Notification.objects.filter(utilisateur=self.user, lue=False).exists()
+            Notification.objects.filter(
+                utilisateur=self.user,
+                date_lecture__isnull=True,
+            ).exists()
         )

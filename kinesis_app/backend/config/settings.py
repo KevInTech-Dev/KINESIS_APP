@@ -37,8 +37,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=1),
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=1),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=3),
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
 }
@@ -47,6 +47,7 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "KINESIS API",
     "DESCRIPTION": "API de réservation de voyages et de gestion des bagages.",
     "VERSION": "1.0.0",
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 TIME_ZONE = "Africa/Lome"
@@ -72,16 +73,13 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-
     # Stockage des images
     "cloudinary",
     "cloudinary_storage",
-
     # API et documentation
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
-
     # Applications KINESIS
     "utilisateurs",
     "compagnies",
@@ -177,6 +175,10 @@ EMAIL_BACKEND = env(
     "EMAIL_BACKEND",
     default="django.core.mail.backends.console.EmailBackend",
 )
+FEDAPAY_ENVIRONMENT = env("FEDAPAY_ENVIRONMENT", default="sandbox")
+FEDAPAY_SECRET_KEY = env("FEDAPAY_SECRET_KEY", default="")
+FEDAPAY_WEBHOOK_SECRET = env("FEDAPAY_WEBHOOK_SECRET", default="")
+FEDAPAY_CALLBACK_URL = env("FEDAPAY_CALLBACK_URL", default="")
 EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)

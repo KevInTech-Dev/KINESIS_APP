@@ -1,17 +1,21 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from config.pagination import StandardResultsSetPagination
+
 from .models import Utilisateur
-from .permissions import PasswordChangeComplete
+from .permissions import IsKinesisAdministrator, PasswordChangeComplete
 from .serializers import (
+	AdminUserListSerializer,
 	LogoutRequestSerializer,
 	PasswordChangeRequestSerializer,
 	UserProfileSerializer,
@@ -25,9 +29,44 @@ class UserRegistrationView(generics.CreateAPIView):
 	permission_classes = [AllowAny]
 
 
+class AdminUserListView(generics.ListAPIView):
+	serializer_class = AdminUserListSerializer
+	permission_classes = [IsKinesisAdministrator]
+	pagination_class = StandardResultsSetPagination
+
+	@extend_schema(
+		parameters=[
+			OpenApiParameter(
+				name="role",
+				type=str,
+				enum=Utilisateur.Role.values,
+				required=False,
+				description="Filtrer par rôle : VOYAGEUR, COMPAGNIE, AGENT_COMPAGNIE ou ADMINISTRATEUR.",
+			)
+		]
+	)
+	def get(self, request, *args, **kwargs):
+		return super().get(request, *args, **kwargs)
+
+	def get_queryset(self):
+		queryset = Utilisateur.objects.select_related(
+			"profil_compagnie",
+			"profil_agent__compagnie",
+		).order_by("email", "id")
+		role = self.request.query_params.get("role")
+		if role:
+			if role not in Utilisateur.Role.values:
+				raise ValidationError(
+					{"role": "Rôle invalide. Consultez les rôles documentés de l’API."}
+				)
+			queryset = queryset.filter(role=role)
+		return queryset
+
+
 class CurrentUserView(generics.RetrieveUpdateAPIView):
 	serializer_class = UserProfileSerializer
 	permission_classes = [PasswordChangeComplete]
+	parser_classes = (JSONParser, FormParser, MultiPartParser)
 
 	def get_object(self):
 		return self.request.user

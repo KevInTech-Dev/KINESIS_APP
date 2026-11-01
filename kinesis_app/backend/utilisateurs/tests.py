@@ -3,12 +3,33 @@ from django.test import TestCase
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import AccessToken
+
+from compagnies.models import AgentCompagnie, Compagnie
 
 User = get_user_model()
 
 
 class UserAuthenticationTests(APITestCase):
 	password = "Qx7!mR4#vN8p"
+
+	def test_registration_allows_missing_first_names(self):
+		response = self.client.post(
+			reverse("user-register"),
+			{
+				"email": "sans-prenoms@example.com",
+				"nom": "Doe",
+				"password": self.password,
+				"password_confirmation": self.password,
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.assertEqual(
+			User.objects.get(email="sans-prenoms@example.com").prenoms,
+			"",
+		)
 
 	def test_registration_creates_a_traveler_and_hashes_password(self):
 		response = self.client.post(
@@ -132,3 +153,87 @@ class UserAdminPrivacyTests(TestCase):
 		self.assertNotContains(response, "NomConfidentiel")
 		self.assertNotContains(response, "PrenomConfidentiel")
 		self.assertNotContains(response, "+22800000000")
+
+
+class AdminUserListTests(APITestCase):
+	def setUp(self):
+		self.admin = User.objects.create_superuser(
+			email="api-admin@example.com",
+			password="Admin!Password-729",
+			nom="Admin",
+			prenoms="Kinesis",
+		)
+		company_user = User.objects.create_user(
+			email="company-list@example.com",
+			password="Company!Password-729",
+			nom="Transport",
+			prenoms="",
+			telephone="+22890000000",
+			role=User.Role.COMPAGNIE,
+		)
+		Compagnie.objects.create(
+			utilisateur=company_user,
+			raison_sociale="Transport Togo SARL",
+			nom_commercial="Kinesis Transport",
+			nif="1234567890",
+			rccm="TG-LFW-01-2023-B13-01282",
+		)
+		agent_user = User.objects.create_user(
+			email="agent-list@example.com",
+			password="Temporary!Password-729",
+			nom="Agent",
+			prenoms="",
+			role=User.Role.AGENT_COMPAGNIE,
+		)
+		AgentCompagnie.objects.create(
+			utilisateur=agent_user,
+			compagnie=company_user.profil_compagnie,
+		)
+		User.objects.create_user(
+			email="traveler-list@example.com",
+			password="Traveler!Password-729",
+			nom="Voyageur",
+			prenoms="Test",
+			role=User.Role.VOYAGEUR,
+		)
+		self.client.credentials(
+			HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.admin)}"
+		)
+
+	def test_admin_can_filter_users_by_role_and_page_through_results(self):
+		response = self.client.get(
+			reverse("admin-user-list"),
+			{"role": User.Role.COMPAGNIE, "page_size": 1},
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data["count"], 1)
+		self.assertIsNone(response.data["next"])
+		company_data = response.data["results"][0]
+		self.assertEqual(company_data["role"], User.Role.COMPAGNIE)
+		self.assertEqual(company_data["compagnie"]["nom_commercial"], "Kinesis Transport")
+		self.assertEqual(company_data["compagnie"]["telephone_principal"], "+22890000000")
+
+		all_users_response = self.client.get(
+			reverse("admin-user-list"),
+			{"page_size": 2},
+		)
+		self.assertEqual(all_users_response.data["count"], 4)
+		self.assertIsNotNone(all_users_response.data["next"])
+
+	def test_user_listing_rejects_invalid_role_and_non_admins(self):
+		invalid_role_response = self.client.get(
+			reverse("admin-user-list"),
+			{"role": "UNKNOWN"},
+		)
+		self.assertEqual(
+			invalid_role_response.status_code,
+			status.HTTP_400_BAD_REQUEST,
+		)
+
+		traveler = User.objects.get(email="traveler-list@example.com")
+		self.client.credentials(
+			HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(traveler)}"
+		)
+		response = self.client.get(reverse("admin-user-list"))
+		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)

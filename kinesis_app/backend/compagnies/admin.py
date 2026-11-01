@@ -1,7 +1,8 @@
 from urllib.parse import urlencode
 
-from django.contrib import admin
+from django import forms
 from django.conf import settings
+from django.contrib import admin
 from django.core import signing
 from django.core.mail import send_mail
 from django.urls import reverse
@@ -11,6 +12,24 @@ from .models import AgentCompagnie, Compagnie, PermissionAgent
 ACTIVATION_TOKEN_SALT = "compagnies.activation"
 
 
+class CompagnieAdminForm(forms.ModelForm):
+    telephone_principal = forms.CharField(
+        label="Téléphone principal",
+        max_length=30,
+    )
+
+    class Meta:
+        model = Compagnie
+        exclude = ("utilisateur",)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance and self.instance.pk:
+            self.fields["telephone_principal"].initial = (
+                self.instance.utilisateur.telephone
+            )
+
+
 class PermissionAgentInline(admin.TabularInline):
     model = PermissionAgent
     extra = 0
@@ -18,13 +37,42 @@ class PermissionAgentInline(admin.TabularInline):
 
 @admin.register(Compagnie)
 class CompagnieAdmin(admin.ModelAdmin):
-    list_display = ("utilisateur", "statut", "adresse")
+    form = CompagnieAdminForm
+    list_display = ("nom_commercial", "raison_sociale", "nif", "rccm", "statut")
     list_filter = ("statut",)
-    search_fields = ("utilisateur__email", "utilisateur__nom", "adresse")
+    search_fields = (
+        "utilisateur__email",
+        "raison_sociale",
+        "nom_commercial",
+        "nif",
+        "rccm",
+    )
     readonly_fields = ("statut",)
+    fields = (
+        "raison_sociale",
+        "nom_commercial",
+        "nif",
+        "rccm",
+        "telephone_principal",
+        "telephone_secondaire",
+        "logo",
+        "carte_cfe",
+        "piece_identite_gerant",
+        "description",
+        "adresse",
+        "statut",
+    )
     actions = ("approve_and_send_activation", "refuse_companies", "deactivate_companies")
 
-    @admin.action(description="Approuver et envoyer le lien d’activation")
+    def has_add_permission(self, request):
+        return False
+
+    def save_model(self, request, obj, form, change):
+        super().save_model(request, obj, form, change)
+        obj.utilisateur.telephone = form.cleaned_data["telephone_principal"]
+        obj.utilisateur.save(update_fields=("telephone",))
+
+    @admin.action(description="Valider et envoyer le lien d’activation")
     def approve_and_send_activation(self, request, queryset):
         approved = 0
         for compagnie in queryset.filter(
@@ -40,7 +88,7 @@ class CompagnieAdmin(admin.ModelAdmin):
             sent = send_mail(
                 subject="Activation de votre compte KINESIS",
                 message=(
-                    f"Bonjour {compagnie.utilisateur.prenoms},\n\n"
+                    f"Bonjour {compagnie.nom_commercial},\n\n"
                     "Votre demande d’inscription a été approuvée. "
                     "Activez votre compte avec ce lien, valable 24 heures :\n"
                     f"{activation_url}\n"
@@ -70,7 +118,7 @@ class CompagnieAdmin(admin.ModelAdmin):
             send_mail(
                 subject="Suite à votre demande d’inscription KINESIS",
                 message=(
-                    f"Bonjour {compagnie.utilisateur.prenoms},\n\n"
+                    f"Bonjour {compagnie.nom_commercial},\n\n"
                     "Après examen de votre demande d’inscription, nous ne pouvons "
                     "pas donner suite à la création de votre compte compagnie.\n"
                 ),

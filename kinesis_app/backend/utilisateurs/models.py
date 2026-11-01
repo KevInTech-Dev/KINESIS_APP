@@ -49,7 +49,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
         editable=False,
     )
     nom = models.CharField(max_length=100)
-    prenoms = models.CharField(max_length=150)
+    prenoms = models.CharField(max_length=150, blank=True)
     email = models.EmailField(unique=True)
     telephone = models.CharField(max_length=30, blank=True)
     photo_profil = models.ImageField(
@@ -71,7 +71,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     objects = UserManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["nom", "prenoms"]
+    REQUIRED_FIELDS = ["nom"]
 
     def __str__(self):
         if self.role == self.Role.VOYAGEUR:

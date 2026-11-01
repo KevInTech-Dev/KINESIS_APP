@@ -2,6 +2,7 @@ from django.db import transaction
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -44,6 +45,8 @@ class TarifDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class BagageListCreateView(generics.ListCreateAPIView):
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
+
     def get_permissions(self):
         if self.request.method == "POST":
             return [CanRegisterBaggage()]

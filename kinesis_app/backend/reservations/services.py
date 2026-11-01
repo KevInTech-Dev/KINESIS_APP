@@ -1,5 +1,5 @@
-from datetime import datetime, timedelta
 import uuid
+from datetime import datetime, timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -35,7 +35,7 @@ def _expire_for_voyage(voyage, now):
     ).update(liberee=True)
 
 
-def expire_overdue_reservations(*, voyageur=None, now=None):
+def expire_overdue_reservations(*, voyageur=None, company=None, now=None):
     now = now or timezone.now()
     reservations = Reservation.objects.filter(
         statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
@@ -43,6 +43,8 @@ def expire_overdue_reservations(*, voyageur=None, now=None):
     )
     if voyageur is not None:
         reservations = reservations.filter(voyageur=voyageur)
+    if company is not None:
+        reservations = reservations.filter(voyage__compagnie=company)
 
     with transaction.atomic():
         expired_ids = list(
@@ -91,15 +93,26 @@ def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
                 flat=True,
             )
         )
+        seat_count = len(passenger_names)
         seat_numbers = []
-        next_seat = 1
-        while len(seat_numbers) < len(passenger_names):
-            seat_number = f"S{next_seat:03d}"
-            if seat_number not in occupied_seats:
-                seat_numbers.append(seat_number)
-            next_seat += 1
-            if next_seat > voyage.place_totale and len(seat_numbers) < len(passenger_names):
-                raise ValidationError({"passagers": "Il n’y a pas assez de places disponibles."})
+        for first_seat in range(1, voyage.place_totale - seat_count + 2):
+            candidate = [
+                f"S{seat_number:03d}"
+                for seat_number in range(first_seat, first_seat + seat_count)
+            ]
+            if not occupied_seats.intersection(candidate):
+                seat_numbers = candidate
+                break
+
+        if not seat_numbers:
+            raise ValidationError(
+                {
+                    "passagers": (
+                        "Il n’y a pas assez de places consécutives disponibles "
+                        "pour tous les passagers."
+                    )
+                }
+            )
 
         reservation = Reservation.objects.create(
             reference=f"RES-{uuid.uuid4().hex[:16].upper()}",

@@ -2,7 +2,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import generics
-from rest_framework.exceptions import ValidationError
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 
 from notifications.models import Notification
@@ -36,6 +36,7 @@ class VilleListView(generics.ListAPIView):
 
 class VoyageListCreateView(generics.ListCreateAPIView):
     serializer_class = VoyageSerializer
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     def get_permissions(self):
         if self.request.method == "POST":
@@ -90,6 +91,7 @@ class VoyageListCreateView(generics.ListCreateAPIView):
 
 class VoyageDetailView(generics.RetrieveUpdateAPIView):
     serializer_class = VoyageSerializer
+    parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     def get_permissions(self):
         if self.request.method in ("PUT", "PATCH"):

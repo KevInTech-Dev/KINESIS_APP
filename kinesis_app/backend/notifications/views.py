@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import generics, serializers, status
 from rest_framework.permissions import IsAuthenticated
@@ -32,9 +33,9 @@ class NotificationReadView(APIView):
             pk=pk,
             utilisateur=request.user,
         )
-        if not notification.lue:
-            notification.lue = True
-            notification.save(update_fields=("lue",))
+        if notification.date_lecture is None:
+            notification.date_lecture = timezone.now()
+            notification.save(update_fields=("date_lecture",))
         return Response(NotificationSerializer(notification).data)
 
 
@@ -53,6 +54,6 @@ class NotificationReadAllView(APIView):
     def post(self, request):
         updated = Notification.objects.filter(
             utilisateur=request.user,
-            lue=False,
-        ).update(lue=True)
+            date_lecture__isnull=True,
+        ).update(date_lecture=timezone.now())
         return Response({"updated": updated})

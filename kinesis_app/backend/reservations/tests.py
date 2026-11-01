@@ -9,11 +9,10 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
-from compagnies.models import Compagnie
+from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
 from voyages.models import Ville, Voyage
 
 from .models import PlaceReservee, Reservation
-
 
 User = get_user_model()
 
@@ -33,6 +32,8 @@ class ReservationApiTests(APITestCase):
             utilisateur=company_user,
             statut=Compagnie.Statut.ACTIVE,
         )
+        self.company_user = company_user
+        self.company = company
         departure = Ville.objects.create(nom="Lome")
         arrival = Ville.objects.create(nom="Sokode")
         self.voyage = Voyage.objects.create(
@@ -81,6 +82,81 @@ class ReservationApiTests(APITestCase):
             reservation.date_expiration
             <= timezone.now() + timedelta(minutes=10, seconds=2)
         )
+
+    def test_three_passengers_get_three_seats_and_three_fares(self):
+        self.voyage.place_totale = 3
+        self.voyage.save(update_fields=("place_totale",))
+
+        response = self.reserve(["Jean", "Kévin", "Julien"])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        reservation = Reservation.objects.get(pk=response.data["id_reservation"])
+        self.assertEqual(reservation.montant_total, 15000)
+        self.assertEqual(
+            list(
+                reservation.places.values_list(
+                    "numero_siege",
+                    "nom_passager",
+                )
+            ),
+            [("S001", "Jean"), ("S002", "Kévin"), ("S003", "Julien")],
+        )
+
+    def test_group_reservation_uses_next_contiguous_block_of_seats(self):
+        self.voyage.place_totale = 6
+        self.voyage.save(update_fields=("place_totale",))
+        existing_reservation = Reservation.objects.create(
+            reference="RES-EXISTING-SEATS",
+            voyageur=self.traveler,
+            voyage=self.voyage,
+            date_expiration=timezone.now() + timedelta(minutes=5),
+            montant_total=10000,
+        )
+        for seat_number, passenger_name in (
+            ("S001", "Occupant un"),
+            ("S003", "Occupant trois"),
+        ):
+            PlaceReservee.objects.create(
+                reservation=existing_reservation,
+                voyage=self.voyage,
+                numero_siege=seat_number,
+                nom_passager=passenger_name,
+            )
+
+        response = self.reserve(["Jean", "Kévin", "Julien"])
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        reservation = Reservation.objects.get(pk=response.data["id_reservation"])
+        self.assertEqual(
+            list(reservation.places.values_list("numero_siege", flat=True)),
+            ["S004", "S005", "S006"],
+        )
+
+    def test_group_reservation_rejects_scattered_seats_without_contiguous_block(self):
+        self.voyage.place_totale = 5
+        self.voyage.save(update_fields=("place_totale",))
+        existing_reservation = Reservation.objects.create(
+            reference="RES-SCATTERED-SEATS",
+            voyageur=self.traveler,
+            voyage=self.voyage,
+            date_expiration=timezone.now() + timedelta(minutes=5),
+            montant_total=10000,
+        )
+        for seat_number, passenger_name in (
+            ("S002", "Occupant deux"),
+            ("S004", "Occupant quatre"),
+        ):
+            PlaceReservee.objects.create(
+                reservation=existing_reservation,
+                voyage=self.voyage,
+                numero_siege=seat_number,
+                nom_passager=passenger_name,
+            )
+
+        response = self.reserve(["Jean", "Kévin", "Julien"])
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Reservation.objects.count(), 1)
 
     def test_expired_reservation_releases_seat_for_reuse(self):
         first_response = self.reserve(["Jane Doe"])
@@ -139,7 +215,138 @@ class ReservationApiTests(APITestCase):
             reverse("reservation-detail", kwargs={"pk": response.data["id_reservation"]})
         )
         self.assertEqual(detail_response.status_code, status.HTTP_404_NOT_FOUND)
-        self.assertEqual(self.client.get(reverse("reservation-list")).data, [])
+        self.assertEqual(
+            self.client.get(reverse("reservation-list")).data["results"],
+            [],
+        )
+
+    def test_company_can_list_and_read_reservations_for_its_trips_only(self):
+        reservation_response = self.reserve(["Jane Doe"])
+        reservation = Reservation.objects.get(
+            pk=reservation_response.data["id_reservation"]
+        )
+
+        other_company_user = User.objects.create_user(
+            email="autre-compagnie@example.com",
+            password=self.password,
+            nom="Autre",
+            prenoms="Compagnie",
+            role=User.Role.COMPAGNIE,
+        )
+        other_company = Compagnie.objects.create(
+            utilisateur=other_company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        other_trip = Voyage.objects.create(
+            compagnie=other_company,
+            ville_depart=self.voyage.ville_depart,
+            ville_arrivee=self.voyage.ville_arrivee,
+            date_depart=self.voyage.date_depart,
+            heure_depart=self.voyage.heure_depart,
+            place_totale=2,
+            prix="5000",
+        )
+        other_reservation = Reservation.objects.create(
+            reference="RES-OTHER-COMPANY",
+            voyageur=self.traveler,
+            voyage=other_trip,
+            date_expiration=timezone.now() + timedelta(minutes=5),
+            montant_total=5000,
+        )
+
+        self.authenticate(self.company_user)
+        list_response = self.client.get(reverse("reservation-list"))
+        detail_response = self.client.get(
+            reverse("reservation-detail", kwargs={"pk": reservation.pk})
+        )
+        foreign_detail_response = self.client.get(
+            reverse("reservation-detail", kwargs={"pk": other_reservation.pk})
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertEqual(
+            [item["id_reservation"] for item in list_response.data["results"]],
+            [str(reservation.pk)],
+        )
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            foreign_detail_response.status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+
+    def test_agent_with_baggage_registration_permission_can_read_company_reservations(self):
+        reservation_response = self.reserve(["Jane Doe"])
+        reservation_id = reservation_response.data["id_reservation"]
+        agent_user = User.objects.create_user(
+            email="agent@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Kinesis",
+            role=User.Role.AGENT_COMPAGNIE,
+            must_change_password=False,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+        )
+
+        self.authenticate(agent_user)
+        list_response = self.client.get(reverse("reservation-list"))
+        detail_response = self.client.get(
+            reverse("reservation-detail", kwargs={"pk": reservation_id})
+        )
+        create_response = self.client.post(
+            reverse("reservation-list"),
+            {"voyage_id": str(self.voyage.pk), "passagers": ["Another traveler"]},
+            format="json",
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(list_response.data["count"], 1)
+        self.assertEqual(detail_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_agent_without_reservation_related_permission_cannot_read_reservations(self):
+        agent_user = User.objects.create_user(
+            email="agent-sans-permission@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Kinesis",
+            role=User.Role.AGENT_COMPAGNIE,
+            must_change_password=False,
+        )
+        AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+
+        self.authenticate(agent_user)
+        response = self.client.get(reverse("reservation-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_reservation_list_is_paginated_for_company(self):
+        for index in range(21):
+            Reservation.objects.create(
+                reference=f"RES-COMPANY-{index}",
+                voyageur=self.traveler,
+                voyage=self.voyage,
+                date_expiration=timezone.now() + timedelta(minutes=5),
+                montant_total=5000,
+            )
+
+        self.authenticate(self.company_user)
+        response = self.client.get(reverse("reservation-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 21)
+        self.assertEqual(len(response.data["results"]), 20)
+        self.assertIsNotNone(response.data["next"])
 
 
 class ReservationModelTests(TestCase):
