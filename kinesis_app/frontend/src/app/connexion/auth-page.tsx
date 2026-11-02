@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 
 type AuthMode = "login" | "register";
@@ -51,6 +52,7 @@ function getApiMessage(value: unknown): string | null {
 }
 
 export default function AuthPage() {
+  const router = useRouter();
   const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [nom, setNom] = useState("");
@@ -59,7 +61,6 @@ export default function AuthPage() {
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [feedback, setFeedback] = useState<Feedback | null>(null);
-  const [sessionActive, setSessionActive] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   async function submitAuth(event: FormEvent<HTMLFormElement>) {
@@ -114,53 +115,20 @@ export default function AuthPage() {
         });
       } else {
         setPassword("");
-        setSessionActive(true);
-        setFeedback({
-          kind: "success",
-          message: "Vous êtes connecté. Votre session est sécurisée.",
-        });
+        const requestedPath = new URLSearchParams(window.location.search).get(
+          "next",
+        );
+        const destination =
+          requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
+            ? requestedPath
+            : "/espace-voyageur";
+        router.push(destination);
       }
     } catch (error) {
       console.error("Authentication request failed", error);
       setFeedback({
         kind: "error",
         message: "Le serveur est inaccessible. Réessayez dans quelques instants.",
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  async function logout() {
-    setSubmitting(true);
-    setFeedback(null);
-
-    try {
-      const response = await fetch("/api/auth/deconnexion", {
-        method: "POST",
-      });
-      const result: unknown = await response.json().catch(() => null);
-      setSessionActive(false);
-      setPassword("");
-
-      if (!response.ok) {
-        setFeedback({
-          kind: "error",
-          message:
-            getApiMessage(result) ??
-            "La session locale a été fermée, mais le serveur n’a pas confirmé la déconnexion.",
-        });
-        return;
-      }
-
-      setFeedback({ kind: "success", message: "Vous êtes déconnecté." });
-    } catch (error) {
-      console.error("Logout request failed", error);
-      setSessionActive(false);
-      setFeedback({
-        kind: "error",
-        message:
-          "La session locale a été fermée, mais la révocation côté serveur n’a pas pu être confirmée.",
       });
     } finally {
       setSubmitting(false);
@@ -179,38 +147,7 @@ export default function AuthPage() {
           ← Retour à l’accueil
         </Link>
 
-        {sessionActive ? (
-          <div className="auth-success-panel">
-            <span className="auth-success-icon" aria-hidden="true">
-              ✓
-            </span>
-            <h1 id="auth-title">Connexion réussie</h1>
-            <p>
-              Votre session est ouverte. Les espaces de réservation arrivent
-              dans la prochaine étape.
-            </p>
-            {feedback ? (
-              <p
-                className={`auth-feedback auth-feedback--${feedback.kind}`}
-                role="status"
-              >
-                {feedback.message}
-              </p>
-            ) : null}
-            <Link className="auth-submit auth-home-link" href="/">
-              Retourner à l’accueil
-            </Link>
-            <button
-              className="auth-logout"
-              type="button"
-              onClick={logout}
-              disabled={submitting}
-            >
-              {submitting ? "Déconnexion…" : "Se déconnecter"}
-            </button>
-          </div>
-        ) : (
-          <>
+        <>
             <div className="auth-heading">
               <p className="auth-eyebrow">KINESIS · VOYAGEZ AU TOGO</p>
               <h1 id="auth-title">
@@ -358,8 +295,7 @@ export default function AuthPage() {
                 {mode === "login" ? "Créer un compte" : "Se connecter"}
               </button>
             </p>
-          </>
-        )}
+        </>
       </section>
       <p className="auth-footer">Le Togo en mouvement, avec vous.</p>
     </main>

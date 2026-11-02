@@ -25,6 +25,19 @@ Les routes `/api/auth/inscription`, `/api/auth/connexion` et
 correspondantes. Les jetons de connexion sont conservés dans des cookies
 `HttpOnly`, inaccessibles au JavaScript du navigateur.
 
+Après connexion, `/espace-voyageur` restaure la session avec
+`/api/auth/session` et affiche les réservations réelles via `/api/reservations`.
+Le renouvellement des jetons expirés est effectué côté serveur ; les jetons ne
+sont jamais exposés au navigateur.
+
+Le parcours voyageur permet aussi de modifier son profil et sa photo via
+`/api/auth/profile`, de réserver un départ, d’initier un paiement FedaPay et de
+retrouver ses réservations et billets dans l’espace. Les actions de réservation,
+paiement et annulation sont relayées côté serveur vers les API Django.
+Pour que FedaPay ramène le voyageur vers son profil et que l’état du paiement
+soit actualisé au retour, configure `FEDAPAY_CALLBACK_URL` dans le backend
+avec l’URL publique `https://<domaine-frontend>/paiement/retour`.
+
 ## Vérifications
 
 - `npm run lint`

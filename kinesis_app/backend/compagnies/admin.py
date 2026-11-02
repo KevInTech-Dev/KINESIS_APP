@@ -88,7 +88,7 @@ class CompagnieAdmin(admin.ModelAdmin):
             sent = send_mail(
                 subject="Activation de votre compte KINESIS",
                 message=(
-                    f"Bonjour {compagnie.nom_commercial},\n\n"
+                    f"Salut {compagnie.nom_commercial},\n\n"
                     "Votre demande d’inscription a été approuvée. "
                     "Activez votre compte avec ce lien, valable 24 heures :\n"
                     f"{activation_url}\n"
@@ -118,7 +118,7 @@ class CompagnieAdmin(admin.ModelAdmin):
             send_mail(
                 subject="Suite à votre demande d’inscription KINESIS",
                 message=(
-                    f"Bonjour {compagnie.nom_commercial},\n\n"
+                    f"Salut {compagnie.nom_commercial},\n\n"
                     "Après examen de votre demande d’inscription, nous ne pouvons "
                     "pas donner suite à la création de votre compte compagnie.\n"
                 ),

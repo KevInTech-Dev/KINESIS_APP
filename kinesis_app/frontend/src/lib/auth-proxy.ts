@@ -3,17 +3,20 @@ type AuthResponse = {
   data: unknown;
 };
 
-export async function postAuthToBackend(
+async function requestAuthBackend(
   resource: string,
-  payload: Record<string, string>,
+  method: "GET" | "POST" | "PATCH",
+  payload?: Record<string, unknown>,
   accessToken?: string,
+  apiPrefix = "auth/",
+  rawBody?: BodyInit,
 ): Promise<AuthResponse> {
   const backendUrl = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8000";
   let url: URL;
 
   try {
     url = new URL(
-      `/api/v1/auth/${resource.replace(/^\/+/, "")}`,
+      `/api/v1/${apiPrefix}${resource.replace(/^\/+/, "")}`,
       `${backendUrl.replace(/\/+$/, "")}/`,
     );
   } catch (error) {
@@ -27,14 +30,20 @@ export async function postAuthToBackend(
   let response: Response;
   try {
     response = await fetch(url, {
-      method: "POST",
+      method,
       cache: "no-store",
       headers: {
         Accept: "application/json",
-        "Content-Type": "application/json",
+        ...(payload || typeof rawBody === "string"
+          ? { "Content-Type": "application/json" }
+          : {}),
         ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       },
-      body: JSON.stringify(payload),
+      ...(payload
+        ? { body: JSON.stringify(payload) }
+        : rawBody
+          ? { body: rawBody }
+          : {}),
       signal: AbortSignal.timeout(10_000),
     });
   } catch (error) {
@@ -61,6 +70,57 @@ export async function postAuthToBackend(
       data: { detail: "La réponse du serveur d’authentification est illisible." },
     };
   }
+}
+
+export function getAuthFromBackend(
+  resource: string,
+  accessToken: string,
+) {
+  return requestAuthBackend(resource, "GET", undefined, accessToken);
+}
+
+export function getBackendResource(
+  resource: string,
+  accessToken: string,
+) {
+  return requestAuthBackend(resource, "GET", undefined, accessToken, "");
+}
+
+export function postBackendResource(
+  resource: string,
+  payload: Record<string, unknown>,
+  accessToken: string,
+) {
+  return requestAuthBackend(
+    resource,
+    "POST",
+    payload,
+    accessToken,
+    "",
+  );
+}
+
+export function patchBackendResource(
+  resource: string,
+  body: FormData,
+  accessToken: string,
+) {
+  return requestAuthBackend(
+    resource,
+    "PATCH",
+    undefined,
+    accessToken,
+    "",
+    body,
+  );
+}
+
+export function postAuthToBackend(
+  resource: string,
+  payload: Record<string, string>,
+  accessToken?: string,
+) {
+  return requestAuthBackend(resource, "POST", payload, accessToken);
 }
 
 export function isTokenPair(

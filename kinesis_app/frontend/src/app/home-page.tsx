@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type IconName =
   | "arrow"
@@ -259,21 +261,23 @@ function TripCard({
   trip,
   index,
   onSelect,
+  onBook,
 }: {
   trip: Voyage;
   index: number;
   onSelect?: (trip: Voyage) => void;
+  onBook?: (trip: Voyage) => void;
 }) {
   const photo = trip.image || routePhotos[index % routePhotos.length];
 
   return (
     <article className="trip-card">
-      {onSelect ? (
+      {onSelect || onBook ? (
         <button
           className="trip-card__select"
-          onClick={() => onSelect(trip)}
+          onClick={() => (onBook ?? onSelect)?.(trip)}
           type="button"
-          aria-label={`Préparer une recherche pour ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
+          aria-label={`${onBook ? "Réserver" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
         />
       ) : null}
       <Image
@@ -319,6 +323,7 @@ function TripCard({
 }
 
 export default function HomePage() {
+  const router = useRouter();
   const [cities, setCities] = useState<Ville[]>([]);
   const [trips, setTrips] = useState<Voyage[]>([]);
   const [from, setFrom] = useState("");
@@ -334,6 +339,7 @@ export default function HomePage() {
   const [searching, setSearching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -344,6 +350,29 @@ export default function HomePage() {
       tomorrow.setDate(tomorrow.getDate() + 1);
       setMinimumDate(localDateString(new Date()));
       setDate(localDateString(tomorrow));
+
+      void fetch("/api/auth/session", { cache: "no-store" })
+        .then(async (response): Promise<UserProfile | null> => {
+          if (response.status === 401) return null;
+          if (!response.ok) {
+            throw new Error(
+              `Le profil n’a pas pu être chargé (${response.status}).`,
+            );
+          }
+          const currentProfile: unknown = await response.json();
+          if (!isUserProfile(currentProfile)) {
+            throw new Error("Le profil reçu du serveur est invalide.");
+          }
+          return currentProfile;
+        })
+        .then((currentProfile) => {
+          if (active) setProfile(currentProfile);
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            console.error("Could not load current user profile", error);
+          }
+        });
 
       const [cityResponse, tripResponse] = await Promise.allSettled([
         getList("/api/villes", isVille),
@@ -495,11 +524,22 @@ export default function HomePage() {
           </nav>
 
           <Link
-            className="account-button"
-            href="/connexion"
+            className={`account-button${profile ? " account-button--profile" : ""}`}
+            href={profile ? "/espace-voyageur" : "/connexion"}
           >
-            <Icon name="user" className="icon-small" />
-            Connexion
+            {profile?.photo_profil ? (
+              <Image
+                className="account-avatar"
+                src={profile.photo_profil}
+                width={32}
+                height={32}
+                alt=""
+                unoptimized
+              />
+            ) : (
+              <Icon name="user" className="icon-small" />
+            )}
+            {profile ? "Profil" : "Connexion"}
           </Link>
 
           <button
@@ -523,8 +563,11 @@ export default function HomePage() {
             <a href="#avantages" onClick={() => setMenuOpen(false)}>
               Pourquoi Kinesis ?
             </a>
-            <Link href="/connexion" onClick={() => setMenuOpen(false)}>
-              Connexion
+            <Link
+              href={profile ? "/espace-voyageur" : "/connexion"}
+              onClick={() => setMenuOpen(false)}
+            >
+              {profile ? "Profil" : "Connexion"}
             </Link>
           </nav>
         ) : null}
@@ -665,8 +708,9 @@ export default function HomePage() {
                   <button
                     className="passenger-stepper__button"
                     type="button"
-                    onClick={() => setPassengers((count) => count + 1)}
-                    aria-label="Ajouter un voyageur"
+                    onClick={() => setPassengers((count) => Math.min(100, count + 1))}
+                    disabled={passengers >= 100}
+                    aria-label="Ajouter un voyageur (maximum 100)"
                   >
                     +
                   </button>
@@ -747,7 +791,16 @@ export default function HomePage() {
             searchResults.length > 0 ? (
               <div className="trip-grid trip-grid--results">
                 {searchResults.map((trip, index) => (
-                  <TripCard key={trip.id_voyage} trip={trip} index={index} />
+                  <TripCard
+                    key={trip.id_voyage}
+                    trip={trip}
+                    index={index}
+                    onBook={(selectedTrip) => {
+                      router.push(
+                        `/reservation/${encodeURIComponent(selectedTrip.id_voyage)}?passagers=${passengers}`,
+                      );
+                    }}
+                  />
                 ))}
               </div>
             ) : (
