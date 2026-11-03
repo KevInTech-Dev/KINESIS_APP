@@ -457,6 +457,18 @@ class CompanyApiTests(APITestCase):
         self.assertIsNotNone(response.data["next"])
         self.assertEqual(len(response.data["results"]), 1)
         self.assertIn("id", response.data["results"][0])
+        self.assertIs(response.data["results"][0]["is_active"], True)
+
+        agent_id = response.data["results"][0]["id"]
+        deactivate_response = self.client.patch(
+            reverse("company-agent-detail", kwargs={"pk": agent_id}),
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(deactivate_response.status_code, status.HTTP_200_OK)
+        self.assertIs(deactivate_response.data["is_active"], False)
+        agent_user = User.objects.get(pk=agent_id)
+        self.assertFalse(agent_user.is_active)
 
     def test_company_cannot_retrieve_another_company_agent(self):
         company_user, company = self.create_active_company("compagnie-a@example.com")

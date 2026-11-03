@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { isUserProfile } from "@/lib/user-profile";
 
 type AuthMode = "login" | "register";
 type Feedback = { kind: "success" | "error"; message: string };
@@ -118,10 +119,30 @@ export default function AuthPage() {
         const requestedPath = new URLSearchParams(window.location.search).get(
           "next",
         );
-        const destination =
+        let destination =
           requestedPath?.startsWith("/") && !requestedPath.startsWith("//")
             ? requestedPath
             : "/espace-voyageur";
+        if (!requestedPath) {
+          const sessionResponse = await fetch("/api/auth/session", {
+            cache: "no-store",
+          });
+          const sessionProfile: unknown = await sessionResponse
+            .json()
+            .catch(() => null);
+          if (!sessionResponse.ok) {
+            setFeedback({
+              kind: "error",
+              message:
+                getApiMessage(sessionProfile) ??
+                "La connexion a réussi, mais le profil n’a pas pu être chargé.",
+            });
+            return;
+          }
+          if (isUserProfile(sessionProfile) && sessionProfile.role === "COMPAGNIE") {
+            destination = "/espace-compagnie";
+          }
+        }
         router.push(destination);
       }
     } catch (error) {
@@ -294,6 +315,10 @@ export default function AuthPage() {
               >
                 {mode === "login" ? "Créer un compte" : "Se connecter"}
               </button>
+            </p>
+            <p className="auth-company-link">
+              Vous représentez une compagnie ?{" "}
+              <Link href="/inscription-compagnie">Créer un compte partenaire</Link>
             </p>
         </>
       </section>

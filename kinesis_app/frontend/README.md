@@ -38,6 +38,16 @@ Pour que FedaPay ramène le voyageur vers son profil et que l’état du paiemen
 soit actualisé au retour, configure `FEDAPAY_CALLBACK_URL` dans le backend
 avec l’URL publique `https://<domaine-frontend>/paiement/retour`.
 
+Les compagnies peuvent déposer leur dossier depuis `/inscription-compagnie`.
+Le formulaire transmet les justificatifs au backend Django ; l’équipe KINESIS
+doit ensuite valider le dossier et envoyer le lien d’activation avant que le
+compte puisse se connecter. Une fois activée, la compagnie est dirigée vers
+`/espace-compagnie`, qui permet de publier et gérer ses trajets, de créer et
+administrer les comptes agents et permissions, de consulter les paiements et de
+modifier la description, l’adresse et le logo. Les routes `/api/compagnie/*`
+servent de proxy serveur authentifié et les droits de propriété restent
+contrôlés par Django.
+
 ## Vérifications
 
 - `npm run lint`

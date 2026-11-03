@@ -138,11 +138,20 @@ class AgentSerializer(serializers.ModelSerializer):
     nom = serializers.CharField(source="utilisateur.nom", read_only=True)
     prenoms = serializers.CharField(source="utilisateur.prenoms", read_only=True)
     telephone = serializers.CharField(source="utilisateur.telephone", read_only=True)
+    is_active = serializers.BooleanField(source="utilisateur.is_active", read_only=True)
     permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = AgentCompagnie
-        fields = ("id", "email", "nom", "prenoms", "telephone", "permissions")
+        fields = (
+            "id",
+            "email",
+            "nom",
+            "prenoms",
+            "telephone",
+            "is_active",
+            "permissions",
+        )
 
     def get_permissions(self, obj) -> list[str]:
         return list(obj.permissions.values_list("permission", flat=True))
