@@ -124,6 +124,43 @@ class UserAuthenticationTests(APITestCase):
 		)
 		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+	def test_agent_must_change_password_can_read_identity_but_not_edit_profile(self):
+		company_user = User.objects.create_user(
+			email="company-profile@example.com",
+			password=self.password,
+			nom="Transport",
+			role=User.Role.COMPAGNIE,
+		)
+		company = Compagnie.objects.create(
+			utilisateur=company_user,
+			nom_commercial="Transport Demo",
+		)
+		agent_user = User.objects.create_user(
+			email="agent-profile@example.com",
+			password=self.password,
+			nom="Agent",
+			role=User.Role.AGENT_COMPAGNIE,
+			must_change_password=True,
+		)
+		AgentCompagnie.objects.create(utilisateur=agent_user, compagnie=company)
+		self.client.credentials(
+			HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+		)
+
+		profile_response = self.client.get(reverse("current-user"))
+		self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+		self.assertEqual(profile_response.data["role"], User.Role.AGENT_COMPAGNIE)
+		self.assertTrue(profile_response.data["must_change_password"])
+		self.assertEqual(profile_response.data["agent_permissions"], [])
+		self.assertEqual(profile_response.data["compagnie_nom"], "Transport Demo")
+
+		update_response = self.client.patch(
+			reverse("current-user"),
+			{"nom": "Modification interdite"},
+			format="json",
+		)
+		self.assertEqual(update_response.status_code, status.HTTP_403_FORBIDDEN)
+
 
 class UserAdminPrivacyTests(TestCase):
 	def setUp(self):
@@ -220,6 +257,38 @@ class AdminUserListTests(APITestCase):
 		)
 		self.assertEqual(all_users_response.data["count"], 4)
 		self.assertIsNotNone(all_users_response.data["next"])
+
+	def test_admin_can_search_users_by_identity_or_company_name(self):
+		response = self.client.get(
+			reverse("admin-user-list"),
+			{"search": "Kinesis Transport"},
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data["count"], 2)
+		self.assertEqual(
+			{user["role"] for user in response.data["results"]},
+			{User.Role.COMPAGNIE, User.Role.AGENT_COMPAGNIE},
+		)
+
+		agent_response = self.client.get(
+			reverse("admin-user-list"),
+			{"search": "agent-list"},
+		)
+		self.assertEqual(agent_response.data["count"], 1)
+		self.assertEqual(
+			agent_response.data["results"][0]["role"],
+			User.Role.AGENT_COMPAGNIE,
+		)
+
+		oversized_search_response = self.client.get(
+			reverse("admin-user-list"),
+			{"search": "x" * 101},
+		)
+		self.assertEqual(
+			oversized_search_response.status_code,
+			status.HTTP_400_BAD_REQUEST,
+		)
 
 	def test_user_listing_rejects_invalid_role_and_non_admins(self):
 		invalid_role_response = self.client.get(

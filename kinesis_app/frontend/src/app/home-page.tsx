@@ -340,6 +340,14 @@ export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const profileHref =
+    profile?.role === "COMPAGNIE"
+      ? "/espace-compagnie"
+      : profile?.role === "AGENT_COMPAGNIE"
+        ? "/espace-agent"
+        : profile?.role === "ADMINISTRATEUR"
+          ? "/espace-administration"
+        : "/espace-voyageur";
 
   useEffect(() => {
     let active = true;
@@ -525,7 +533,7 @@ export default function HomePage() {
 
           <Link
             className={`account-button${profile ? " account-button--profile" : ""}`}
-            href={profile ? "/espace-voyageur" : "/connexion"}
+            href={profile ? profileHref : "/connexion"}
           >
             {profile?.photo_profil ? (
               <Image
@@ -564,7 +572,7 @@ export default function HomePage() {
               Pourquoi Kinesis ?
             </a>
             <Link
-              href={profile ? "/espace-voyageur" : "/connexion"}
+              href={profile ? profileHref : "/connexion"}
               onClick={() => setMenuOpen(false)}
             >
               {profile ? "Profil" : "Connexion"}

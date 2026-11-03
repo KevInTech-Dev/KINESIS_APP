@@ -9,7 +9,10 @@ class PasswordChangeComplete(BasePermission):
         if not user or not user.is_authenticated:
             return False
         if user.must_change_password:
-            return request.resolver_match.url_name == "user-change-password"
+            return request.resolver_match.url_name == "user-change-password" or (
+                request.method == "GET"
+                and request.resolver_match.url_name == "current-user"
+            )
         return True
 
 

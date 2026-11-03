@@ -48,6 +48,22 @@ modifier la description, l’adresse et le logo. Les routes `/api/compagnie/*`
 servent de proxy serveur authentifié et les droits de propriété restent
 contrôlés par Django.
 
+Les agents de compagnie sont redirigés vers `/espace-agent`. À la première
+connexion, ils doivent remplacer leur mot de passe provisoire avant d’accéder
+aux outils attribués : vérification et embarquement des billets, enregistrement
+et suivi des bagages, ainsi que notifications. Les sections affichées suivent
+les permissions de l’agent ; Django vérifie de nouveau chaque action et limite
+les données aux voyages de sa compagnie.
+
+Les comptes administrateur KINESIS sont dirigés vers `/espace-administration`.
+Cet espace permet d’examiner les dossiers compagnie et leurs pièces privées,
+d’envoyer le lien d’activation après validation, de refuser un dossier ou de
+désactiver un compte actif. L’onglet des comptes permet de filtrer par rôle,
+de rechercher par identité, contact ou compagnie, et de parcourir les résultats
+paginés. La liste et chaque action sont protégées par le rôle et le statut
+administrateur dans Django ; les pièces sont délivrées sous forme d’URL
+Cloudinary signées.
+
 ## Vérifications
 
 - `npm run lint`

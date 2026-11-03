@@ -132,6 +132,37 @@ class CompanyProfileSerializer(serializers.ModelSerializer):
         )
 
 
+class AdminCompanyReviewSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="utilisateur_id", read_only=True)
+    email = serializers.EmailField(source="utilisateur.email", read_only=True)
+    telephone = serializers.CharField(source="utilisateur.telephone", read_only=True)
+    is_active = serializers.BooleanField(
+        source="utilisateur.is_active",
+        read_only=True,
+    )
+
+    class Meta:
+        model = Compagnie
+        fields = (
+            "id",
+            "email",
+            "telephone",
+            "is_active",
+            "raison_sociale",
+            "nom_commercial",
+            "telephone_secondaire",
+            "nif",
+            "rccm",
+            "logo",
+            "carte_cfe",
+            "piece_identite_gerant",
+            "description",
+            "adresse",
+            "statut",
+        )
+        read_only_fields = fields
+
+
 class AgentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="utilisateur_id", read_only=True)
     email = serializers.EmailField(source="utilisateur.email", read_only=True)

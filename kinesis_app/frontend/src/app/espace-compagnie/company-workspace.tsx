@@ -575,7 +575,6 @@ export default function CompanyWorkspace() {
                 </button>
               </div>
               <div className="company-welcome-art" aria-hidden="true">
-                <span>✦</span><span>↗</span><span>●</span>
               </div>
             </section>
             <div className="company-stat-grid">

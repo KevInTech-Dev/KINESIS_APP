@@ -99,6 +99,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
+    agent_permissions = serializers.SerializerMethodField()
+    compagnie_nom = serializers.SerializerMethodField()
+
     class Meta:
         model = Utilisateur
         fields = (
@@ -110,8 +113,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "photo_profil",
             "role",
             "must_change_password",
+            "agent_permissions",
+            "compagnie_nom",
         )
         read_only_fields = ("id", "email", "role", "must_change_password")
+
+    def get_agent_permissions(self, obj):
+        if obj.role != Utilisateur.Role.AGENT_COMPAGNIE:
+            return []
+        try:
+            return list(obj.profil_agent.permissions.values_list("permission", flat=True))
+        except AgentCompagnie.DoesNotExist:
+            return []
+
+    def get_compagnie_nom(self, obj):
+        if obj.role != Utilisateur.Role.AGENT_COMPAGNIE:
+            return None
+        try:
+            return obj.profil_agent.compagnie.nom_commercial
+        except AgentCompagnie.DoesNotExist:
+            return None
 
 
 class LogoutRequestSerializer(serializers.Serializer):

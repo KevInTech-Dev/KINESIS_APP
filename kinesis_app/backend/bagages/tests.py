@@ -339,3 +339,67 @@ class BagageApiTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(other)}"
         )
         self.assertEqual(self.client.get(reverse("bagage-list")).data, [])
+
+    @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
+    def test_agent_with_return_permission_can_list_company_baggage(self, _save):
+        baggage = register_baggage(
+            actor=self.company_user,
+            reservation_id=self.reservation.pk,
+            poids=12,
+            photo_files=[make_image()],
+        )
+        agent_user = User.objects.create_user(
+            email="agent@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Test",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.RESTITUER_BAGAGE,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+        )
+
+        response = self.client.get(reverse("bagage-list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id_bagage"], str(baggage.pk))
+
+        record_manual_fee_payment(
+            actor=self.company_user,
+            baggage_id=baggage.pk,
+        )
+        return_response = self.client.post(
+            reverse("bagage-restitution", kwargs={"pk": baggage.pk})
+        )
+
+        self.assertEqual(return_response.status_code, 200)
+        self.assertEqual(return_response.data["statut"], Bagage.Statut.RESTITUE)
+
+    def test_agent_without_baggage_read_or_return_permission_cannot_list(self):
+        agent_user = User.objects.create_user(
+            email="agent@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Test",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+        )
+
+        response = self.client.get(reverse("bagage-list"))
+
+        self.assertEqual(response.status_code, 403)

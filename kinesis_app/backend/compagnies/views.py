@@ -5,24 +5,31 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import generics, parsers, serializers
+from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
 from rest_framework.views import APIView
 
 from config.pagination import StandardResultsSetPagination
+from utilisateurs.permissions import IsKinesisAdministrator
 
 from .models import AgentCompagnie, Compagnie
 from .permissions import IsActiveCompany
 from .serializers import (
+    AdminCompanyReviewSerializer,
     AgentCreateSerializer,
     AgentSerializer,
     AgentUpdateSerializer,
     CompanyProfileSerializer,
     CompanyRegistrationSerializer,
 )
-
-ACTIVATION_TOKEN_SALT = "compagnies.activation"
+from .services import (
+    ACTIVATION_TOKEN_SALT,
+    approve_company,
+    deactivate_company,
+    refuse_company,
+)
 
 
 class CompanyRegistrationView(generics.CreateAPIView):
@@ -84,6 +91,57 @@ class CompanyActivationView(APIView):
             {"detail": "Votre compte compagnie est activé."},
             status=HTTP_200_OK,
         )
+
+
+class AdminCompanyListView(generics.ListAPIView):
+    serializer_class = AdminCompanyReviewSerializer
+    permission_classes = (IsKinesisAdministrator,)
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        queryset = Compagnie.objects.select_related("utilisateur").order_by(
+            "statut",
+            "nom_commercial",
+            "utilisateur_id",
+        )
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            if status_filter not in Compagnie.Statut.values:
+                raise ValidationError(
+                    {"status": "Statut de compagnie invalide."}
+                )
+            queryset = queryset.filter(statut=status_filter)
+        return queryset
+
+
+class AdminCompanyActionView(APIView):
+    permission_classes = (IsKinesisAdministrator,)
+    action = None
+
+    def post(self, request, pk):
+        if self.action == "approve":
+            company = approve_company(company_id=pk, request=request)
+        elif self.action == "refuse":
+            company = refuse_company(company_id=pk)
+        elif self.action == "deactivate":
+            company = deactivate_company(company_id=pk)
+        else:
+            raise ValidationError({"action": "Action administrateur invalide."})
+        return Response(
+            AdminCompanyReviewSerializer(company, context={"request": request}).data
+        )
+
+
+class AdminCompanyApproveView(AdminCompanyActionView):
+    action = "approve"
+
+
+class AdminCompanyRefuseView(AdminCompanyActionView):
+    action = "refuse"
+
+
+class AdminCompanyDeactivateView(AdminCompanyActionView):
+    action = "deactivate"
 
 
 class MyCompanyView(generics.RetrieveUpdateAPIView):

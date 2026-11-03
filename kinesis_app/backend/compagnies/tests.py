@@ -399,7 +399,9 @@ class CompanyApiTests(APITestCase):
         )
 
         profile_response = self.client.get(reverse("current-user"))
-        self.assertEqual(profile_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(profile_response.data["role"], User.Role.AGENT_COMPAGNIE)
+        self.assertTrue(profile_response.data["must_change_password"])
 
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {agent_login_response.data['access']}"
@@ -492,3 +494,160 @@ class CompanyApiTests(APITestCase):
             reverse("company-agent-detail", kwargs={"pk": agent.pk})
         )
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class AdminCompanyApiTests(APITestCase):
+    password = "Qx7!mR4#vN8p"
+
+    def setUp(self):
+        admin_user = User.objects.create_superuser(
+            email="admin-api@example.com",
+            password=self.password,
+            nom="Admin",
+            prenoms="Kinesis",
+        )
+        self.pending_user = User.objects.create_user(
+            email="pending-api@example.com",
+            password=self.password,
+            nom="Transport",
+            role=User.Role.COMPAGNIE,
+            is_active=False,
+        )
+        self.pending_company = Compagnie.objects.create(
+            utilisateur=self.pending_user,
+            raison_sociale="Transport Togo SARL",
+            nom_commercial="Kinesis Transport",
+            nif="1234567890",
+            rccm="TG-LFW-01-2023-B13-01282",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(admin_user)}"
+        )
+
+    def test_admin_lists_company_applications_with_signed_private_documents(self):
+        self.pending_company.carte_cfe.name = "compagnies/documents/cfe.png"
+        self.pending_company.save(update_fields=("carte_cfe",))
+        with patch.object(
+            AuthenticatedCompanyDocumentStorage,
+            "url",
+            return_value="https://cloudinary.example/signed-cfe",
+        ):
+            response = self.client.get(
+                reverse("admin-company-list"),
+                {"status": Compagnie.Statut.EN_ATTENTE_VALIDATION},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        application = response.data["results"][0]
+        self.assertEqual(application["id"], str(self.pending_company.pk))
+        self.assertEqual(application["email"], self.pending_user.email)
+        self.assertEqual(
+            application["carte_cfe"],
+            "https://cloudinary.example/signed-cfe",
+        )
+
+    def test_non_administrator_cannot_review_company_applications(self):
+        traveler = User.objects.create_user(
+            email="traveler-api@example.com",
+            password=self.password,
+            nom="Voyageur",
+            role=User.Role.VOYAGEUR,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(traveler)}"
+        )
+
+        response = self.client.get(reverse("admin-company-list"))
+        action_response = self.client.post(
+            reverse(
+                "admin-company-approve",
+                kwargs={"pk": self.pending_company.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(action_response.status_code, status.HTTP_403_FORBIDDEN)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_admin_approves_company_by_sending_activation_link(self):
+        from django.core import mail
+
+        response = self.client.post(
+            reverse(
+                "admin-company-approve",
+                kwargs={"pk": self.pending_company.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["statut"],
+            Compagnie.Statut.EN_ATTENTE_ACTIVATION,
+        )
+        self.assertEqual(len(mail.outbox), 1)
+        self.pending_user.refresh_from_db()
+        self.assertFalse(self.pending_user.is_active)
+
+        repeated_response = self.client.post(
+            reverse(
+                "admin-company-approve",
+                kwargs={"pk": self.pending_company.pk},
+            )
+        )
+        self.assertEqual(repeated_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(mail.outbox), 1)
+
+    @patch("compagnies.services.send_mail", return_value=0)
+    def test_company_stays_pending_when_activation_email_is_not_sent(self, _send_mail):
+        response = self.client.post(
+            reverse(
+                "admin-company-approve",
+                kwargs={"pk": self.pending_company.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.pending_company.refresh_from_db()
+        self.assertEqual(
+            self.pending_company.statut,
+            Compagnie.Statut.EN_ATTENTE_VALIDATION,
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_admin_refuses_or_deactivates_company_accounts(self):
+        from django.core import mail
+
+        refused = self.client.post(
+            reverse(
+                "admin-company-refuse",
+                kwargs={"pk": self.pending_company.pk},
+            )
+        )
+        self.assertEqual(refused.status_code, status.HTTP_200_OK)
+        self.assertEqual(refused.data["statut"], Compagnie.Statut.REFUSEE)
+        self.pending_user.refresh_from_db()
+        self.assertFalse(self.pending_user.is_active)
+        self.assertEqual(len(mail.outbox), 1)
+
+        active_user = User.objects.create_user(
+            email="active-api@example.com",
+            password=self.password,
+            nom="Transport actif",
+            role=User.Role.COMPAGNIE,
+            is_active=True,
+        )
+        active_company = Compagnie.objects.create(
+            utilisateur=active_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        deactivated = self.client.post(
+            reverse(
+                "admin-company-deactivate",
+                kwargs={"pk": active_company.pk},
+            )
+        )
+        self.assertEqual(deactivated.status_code, status.HTTP_200_OK)
+        self.assertEqual(deactivated.data["statut"], Compagnie.Statut.DESACTIVE)
+        active_user.refresh_from_db()
+        self.assertFalse(active_user.is_active)

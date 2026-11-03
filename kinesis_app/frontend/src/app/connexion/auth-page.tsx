@@ -141,6 +141,16 @@ export default function AuthPage() {
           }
           if (isUserProfile(sessionProfile) && sessionProfile.role === "COMPAGNIE") {
             destination = "/espace-compagnie";
+          } else if (
+            isUserProfile(sessionProfile) &&
+            sessionProfile.role === "AGENT_COMPAGNIE"
+          ) {
+            destination = "/espace-agent";
+          } else if (
+            isUserProfile(sessionProfile) &&
+            sessionProfile.role === "ADMINISTRATEUR"
+          ) {
+            destination = "/espace-administration";
           }
         }
         router.push(destination);

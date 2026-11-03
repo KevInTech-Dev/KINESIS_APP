@@ -6,6 +6,8 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 
 from compagnies.models import PermissionAgent
+from compagnies.permissions import CanOperateAgentVoyages
+from config.pagination import StandardResultsSetPagination
 from notifications.models import Notification
 from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
@@ -34,6 +36,21 @@ class VilleListView(generics.ListAPIView):
     queryset = Ville.objects.all()
     serializer_class = VilleSerializer
     permission_classes = [AllowAny]
+
+
+class AgentVoyageListView(generics.ListAPIView):
+    serializer_class = VoyageSerializer
+    permission_classes = [CanOperateAgentVoyages]
+    pagination_class = StandardResultsSetPagination
+
+    def get_queryset(self):
+        return Voyage.objects.filter(
+            compagnie=self.request.user.profil_agent.compagnie,
+        ).select_related(
+            "compagnie__utilisateur",
+            "ville_depart",
+            "ville_arrivee",
+        )
 
 
 class VoyageListCreateView(generics.ListCreateAPIView):

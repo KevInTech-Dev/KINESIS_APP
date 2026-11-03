@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
-from compagnies.models import Compagnie
+from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
 from notifications.models import Notification
 from reservations.models import PlaceReservee, Reservation
 
@@ -66,6 +66,77 @@ class VoyageApiTests(APITestCase):
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}"
         )
+
+    def test_agent_with_boarding_permissions_only_lists_company_trips(self):
+        other_company_user = User.objects.create_user(
+            email="autre-compagnie@example.com",
+            password=self.password,
+            nom="Autre transport",
+            prenoms="Admin",
+            role=User.Role.COMPAGNIE,
+        )
+        other_company = Compagnie.objects.create(
+            utilisateur=other_company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        other_trip = Voyage.objects.create(
+            compagnie=other_company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date,
+            heure_depart=time(11, 0),
+            place_totale=30,
+            prix="4500",
+        )
+        agent_user = User.objects.create_user(
+            email="agent-voyages@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Test",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.SCANNER_BILLET,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+        )
+
+        response = self.client.get(reverse("agent-voyage-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        trip_ids = [item["id_voyage"] for item in response.data["results"]]
+        self.assertIn(str(self.voyage.pk), trip_ids)
+        self.assertNotIn(str(other_trip.pk), trip_ids)
+
+    def test_agent_without_both_boarding_permissions_cannot_list_trips(self):
+        agent_user = User.objects.create_user(
+            email="agent-voyages@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Test",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+        )
+
+        response = self.client.get(reverse("agent-voyage-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_public_search_returns_only_published_future_trips_and_filters(self):
         Voyage.objects.create(

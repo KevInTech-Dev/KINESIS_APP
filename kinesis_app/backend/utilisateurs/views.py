@@ -1,5 +1,6 @@
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import Q
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -41,8 +42,19 @@ class AdminUserListView(generics.ListAPIView):
 				type=str,
 				enum=Utilisateur.Role.values,
 				required=False,
-				description="Filtrer par rôle : VOYAGEUR, COMPAGNIE, AGENT_COMPAGNIE ou ADMINISTRATEUR.",
-			)
+				description=(
+					"Filtrer par rôle : VOYAGEUR, COMPAGNIE, AGENT_COMPAGNIE "
+					"ou ADMINISTRATEUR."
+				),
+			),
+			OpenApiParameter(
+				name="search",
+				type=str,
+				required=False,
+				description=(
+					"Rechercher par identité, contact ou nom de compagnie liée."
+				),
+			),
 		]
 	)
 	def get(self, request, *args, **kwargs):
@@ -60,6 +72,21 @@ class AdminUserListView(generics.ListAPIView):
 					{"role": "Rôle invalide. Consultez les rôles documentés de l’API."}
 				)
 			queryset = queryset.filter(role=role)
+		search = self.request.query_params.get("search", "").strip()
+		if len(search) > 100:
+			raise ValidationError(
+				{"search": "La recherche ne peut pas dépasser 100 caractères."}
+			)
+		if search:
+			queryset = queryset.filter(
+				Q(email__icontains=search)
+				| Q(nom__icontains=search)
+				| Q(prenoms__icontains=search)
+				| Q(telephone__icontains=search)
+				| Q(profil_compagnie__nom_commercial__icontains=search)
+				| Q(profil_compagnie__raison_sociale__icontains=search)
+				| Q(profil_agent__compagnie__nom_commercial__icontains=search)
+			)
 		return queryset
 
 
