@@ -10,6 +10,7 @@ async function BookingRoute({ params, searchParams }: BookingRouteProps) {
   const [{ voyageId }, { passagers }] = await Promise.all([params, searchParams]);
   return (
     <BookingPage
+      key={`${voyageId}:${Number(passagers) || 1}`}
       voyageId={voyageId}
       passengerCount={Number(passagers) || 1}
     />

@@ -169,6 +169,11 @@ class AgentSerializer(serializers.ModelSerializer):
     nom = serializers.CharField(source="utilisateur.nom", read_only=True)
     prenoms = serializers.CharField(source="utilisateur.prenoms", read_only=True)
     telephone = serializers.CharField(source="utilisateur.telephone", read_only=True)
+    photo_profil = serializers.ImageField(
+        source="utilisateur.photo_profil",
+        read_only=True,
+        allow_null=True,
+    )
     is_active = serializers.BooleanField(source="utilisateur.is_active", read_only=True)
     permissions = serializers.SerializerMethodField()
 
@@ -180,6 +185,7 @@ class AgentSerializer(serializers.ModelSerializer):
             "nom",
             "prenoms",
             "telephone",
+            "photo_profil",
             "is_active",
             "permissions",
         )

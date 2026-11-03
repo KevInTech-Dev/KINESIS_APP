@@ -1,6 +1,17 @@
 import { forwardBackendGet } from "@/lib/backend-api";
 
-const searchFields = ["ville_depart", "ville_arrivee", "date_depart"] as const;
+const searchFields = [
+  "ville_depart",
+  "ville_arrivee",
+  "date_depart",
+  "date_depart_apres",
+  "date_depart_avant",
+  "compagnie",
+  "prix_min",
+  "prix_max",
+  "places_min",
+  "ordering",
+] as const;
 
 export function GET(request: Request) {
   const input = new URL(request.url).searchParams;
@@ -13,23 +24,20 @@ export function GET(request: Request) {
     }
   }
 
-  if (filters.size > 0) {
-    if (searchFields.some((field) => !filters.has(field))) {
-      return Response.json(
-        { detail: "Le départ, l’arrivée et la date sont obligatoires." },
-        { status: 400 },
-      );
-    }
+  if (
+    filters.has("ville_depart") &&
+    filters.has("ville_arrivee") &&
+    filters.get("ville_depart") === filters.get("ville_arrivee")
+  ) {
+    return Response.json(
+      { detail: "Les villes de départ et d’arrivée doivent être différentes." },
+      { status: 400 },
+    );
+  }
 
-    if (filters.get("ville_depart") === filters.get("ville_arrivee")) {
-      return Response.json(
-        { detail: "Les villes de départ et d’arrivée doivent être différentes." },
-        { status: 400 },
-      );
-    }
-
-    const date = filters.get("date_depart") ?? "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  for (const field of ["date_depart", "date_depart_apres", "date_depart_avant"]) {
+    const date = filters.get(field);
+    if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       return Response.json(
         { detail: "La date de départ doit être au format AAAA-MM-JJ." },
         { status: 400 },
@@ -37,5 +45,5 @@ export function GET(request: Request) {
     }
   }
 
-  return forwardBackendGet("voyages/", filters);
+  return forwardBackendGet("voyages/", filters.size ? filters : undefined);
 }

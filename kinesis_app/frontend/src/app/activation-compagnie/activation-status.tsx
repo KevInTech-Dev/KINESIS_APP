@@ -55,13 +55,15 @@ export default function ActivationStatus() {
     };
   }, [token]);
 
-  const activationResult = token
-    ? result
-    : {
+  const activationResult =
+    result ??
+    (token
+      ? null
+      : {
         success: false,
         message:
           "Le lien d’activation est incomplet. Vérifiez le lien reçu par e-mail.",
-      };
+      });
 
   return (
     <main className="activation-page">

@@ -248,6 +248,8 @@ class AdminUserListTests(APITestCase):
 		self.assertIsNone(response.data["next"])
 		company_data = response.data["results"][0]
 		self.assertEqual(company_data["role"], User.Role.COMPAGNIE)
+		self.assertIn("photo_profil", company_data)
+		self.assertIsNone(company_data["photo_profil"])
 		self.assertEqual(company_data["compagnie"]["nom_commercial"], "Kinesis Transport")
 		self.assertEqual(company_data["compagnie"]["telephone_principal"], "+22890000000")
 

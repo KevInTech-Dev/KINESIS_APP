@@ -19,7 +19,18 @@ function isAllowedResource(path: string[], method: string) {
   if (/^voyages\/[0-9a-f-]{36}$/i.test(resource)) {
     return ["GET", "PATCH", "PUT"].includes(method);
   }
-  return resource === "paiements" && method === "GET";
+  if (resource === "paiements" && method === "GET") return true;
+  if (resource === "reservations" && method === "GET") return true;
+  if (resource === "notifications" && method === "GET") return true;
+  if (resource === "notifications/lire-tout" && method === "POST") return true;
+  if (/^notifications\/[0-9a-f-]{36}\/lire$/i.test(resource)) {
+    return method === "POST";
+  }
+  if (resource === "bagages/tarifs") return ["GET", "POST"].includes(method);
+  if (/^bagages\/tarifs\/[0-9a-f-]{36}$/i.test(resource)) {
+    return ["GET", "PATCH", "PUT", "DELETE"].includes(method);
+  }
+  return false;
 }
 
 async function proxyCompanyRequest(request: Request, context: RouteContext) {

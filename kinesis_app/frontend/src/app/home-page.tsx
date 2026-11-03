@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type IconName =
@@ -277,7 +278,7 @@ function TripCard({
           className="trip-card__select"
           onClick={() => (onBook ?? onSelect)?.(trip)}
           type="button"
-          aria-label={`${onBook ? "Réserver" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
+          aria-label={`${onBook ? "Consulter" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
         />
       ) : null}
       <Image
@@ -468,6 +469,7 @@ export default function HomePage() {
       ville_depart: from,
       ville_arrivee: to,
       date_depart: date,
+      places_min: String(passengers),
     });
 
     try {
@@ -478,6 +480,12 @@ export default function HomePage() {
       const suitableTrips = matchingTrips.filter(
         (trip) => trip.places_disponibles >= passengers,
       );
+      if (suitableTrips.length === 1) {
+        router.push(
+          `/voyages/${encodeURIComponent(suitableTrips[0].id_voyage)}?passagers=${passengers}`,
+        );
+        return;
+      }
       setSearchResults(suitableTrips);
       setSearchMessage(
         suitableTrips.length === 0
@@ -493,18 +501,6 @@ export default function HomePage() {
     } finally {
       setSearching(false);
     }
-  }
-
-  function selectTrip(trip: Voyage) {
-    setFrom(trip.ville_depart);
-    setTo(trip.ville_arrivee);
-    setDate(trip.date_depart);
-    setSearchMessage("");
-    setSearchResults(null);
-    document.getElementById("search-form")?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
   }
 
   return (
@@ -527,7 +523,7 @@ export default function HomePage() {
 
           <nav className="main-nav" aria-label="Navigation principale">
             <a href="#accueil">Accueil</a>
-            <a href="#destinations">Trajets</a>
+            <Link href="/voyages">Voyages</Link>
             <a href="#avantages">Pourquoi Kinesis ?</a>
           </nav>
 
@@ -535,14 +531,13 @@ export default function HomePage() {
             className={`account-button${profile ? " account-button--profile" : ""}`}
             href={profile ? profileHref : "/connexion"}
           >
-            {profile?.photo_profil ? (
-              <Image
+            {profile ? (
+              <ProfileAvatar
                 className="account-avatar"
+                fallbackClassName="account-avatar--fallback"
                 src={profile.photo_profil}
-                width={32}
-                height={32}
-                alt=""
-                unoptimized
+                name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+                size={32}
               />
             ) : (
               <Icon name="user" className="icon-small" />
@@ -565,16 +560,24 @@ export default function HomePage() {
             <a href="#accueil" onClick={() => setMenuOpen(false)}>
               Accueil
             </a>
-            <a href="#destinations" onClick={() => setMenuOpen(false)}>
-              Trajets
-            </a>
+            <Link href="/voyages" onClick={() => setMenuOpen(false)}>Voyages</Link>
             <a href="#avantages" onClick={() => setMenuOpen(false)}>
               Pourquoi Kinesis ?
             </a>
             <Link
+              className={profile ? "mobile-profile-link" : undefined}
               href={profile ? profileHref : "/connexion"}
               onClick={() => setMenuOpen(false)}
             >
+              {profile ? (
+                <ProfileAvatar
+                  className="account-avatar"
+                  fallbackClassName="account-avatar--fallback"
+                  src={profile.photo_profil}
+                  name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+                  size={32}
+                />
+              ) : null}
               {profile ? "Profil" : "Connexion"}
             </Link>
           </nav>
@@ -805,7 +808,7 @@ export default function HomePage() {
                     index={index}
                     onBook={(selectedTrip) => {
                       router.push(
-                        `/reservation/${encodeURIComponent(selectedTrip.id_voyage)}?passagers=${passengers}`,
+                        `/voyages/${encodeURIComponent(selectedTrip.id_voyage)}?passagers=${passengers}`,
                       );
                     }}
                   />
@@ -833,11 +836,35 @@ export default function HomePage() {
                   key={trip.id_voyage}
                   trip={trip}
                   index={index}
-                  onSelect={selectTrip}
+                  onBook={(selectedTrip) => {
+                    router.push(`/voyages/${encodeURIComponent(selectedTrip.id_voyage)}`);
+                  }}
                 />
               ))}
             </div>
           )}
+          {searchResults === null && trips.length > 3 ? (
+            <div className="trip-more">
+              <Link className="trip-more__button" href="/voyages">
+                Voir plus de voyages <Icon name="arrow" className="icon-small" />
+              </Link>
+            </div>
+          ) : null}
+          {searchResults && searchResults.length > 1 ? (
+            <div className="trip-more">
+              <Link
+                className="trip-more__button"
+                href={`/voyages?${new URLSearchParams({
+                  ville_depart: from,
+                  ville_arrivee: to,
+                  date_depart: date,
+                  places_min: String(passengers),
+                })}`}
+              >
+                Afficher tous les résultats <Icon name="arrow" className="icon-small" />
+              </Link>
+            </div>
+          ) : null}
         </section>
 
         <section className="benefits-section" id="avantages">
@@ -888,7 +915,7 @@ export default function HomePage() {
           <p>Le Togo en mouvement, avec vous.</p>
           <nav aria-label="Navigation de pied de page">
             <a href="#avantages">À propos</a>
-            <a href="#destinations">Trajets</a>
+            <Link href="/voyages">Voyages</Link>
           </nav>
         </div>
         <div className="footer-bottom">

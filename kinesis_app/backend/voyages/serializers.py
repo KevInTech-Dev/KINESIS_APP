@@ -18,6 +18,7 @@ class VilleSerializer(serializers.ModelSerializer):
 
 
 class VoyageSerializer(serializers.ModelSerializer):
+    heure_depart = serializers.TimeField(format="%H:%M")
     compagnie = serializers.UUIDField(source="compagnie_id", read_only=True)
     compagnie_nom = serializers.CharField(
         source="compagnie.utilisateur.nom",
@@ -77,6 +78,9 @@ class VoyageSerializer(serializers.ModelSerializer):
                 .count()
             )
         return max(obj.place_totale - occupied, 0)
+
+    def validate_heure_depart(self, value):
+        return value.replace(second=0, microsecond=0)
 
     def validate_place_totale(self, value):
         if value <= 0:
@@ -144,3 +148,42 @@ class VoyageSearchSerializer(serializers.Serializer):
     ville_depart = serializers.UUIDField(required=False)
     ville_arrivee = serializers.UUIDField(required=False)
     date_depart = serializers.DateField(required=False)
+    date_depart_apres = serializers.DateField(required=False)
+    date_depart_avant = serializers.DateField(required=False)
+    compagnie = serializers.UUIDField(required=False)
+    prix_min = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        min_value=0,
+        required=False,
+    )
+    prix_max = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=0,
+        min_value=0,
+        required=False,
+    )
+    places_min = serializers.IntegerField(min_value=1, max_value=100, required=False)
+    ordering = serializers.ChoiceField(
+        choices=("date_depart", "prix", "-prix"),
+        required=False,
+    )
+
+    def validate(self, attrs):
+        if (
+            attrs.get("date_depart_apres")
+            and attrs.get("date_depart_avant")
+            and attrs["date_depart_apres"] > attrs["date_depart_avant"]
+        ):
+            raise serializers.ValidationError(
+                {"date_depart_avant": "La date de fin doit suivre la date de début."}
+            )
+        if (
+            attrs.get("prix_min") is not None
+            and attrs.get("prix_max") is not None
+            and attrs["prix_min"] > attrs["prix_max"]
+        ):
+            raise serializers.ValidationError(
+                {"prix_max": "Le prix maximum doit être supérieur au prix minimum."}
+            )
+        return attrs

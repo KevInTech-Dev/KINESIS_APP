@@ -84,7 +84,9 @@ export default function BookingPage({
   const [createdReservation, setCreatedReservation] = useState<string | null>(
     null,
   );
-  const count = Math.min(Math.max(passengerCount, 1), 100);
+  const initialCount = Math.min(Math.max(passengerCount, 1), 100);
+  const [count, setCount] = useState(initialCount);
+  const enoughSeats = trip !== null && trip.places_disponibles >= count;
   const total = useMemo(
     () => (trip ? Number(trip.prix) * count : 0),
     [trip, count],
@@ -115,7 +117,7 @@ export default function BookingPage({
           throw new Error(await responseMessage(profileResponse));
         }
         setNames(
-          Array.from({ length: count }, (_, index) =>
+          Array.from({ length: initialCount }, (_, index) =>
             index === 0 && loadedProfile?.nom
               ? [loadedProfile.prenoms, loadedProfile.nom]
                   .filter(Boolean)
@@ -138,7 +140,16 @@ export default function BookingPage({
     return () => {
       active = false;
     };
-  }, [voyageId, count]);
+  }, [voyageId, initialCount]);
+
+  function updatePassengerCount(nextCount: number) {
+    const next = Math.min(Math.max(nextCount, 1), 100);
+    setCount(next);
+    setNames((current) =>
+      Array.from({ length: next }, (_, index) => current[index] ?? ""),
+    );
+    setError(null);
+  }
 
   async function submitBooking(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -146,6 +157,10 @@ export default function BookingPage({
     if (!profile) {
       const returnPath = `/reservation/${encodeURIComponent(voyageId)}?passagers=${count}`;
       router.push(`/connexion?next=${encodeURIComponent(returnPath)}`);
+      return;
+    }
+    if (!enoughSeats) {
+      setError("Le nombre de passagers dépasse les places encore disponibles.");
       return;
     }
     if (names.length !== count || names.some((name) => !name.trim())) {
@@ -228,8 +243,8 @@ export default function BookingPage({
           />
           <span>KINESIS</span>
         </Link>
-        <Link className="booking-back" href="/#destinations">
-          Retour aux trajets
+        <Link className="booking-back" href="/voyages">
+          Retour aux voyages
         </Link>
       </header>
 
@@ -272,12 +287,41 @@ export default function BookingPage({
                   <h2>Informations des passagers</h2>
                   <span>{count} {count > 1 ? "places" : "place"}</span>
                 </div>
+                <div className="booking-passenger-controls">
+                  <span>Combien de passagers voyagent ?</span>
+                  <div className="booking-passenger-stepper">
+                    <button
+                      type="button"
+                      aria-label="Retirer un passager"
+                      onClick={() => updatePassengerCount(count - 1)}
+                      disabled={count <= 1}
+                    >
+                      −
+                    </button>
+                    <strong aria-live="polite">{count}</strong>
+                    <button
+                      type="button"
+                      aria-label="Ajouter un passager"
+                      onClick={() => updatePassengerCount(count + 1)}
+                      disabled={
+                        count >= 100 ||
+                        count >= trip.places_disponibles
+                      }
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+                <p className="booking-seats-available">
+                  {trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}
+                </p>
                 {names.map((name, index) => (
                   <label key={index}>
-                    <span>Passager {index + 1}</span>
+                    <span>Nom complet du passager {index + 1}</span>
                     <input
-                      autoComplete="name"
+                      autoComplete={index === 0 ? "name" : "off"}
                       maxLength={150}
+                      placeholder="Ex. Kévin ADJAKLI"
                       required
                       value={name}
                       onChange={(event) =>
@@ -294,10 +338,19 @@ export default function BookingPage({
                   <span>Total à régler</span>
                   <strong>{formatPrice(total)}</strong>
                 </div>
+                {!enoughSeats ? (
+                  <p className="traveler-form-error" role="alert">
+                    Il ne reste que {trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} pour {count} passager{count > 1 ? "s" : ""}. Réduisez le nombre de passagers pour continuer.
+                  </p>
+                ) : null}
                 {error ? (
                   <p className="traveler-form-error" role="alert">{error}</p>
                 ) : null}
-                <button className="booking-submit" type="submit" disabled={submitting}>
+                <button
+                  className="booking-submit"
+                  type="submit"
+                  disabled={submitting || !enoughSeats}
+                >
                   {submitting ? "Préparation du paiement…" : "Réserver et payer"}
                 </button>
                 <p className="booking-note">

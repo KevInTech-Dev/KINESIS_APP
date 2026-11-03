@@ -12,6 +12,7 @@ import {
   type FormEvent,
 } from "react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Reservation = {
@@ -43,6 +44,8 @@ type Ticket = {
   nom_passager: string;
   numero_siege: string;
   statut: string;
+  date_creation?: string;
+  date_embarquement?: string | null;
   voyage: {
     ville_depart_nom: string;
     ville_arrivee_nom: string;
@@ -51,10 +54,20 @@ type Ticket = {
   };
 };
 
+type Notification = {
+  id_notification: string;
+  type: string;
+  titre: string;
+  message: string;
+  lue: boolean;
+  date_creation: string;
+};
+
 type DashboardData = {
   profile: UserProfile | null;
   reservations: Reservation[];
   tickets: Ticket[];
+  notifications: Notification[];
 };
 
 const statusLabels: Record<string, string> = {
@@ -121,6 +134,9 @@ function isReservationList(
         typeof reservation.reference === "string" &&
         "date_reservation" in reservation &&
         typeof reservation.date_reservation === "string" &&
+        "date_expiration" in reservation &&
+        (typeof reservation.date_expiration === "string" ||
+          reservation.date_expiration === null) &&
         "montant_total" in reservation &&
         (typeof reservation.montant_total === "string" ||
           typeof reservation.montant_total === "number") &&
@@ -141,6 +157,32 @@ function isReservationList(
         typeof reservation.voyage.heure_depart === "string" &&
         "places" in reservation &&
         Array.isArray(reservation.places),
+    )
+  );
+}
+
+function isNotificationList(value: unknown): value is { results: Notification[] } {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "results" in value &&
+    Array.isArray(value.results) &&
+    value.results.every(
+      (notification) =>
+        typeof notification === "object" &&
+        notification !== null &&
+        "id_notification" in notification &&
+        typeof notification.id_notification === "string" &&
+        "type" in notification &&
+        typeof notification.type === "string" &&
+        "titre" in notification &&
+        typeof notification.titre === "string" &&
+        "message" in notification &&
+        typeof notification.message === "string" &&
+        "lue" in notification &&
+        typeof notification.lue === "boolean" &&
+        "date_creation" in notification &&
+        typeof notification.date_creation === "string",
     )
   );
 }
@@ -172,6 +214,21 @@ function formatPrice(value: string | number) {
     : "Montant non disponible";
 }
 
+function getPaymentCountdown(expiration: string, now: number) {
+  const remaining = new Date(expiration).getTime() - now;
+  if (!Number.isFinite(remaining)) return null;
+  if (remaining <= 0) return { text: "00:00", expired: true, urgent: true };
+
+  const totalSeconds = Math.ceil(remaining / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return {
+    text: `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`,
+    expired: false,
+    urgent: totalSeconds <= 60,
+  };
+}
+
 export default function TravelerDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
@@ -181,17 +238,26 @@ export default function TravelerDashboard() {
   const [busyReservation, setBusyReservation] = useState<string | null>(null);
   const [reservationToCancel, setReservationToCancel] =
     useState<Reservation | null>(null);
+  const [reservationDetail, setReservationDetail] = useState<Reservation | null>(null);
+  const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
+  const [detailLoading, setDetailLoading] = useState<string | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
+  const [currentTime, setCurrentTime] = useState(0);
   const [nom, setNom] = useState("");
   const [prenoms, setPrenoms] = useState("");
   const [telephone, setTelephone] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const loadDashboard = useCallback(async () => {
     setLoading(true);
@@ -214,7 +280,7 @@ export default function TravelerDashboard() {
       }
 
       if (profileData.role !== "VOYAGEUR") {
-        setData({ profile: profileData, reservations: [], tickets: [] });
+        setData({ profile: profileData, reservations: [], tickets: [], notifications: [] });
         return;
       }
 
@@ -255,11 +321,16 @@ export default function TravelerDashboard() {
         window.history.replaceState(null, "", "/espace-voyageur");
       }
 
-      const [reservationsResponse, ticketsResponse] = await Promise.all([
+      const [reservationsResponse, ticketsResponse, notificationsResponse] = await Promise.all([
         fetch("/api/reservations", { cache: "no-store" }),
         fetch("/api/billets", { cache: "no-store" }),
+        fetch("/api/notifications?page_size=100", { cache: "no-store" }),
       ]);
-      if (reservationsResponse.status === 401 || ticketsResponse.status === 401) {
+      if (
+        reservationsResponse.status === 401 ||
+        ticketsResponse.status === 401 ||
+        notificationsResponse.status === 401
+      ) {
         router.replace("/connexion");
         return;
       }
@@ -269,19 +340,27 @@ export default function TravelerDashboard() {
       if (!ticketsResponse.ok) {
         throw new Error(await getErrorMessage(ticketsResponse));
       }
+      if (!notificationsResponse.ok) {
+        throw new Error(await getErrorMessage(notificationsResponse));
+      }
 
       const reservationsData: unknown = await reservationsResponse.json();
       const ticketsData: unknown = await ticketsResponse.json();
+      const notificationsData: unknown = await notificationsResponse.json();
       if (!isReservationList(reservationsData)) {
         throw new Error("La liste des réservations reçue est invalide.");
       }
       if (!isTicketList(ticketsData)) {
         throw new Error("La liste des billets reçue est invalide.");
       }
+      if (!isNotificationList(notificationsData)) {
+        throw new Error("La liste des notifications reçue est invalide.");
+      }
       setData({
         profile: profileData,
         reservations: reservationsData.results,
         tickets: ticketsData.results,
+        notifications: notificationsData.results,
       });
       setNom(profileData.nom);
       setPrenoms(profileData.prenoms);
@@ -430,6 +509,117 @@ export default function TravelerDashboard() {
     }
   }
 
+  async function showReservationDetails(reservationId: string) {
+    setDetailLoading(reservationId);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/reservations/${encodeURIComponent(reservationId)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result: unknown = await response.json();
+      const details = { results: [result] };
+      if (!isReservationList(details)) {
+        throw new Error("Les détails de la réservation reçus sont invalides.");
+      }
+      setReservationDetail(details.results[0]);
+    } catch (detailError) {
+      console.error("Reservation detail request failed", detailError);
+      setError(
+        detailError instanceof Error
+          ? detailError.message
+          : "Impossible de charger cette réservation.",
+      );
+    } finally {
+      setDetailLoading(null);
+    }
+  }
+
+  async function showTicketDetails(ticketId: string) {
+    setDetailLoading(ticketId);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/billets/${encodeURIComponent(ticketId)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      const result: unknown = await response.json();
+      const details = { results: [result] };
+      if (!isTicketList(details)) {
+        throw new Error("Les détails du billet reçus sont invalides.");
+      }
+      setTicketDetail(details.results[0]);
+    } catch (detailError) {
+      console.error("Ticket detail request failed", detailError);
+      setError(
+        detailError instanceof Error
+          ? detailError.message
+          : "Impossible de charger ce billet.",
+      );
+    } finally {
+      setDetailLoading(null);
+    }
+  }
+
+  async function markNotificationRead(notification: Notification) {
+    if (notification.lue) return;
+    try {
+      const response = await fetch(
+        `/api/notifications/${encodeURIComponent(notification.id_notification)}/lire`,
+        { method: "POST" },
+      );
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              notifications: current.notifications.map((item) =>
+                item.id_notification === notification.id_notification
+                  ? { ...item, lue: true }
+                  : item,
+              ),
+            }
+          : current,
+      );
+    } catch (readError) {
+      console.error("Notification read request failed", readError);
+      setError(
+        readError instanceof Error
+          ? readError.message
+          : "Impossible de marquer cette notification comme lue.",
+      );
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    try {
+      const response = await fetch("/api/notifications/lire-tout", {
+        method: "POST",
+      });
+      if (!response.ok) throw new Error(await getErrorMessage(response));
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              notifications: current.notifications.map((item) => ({
+                ...item,
+                lue: true,
+              })),
+            }
+          : current,
+      );
+    } catch (readError) {
+      console.error("Mark all notifications as read failed", readError);
+      setError(
+        readError instanceof Error
+          ? readError.message
+          : "Impossible de mettre à jour les notifications.",
+      );
+    }
+  }
+
   const profile = data?.profile;
   const displayName = [profile?.prenoms, profile?.nom]
     .filter(Boolean)
@@ -452,7 +642,7 @@ export default function TravelerDashboard() {
           </Link>
           <nav className="main-nav" aria-label="Navigation principale">
             <Link href="/#accueil">Accueil</Link>
-            <Link href="/#destinations">Trajets</Link>
+            <Link href="/voyages">Voyages</Link>
             <Link href="/#avantages">Pourquoi Kinesis ?</Link>
           </nav>
           <Link
@@ -460,31 +650,13 @@ export default function TravelerDashboard() {
             href="/espace-voyageur"
             aria-current="page"
           >
-            {profile?.photo_profil ? (
-              <Image
-                className="account-avatar"
-                src={profile.photo_profil}
-                width={32}
-                height={32}
-                alt=""
-                unoptimized
-              />
-            ) : (
-              <span className="account-avatar account-avatar--fallback">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                >
-                  <circle cx="12" cy="8" r="4" />
-                  <path d="M4 22a8 8 0 0 1 16 0" />
-                </svg>
-              </span>
-            )}
+            <ProfileAvatar
+              className="account-avatar"
+              fallbackClassName="account-avatar--fallback"
+              src={profile?.photo_profil}
+              name={displayName}
+              size={32}
+            />
             Profil
           </Link>
           <button
@@ -509,10 +681,18 @@ export default function TravelerDashboard() {
               Pourquoi Kinesis ?
             </Link>
             <Link
+              className="mobile-profile-link"
               href="/espace-voyageur"
               aria-current="page"
               onClick={() => setMenuOpen(false)}
             >
+              <ProfileAvatar
+                className="account-avatar"
+                fallbackClassName="account-avatar--fallback"
+                src={profile?.photo_profil}
+                name={displayName}
+                size={32}
+              />
               Profil
             </Link>
             <button type="button" onClick={() => void signOut()} disabled={signingOut}>
@@ -565,20 +745,14 @@ export default function TravelerDashboard() {
           <>
             <section className="traveler-profile-card" aria-labelledby="profile-title">
               <div className="traveler-profile-summary">
-                {profile?.photo_profil ? (
-                  <Image
-                    className="traveler-profile-photo"
-                    src={profile.photo_profil}
-                    width={76}
-                    height={76}
-                    alt={`Photo de ${displayName}`}
-                    unoptimized
-                  />
-                ) : (
-                  <span className="traveler-profile-photo traveler-profile-photo--fallback">
-                    {displayName.slice(0, 1).toUpperCase() || "P"}
-                  </span>
-                )}
+                <ProfileAvatar
+                  className="traveler-profile-photo"
+                  fallbackClassName="traveler-profile-photo--fallback"
+                  src={profile?.photo_profil}
+                  name={displayName}
+                  size={76}
+                  alt={`Photo de ${displayName}`}
+                />
                 <div>
                   <p className="traveler-eyebrow">VOTRE COMPTE</p>
                   <h2 id="profile-title">{displayName || "Mon profil"}</h2>
@@ -701,7 +875,7 @@ export default function TravelerDashboard() {
                           month: "long",
                           year: "numeric",
                         })}{" "}
-                        à {reservation.voyage.heure_depart}
+                        à {reservation.voyage.heure_depart.slice(0, 5)}
                       </p>
                     </div>
                     <div className="traveler-booking-details">
@@ -720,6 +894,76 @@ export default function TravelerDashboard() {
                         {reservation.places.length} place
                         {reservation.places.length > 1 ? "s" : ""}
                       </p>
+                      {reservation.statut === "EN_ATTENTE_PAIEMENT" &&
+                      reservation.date_expiration &&
+                      currentTime > 0 ? (
+                        (() => {
+                          const countdown = getPaymentCountdown(
+                            reservation.date_expiration,
+                            currentTime,
+                          );
+                          return countdown ? (
+                            <div
+                              className={`traveler-payment-countdown${countdown.urgent ? " traveler-payment-countdown--urgent" : ""}${countdown.expired ? " traveler-payment-countdown--expired" : ""}`}
+                              role="timer"
+                              aria-label={
+                                countdown.expired
+                                  ? "Le délai de paiement est expiré"
+                                  : `Temps restant pour payer : ${countdown.text}`
+                              }
+                            >
+                              <span className="traveler-payment-countdown__label">
+                                <svg
+                                  aria-hidden="true"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                >
+                                  <circle cx="12" cy="12" r="9" />
+                                  <path d="M12 7v5l3 2" />
+                                </svg>
+                                {countdown.expired
+                                  ? "Délai de paiement expiré"
+                                  : "Temps restant pour payer"}
+                              </span>
+                              <strong className="traveler-payment-countdown__time">
+                                {countdown.text}
+                                <small>MIN : SEC</small>
+                              </strong>
+                            </div>
+                          ) : null;
+                        })()
+                      ) : null}
+                      <div className="traveler-booking-actions">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            reservationDetail?.id_reservation === reservation.id_reservation
+                              ? setReservationDetail(null)
+                              : void showReservationDetails(reservation.id_reservation)
+                          }
+                          disabled={detailLoading === reservation.id_reservation}
+                        >
+                          {detailLoading === reservation.id_reservation
+                            ? "Chargement…"
+                            : reservationDetail?.id_reservation === reservation.id_reservation
+                              ? "Masquer les détails"
+                              : "Détails"}
+                        </button>
+                      </div>
+                      {reservationDetail?.id_reservation === reservation.id_reservation ? (
+                        <div className="traveler-detail-panel">
+                          <strong>Passagers et sièges</strong>
+                          <ul>
+                            {reservationDetail.places.map((place) => (
+                              <li key={place.numero_siege}>{place.nom_passager} · Siège {place.numero_siege}</li>
+                            ))}
+                          </ul>
+                          <span>Réservée le {formatDate(reservationDetail.date_reservation, { day: "numeric", month: "long", year: "numeric" })}</span>
+                          {reservationDetail.date_expiration ? (
+                            <span>Expiration du paiement : {formatDate(reservationDetail.date_expiration, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          ) : null}
+                        </div>
+                      ) : null}
                       {reservation.statut === "EN_ATTENTE_PAIEMENT" ? (
                         <div className="traveler-booking-actions">
                           <button
@@ -791,6 +1035,36 @@ export default function TravelerDashboard() {
                       <p className="traveler-reference">
                         Billet {ticket.code_billet} · Réservation {ticket.reservation_reference}
                       </p>
+                      <div className="traveler-booking-actions">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            ticketDetail?.id_billet === ticket.id_billet
+                              ? setTicketDetail(null)
+                              : void showTicketDetails(ticket.id_billet)
+                          }
+                          disabled={detailLoading === ticket.id_billet}
+                        >
+                          {detailLoading === ticket.id_billet
+                            ? "Chargement…"
+                            : ticketDetail?.id_billet === ticket.id_billet
+                              ? "Masquer les détails"
+                              : "Détails du billet"}
+                        </button>
+                      </div>
+                      {ticketDetail?.id_billet === ticket.id_billet ? (
+                        <div className="traveler-detail-panel">
+                          <strong>Informations du billet</strong>
+                          <span>Départ le {formatDate(ticketDetail.voyage.date_depart, { day: "numeric", month: "long", year: "numeric" })} à {ticketDetail.voyage.heure_depart.slice(0, 5)}</span>
+                          <span>Code : {ticketDetail.code_billet}</span>
+                          {ticketDetail.date_creation ? (
+                            <span>Émis le {formatDate(ticketDetail.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          ) : null}
+                          {ticketDetail.date_embarquement ? (
+                            <span>Embarquement confirmé le {formatDate(ticketDetail.date_embarquement, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                     <span className="traveler-status traveler-status--payee">
                       {ticket.statut === "EMBARQUE" ? "Embarqué" : "Valide"}
@@ -802,6 +1076,45 @@ export default function TravelerDashboard() {
               <div className="traveler-empty traveler-empty--compact">
                 <h3>Vos billets apparaîtront ici</h3>
                 <p>Ils sont générés dès que votre paiement est confirmé.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="traveler-notifications" id="notifications" aria-labelledby="notifications-title">
+            <div className="traveler-section-heading">
+              <div>
+                <p className="traveler-eyebrow">INFORMATIONS IMPORTANTES</p>
+                <h2 id="notifications-title">Mes notifications</h2>
+              </div>
+              <span className="traveler-count">
+                {data?.notifications.filter((notification) => !notification.lue).length ?? 0} non lue(s)
+              </span>
+              {data?.notifications.some((notification) => !notification.lue) ? (
+                <button className="traveler-secondary-button" type="button" onClick={() => void markAllNotificationsRead()}>
+                  Tout marquer comme lu
+                </button>
+              ) : null}
+            </div>
+            {data?.notifications.length ? (
+              <div className="traveler-notification-list">
+                {data.notifications.map((notification) => (
+                  <article className={`traveler-notification-card ${notification.lue ? "" : "traveler-notification-card--unread"}`} key={notification.id_notification}>
+                    <div>
+                      <span className="traveler-notification-type">{notification.type}</span>
+                      <h3>{notification.titre}</h3>
+                      <p>{notification.message}</p>
+                      <time dateTime={notification.date_creation}>{formatDate(notification.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+                    </div>
+                    {!notification.lue ? (
+                      <button type="button" onClick={() => void markNotificationRead(notification)}>Marquer comme lu</button>
+                    ) : <span className="traveler-status traveler-status--payee">Lue</span>}
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="traveler-empty traveler-empty--compact">
+                <h3>Aucune notification pour le moment</h3>
+                <p>Les informations liées à vos réservations et vos voyages apparaîtront ici.</p>
               </div>
             )}
           </section>

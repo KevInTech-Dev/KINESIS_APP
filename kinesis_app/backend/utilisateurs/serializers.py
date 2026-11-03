@@ -58,6 +58,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
             "nom",
             "prenoms",
             "telephone",
+            "photo_profil",
             "role",
             "is_active",
             "must_change_password",

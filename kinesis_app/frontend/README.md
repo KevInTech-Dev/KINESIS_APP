@@ -36,7 +36,9 @@ retrouver ses réservations et billets dans l’espace. Les actions de réservat
 paiement et annulation sont relayées côté serveur vers les API Django.
 Pour que FedaPay ramène le voyageur vers son profil et que l’état du paiement
 soit actualisé au retour, configure `FEDAPAY_CALLBACK_URL` dans le backend
-avec l’URL publique `https://<domaine-frontend>/paiement/retour`.
+avec l’URL publique `https://<domaine-frontend>/paiement/retour`. En mode
+développement, cette URL est construite depuis `FRONTEND_BASE_URL` si elle
+n’est pas définie ; vérifie qu’elle correspond au port du serveur frontend.
 
 Les compagnies peuvent déposer leur dossier depuis `/inscription-compagnie`.
 Le formulaire transmet les justificatifs au backend Django ; l’équipe KINESIS

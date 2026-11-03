@@ -4,6 +4,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import ConfirmationDialog from "@/components/confirmation-dialog";
+import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Company = {
@@ -41,6 +43,7 @@ type Agent = {
   nom: string;
   prenoms: string;
   telephone: string;
+  photo_profil: string | null;
   is_active: boolean;
   permissions: string[];
 };
@@ -57,7 +60,44 @@ type Payment = {
   ville_arrivee_nom: string;
   date_depart: string;
 };
-type Tab = "overview" | "trips" | "agents" | "payments" | "profile";
+type BaggageTariff = {
+  id_tarif: string;
+  poids_min: string | number;
+  poids_max: string | number;
+  prix: string | number;
+};
+type CompanyReservation = {
+  id_reservation: string;
+  reference: string;
+  date_reservation: string;
+  date_expiration: string | null;
+  montant_total: string | number;
+  statut: string;
+  voyage: {
+    ville_depart_nom: string;
+    ville_arrivee_nom: string;
+    date_depart: string;
+    heure_depart: string;
+  };
+  places: Array<{ nom_passager: string; numero_siege: string }>;
+};
+type Notification = {
+  id_notification: string;
+  type: string;
+  titre: string;
+  message: string;
+  lue: boolean;
+  date_creation: string;
+};
+type Tab =
+  | "overview"
+  | "trips"
+  | "agents"
+  | "reservations"
+  | "tariffs"
+  | "payments"
+  | "notifications"
+  | "profile";
 
 const PERMISSIONS = [
   ["ENREGISTRER_BAGAGE", "Enregistrer un bagage"],
@@ -71,7 +111,10 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "overview", label: "Vue d’ensemble" },
   { id: "trips", label: "Mes trajets" },
   { id: "agents", label: "Équipe" },
+  { id: "reservations", label: "Réservations" },
+  { id: "tariffs", label: "Tarifs bagages" },
   { id: "payments", label: "Paiements" },
+  { id: "notifications", label: "Notifications" },
   { id: "profile", label: "Ma compagnie" },
 ];
 
@@ -131,6 +174,7 @@ function isAgent(value: unknown): value is Agent {
     typeof value.nom === "string" &&
     typeof value.prenoms === "string" &&
     typeof value.telephone === "string" &&
+    (typeof value.photo_profil === "string" || value.photo_profil === null) &&
     typeof value.is_active === "boolean" &&
     Array.isArray(value.permissions) &&
     value.permissions.every((permission) => typeof permission === "string")
@@ -151,6 +195,52 @@ function isPayment(value: unknown): value is Payment {
     typeof value.ville_depart_nom === "string" &&
     typeof value.ville_arrivee_nom === "string" &&
     typeof value.date_depart === "string"
+  );
+}
+
+function isBaggageTariff(value: unknown): value is BaggageTariff {
+  return (
+    isRecord(value) &&
+    typeof value.id_tarif === "string" &&
+    (typeof value.poids_min === "string" || typeof value.poids_min === "number") &&
+    (typeof value.poids_max === "string" || typeof value.poids_max === "number") &&
+    (typeof value.prix === "string" || typeof value.prix === "number")
+  );
+}
+
+function isCompanyReservation(value: unknown): value is CompanyReservation {
+  return (
+    isRecord(value) &&
+    typeof value.id_reservation === "string" &&
+    typeof value.reference === "string" &&
+    typeof value.date_reservation === "string" &&
+    (typeof value.date_expiration === "string" || value.date_expiration === null) &&
+    (typeof value.montant_total === "string" || typeof value.montant_total === "number") &&
+    typeof value.statut === "string" &&
+    isRecord(value.voyage) &&
+    typeof value.voyage.ville_depart_nom === "string" &&
+    typeof value.voyage.ville_arrivee_nom === "string" &&
+    typeof value.voyage.date_depart === "string" &&
+    typeof value.voyage.heure_depart === "string" &&
+    Array.isArray(value.places) &&
+    value.places.every(
+      (place) =>
+        isRecord(place) &&
+        typeof place.nom_passager === "string" &&
+        typeof place.numero_siege === "string",
+    )
+  );
+}
+
+function isNotification(value: unknown): value is Notification {
+  return (
+    isRecord(value) &&
+    typeof value.id_notification === "string" &&
+    typeof value.type === "string" &&
+    typeof value.titre === "string" &&
+    typeof value.message === "string" &&
+    typeof value.lue === "boolean" &&
+    typeof value.date_creation === "string"
   );
 }
 
@@ -245,6 +335,8 @@ function statusLabel(status: string) {
       ECHEC: "Échec",
       REMBOURSE: "Remboursé",
       A_RECONCILIER: "À vérifier",
+      EN_ATTENTE_PAIEMENT: "En attente de paiement",
+      PAYEE: "Payée",
     }[status] ?? status
   );
 }
@@ -261,6 +353,9 @@ export default function CompanyWorkspace() {
   const [cities, setCities] = useState<City[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [reservations, setReservations] = useState<CompanyReservation[]>([]);
+  const [tariffs, setTariffs] = useState<BaggageTariff[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [redirecting, setRedirecting] = useState(false);
@@ -268,16 +363,32 @@ export default function CompanyWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [editingTariff, setEditingTariff] = useState<BaggageTariff | null>(null);
+  const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
+  const [tariffToDelete, setTariffToDelete] = useState<BaggageTariff | null>(null);
   const [agentPermissions, setAgentPermissions] = useState<Record<string, string[]>>({});
 
   const loadWorkspace = useCallback(async () => {
     try {
-      const [sessionResponse, companyData, tripsData, agentsData, paymentsData, citiesResponse] =
+      const [
+        sessionResponse,
+        companyData,
+        tripsData,
+        agentsData,
+        reservationsData,
+        tariffsData,
+        notificationsData,
+        paymentsData,
+        citiesResponse,
+      ] =
         await Promise.all([
           fetch("/api/auth/session", { cache: "no-store" }),
           requestApi("me"),
           requestApi("voyages?page_size=100"),
           requestApi("agents?page_size=100"),
+          requestApi("reservations?page_size=100"),
+          requestApi("bagages/tarifs?page_size=100"),
+          requestApi("notifications?page_size=100"),
           requestApi("paiements?page_size=100"),
           fetch("/api/villes", { cache: "no-store" }),
         ]);
@@ -308,6 +419,9 @@ export default function CompanyWorkspace() {
       setProfile(sessionBody);
       setTrips(loadedTrips);
       setAgents(loadedAgents);
+      setReservations(listFrom(reservationsData, isCompanyReservation));
+      setTariffs(listFrom(tariffsData, isBaggageTariff));
+      setNotifications(listFrom(notificationsData, isNotification));
       setPayments(listFrom(paymentsData, isPayment));
       setCities(listFrom(cityBody, isCity));
       setAgentPermissions(
@@ -450,6 +564,121 @@ export default function CompanyWorkspace() {
     }
   }
 
+  async function deleteAgent(agent: Agent) {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi(`agents/${agent.id}`, "DELETE");
+      setAgentToDelete(null);
+      await loadWorkspace();
+      setNotice(`${agent.prenoms} ${agent.nom} a été retiré de votre équipe.`);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Impossible de supprimer cet agent.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function submitTariff(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi(
+        editingTariff ? `bagages/tarifs/${editingTariff.id_tarif}` : "bagages/tarifs",
+        editingTariff ? "PATCH" : "POST",
+        {
+          poids_min: Number(formData.get("poids_min")),
+          poids_max: Number(formData.get("poids_max")),
+          prix: Number(formData.get("prix")),
+        },
+      );
+      setEditingTariff(null);
+      form.reset();
+      await loadWorkspace();
+      setNotice(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le tarif.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteTariff(tariff: BaggageTariff) {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi(`bagages/tarifs/${tariff.id_tarif}`, "DELETE");
+      setTariffToDelete(null);
+      await loadWorkspace();
+      setNotice("Le tarif bagage a été supprimé.");
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Impossible de supprimer ce tarif.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function markNotificationRead(notification: Notification) {
+    if (notification.lue) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await requestApi(
+        `notifications/${notification.id_notification}/lire`,
+        "POST",
+      );
+      setNotifications((current) =>
+        current.map((item) =>
+          item.id_notification === notification.id_notification
+            ? { ...item, lue: true }
+            : item,
+        ),
+      );
+    } catch (readError) {
+      setError(
+        readError instanceof Error
+          ? readError.message
+          : "Impossible de marquer cette notification comme lue.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function markAllNotificationsRead() {
+    setSaving(true);
+    setError(null);
+    try {
+      await requestApi("notifications/lire-tout", "POST");
+      setNotifications((current) => current.map((item) => ({ ...item, lue: true })));
+      setNotice("Toutes les notifications sont marquées comme lues.");
+    } catch (readError) {
+      setError(
+        readError instanceof Error
+          ? readError.message
+          : "Impossible de mettre à jour les notifications.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function submitCompanyProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -512,9 +741,12 @@ export default function CompanyWorkspace() {
           <span>KINESIS</span>
         </Link>
         <div className="company-sidebar-company">
-          <span className="company-avatar">
-            {company.nom_commercial.slice(0, 1).toUpperCase()}
-          </span>
+          <ProfileAvatar
+            className="company-avatar"
+            src={company.logo}
+            name={company.nom_commercial}
+            size={42}
+          />
           <div>
             <strong>{company.nom_commercial}</strong>
             <span>Compte compagnie</span>
@@ -535,6 +767,11 @@ export default function CompanyWorkspace() {
               <span className={`company-nav-icon company-nav-icon--${item.id}`} aria-hidden="true" />
               {item.label}
               {item.id === "trips" ? <span className="company-nav-count">{trips.length}</span> : null}
+              {item.id === "notifications" && notifications.some((notification) => !notification.lue) ? (
+                <span className="company-nav-count">
+                  {notifications.filter((notification) => !notification.lue).length}
+                </span>
+              ) : null}
             </button>
           ))}
         </nav>
@@ -553,6 +790,12 @@ export default function CompanyWorkspace() {
             <h1>{TABS.find((item) => item.id === tab)?.label}</h1>
           </div>
           <div className="company-user-summary">
+            <ProfileAvatar
+              className="company-user-avatar"
+              src={profile?.photo_profil}
+              name={[profile?.prenoms, profile?.nom].filter(Boolean).join(" ")}
+              size={34}
+            />
             <span>{company.email}</span>
             <button type="button" aria-label="Se déconnecter" onClick={() => void handleLogout()}>
               ↗
@@ -624,7 +867,7 @@ export default function CompanyWorkspace() {
                 <label><span>Ville d’arrivée</span><select name="ville_arrivee" required defaultValue={editingTrip?.ville_arrivee ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
                 <div className="company-form-grid">
                   <label><span>Date de départ</span><input name="date_depart" type="date" required min={new Date().toISOString().slice(0, 10)} defaultValue={editingTrip?.date_depart ?? ""} /></label>
-                  <label><span>Heure de départ</span><input name="heure_depart" type="time" required defaultValue={editingTrip?.heure_depart ?? ""} /></label>
+                  <label><span>Heure de départ</span><input name="heure_depart" type="time" step="60" required defaultValue={editingTrip?.heure_depart ?? ""} /></label>
                   <label><span>Nombre de places</span><input name="place_totale" type="number" min="1" required defaultValue={editingTrip?.place_totale ?? "30"} /></label>
                   <label><span>Prix par place (FCFA)</span><input name="prix" type="number" min="0" step="1" required defaultValue={editingTrip?.prix ?? ""} /></label>
                 </div>
@@ -672,15 +915,95 @@ export default function CompanyWorkspace() {
               <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>{agents.length} agent(s) rattaché(s)</p></div></div>
               {agents.length ? <div className="company-agent-list">{agents.map((agent) => (
                 <article className="company-agent-card" key={agent.id}>
-                  <div className="company-agent-heading"><span className="company-agent-avatar">{agent.nom.slice(0, 1).toUpperCase()}</span><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.is_active ? "Actif" : "Désactivé"}</span></div>
+                  <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.is_active ? "Actif" : "Désactivé"}</span></div>
                   {agent.telephone ? <p className="company-agent-phone">{agent.telephone}</p> : null}
                   <fieldset className="company-permissions company-permissions--compact"><legend>Permissions</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" checked={(agentPermissions[agent.id] ?? []).includes(code)} onChange={(event) => setAgentPermissions((current) => ({...current, [agent.id]: event.target.checked ? [...(current[agent.id] ?? []), code] : (current[agent.id] ?? []).filter((item) => item !== code)}))} /><span>{label}</span></label>)}</fieldset>
                   <div className="company-row-actions">
                     <button type="button" disabled={saving} onClick={() => void saveAgent(agent, { permissions: agentPermissions[agent.id] ?? [] })}>Enregistrer les permissions</button>
                     <button type="button" className={agent.is_active ? "is-danger" : ""} disabled={saving} onClick={() => void saveAgent(agent, { is_active: !agent.is_active })}>{agent.is_active ? "Désactiver" : "Réactiver"}</button>
+                    <button type="button" className="is-danger" disabled={saving} onClick={() => setAgentToDelete(agent)}>Retirer de l’équipe</button>
                   </div>
                 </article>
               ))}</div> : <p className="company-empty">Aucun agent pour le moment.</p>}
+            </section>
+          </div>
+        ) : null}
+
+        {tab === "reservations" ? (
+          <div className="company-content">
+            <section className="company-panel">
+              <div className="company-panel-heading">
+                <div><h2>Réservations de vos trajets</h2><p>{reservations.length} réservation(s), tous statuts confondus.</p></div>
+              </div>
+              {reservations.length ? (
+                <div className="company-reservation-list">
+                  {reservations.map((reservation) => (
+                    <article className="company-reservation-card" key={reservation.id_reservation}>
+                      <div className="company-reservation-heading">
+                        <div>
+                          <strong>{reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}</strong>
+                          <span>Réf. {reservation.reference}</span>
+                        </div>
+                        <span className={`company-status company-status--${reservation.statut.toLowerCase()}`}>
+                          {statusLabel(reservation.statut)}
+                        </span>
+                      </div>
+                      <div className="company-reservation-meta">
+                        <span>Départ : {formatDate(reservation.voyage.date_depart)} · {reservation.voyage.heure_depart.slice(0, 5)}</span>
+                        <span>{reservation.places.length} place(s) · {formatPrice(reservation.montant_total)}</span>
+                        <span>Réservée le {formatDate(reservation.date_reservation.slice(0, 10))}</span>
+                      </div>
+                      <ul className="company-reservation-passengers">
+                        {reservation.places.map((place) => (
+                          <li key={place.numero_siege}>{place.nom_passager} · Siège {place.numero_siege}</li>
+                        ))}
+                      </ul>
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="company-empty">Aucune réservation n’est encore liée à vos trajets.</p>}
+            </section>
+          </div>
+        ) : null}
+
+        {tab === "tariffs" ? (
+          <div className="company-content company-content--split">
+            <section className="company-panel">
+              <div className="company-panel-heading">
+                <div>
+                  <h2>{editingTariff ? "Modifier un tarif" : "Ajouter un tarif bagage"}</h2>
+                  <p>Définissez une tranche de poids et son prix en FCFA.</p>
+                </div>
+              </div>
+              <form className="company-form" onSubmit={submitTariff} key={editingTariff?.id_tarif ?? "new-tariff"}>
+                <div className="company-form-grid">
+                  <label><span>Poids minimum (kg)</span><input name="poids_min" type="number" min="0" step="1" required defaultValue={editingTariff?.poids_min ?? ""} /></label>
+                  <label><span>Poids maximum (kg)</span><input name="poids_max" type="number" min="1" step="1" required defaultValue={editingTariff?.poids_max ?? ""} /></label>
+                </div>
+                <label><span>Prix (FCFA)</span><input name="prix" type="number" min="0" step="1" required defaultValue={editingTariff?.prix ?? ""} /></label>
+                <div className="company-form-actions">
+                  <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : editingTariff ? "Enregistrer" : "Ajouter le tarif"}</button>
+                  {editingTariff ? <button type="button" className="company-cancel-button" onClick={() => setEditingTariff(null)}>Annuler</button> : null}
+                </div>
+              </form>
+            </section>
+            <section className="company-panel company-panel--list">
+              <div className="company-panel-heading">
+                <div><h2>Vos tarifs</h2><p>{tariffs.length} tranche(s) enregistrée(s)</p></div>
+              </div>
+              {tariffs.length ? (
+                <div className="company-tariff-list">
+                  {tariffs.map((tariff) => (
+                    <article className="company-tariff-card" key={tariff.id_tarif}>
+                      <div><strong>{tariff.poids_min} – {tariff.poids_max} kg</strong><span>{formatPrice(tariff.prix)}</span></div>
+                      <div className="company-row-actions">
+                        <button type="button" disabled={saving} onClick={() => setEditingTariff(tariff)}>Modifier</button>
+                        <button type="button" className="is-danger" disabled={saving} onClick={() => setTariffToDelete(tariff)}>Supprimer</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="company-empty">Aucun tarif bagage. Ajoutez vos premières tranches.</p>}
             </section>
           </div>
         ) : null}
@@ -692,6 +1015,38 @@ export default function CompanyWorkspace() {
               {payments.length ? (
                 <div className="company-table-wrap"><table className="company-table"><thead><tr><th>Référence</th><th>Trajet</th><th>Départ</th><th>Montant</th><th>Statut</th><th>Créé le</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id_paiement}><td>{payment.reference_interne}</td><td>{payment.ville_depart_nom} → {payment.ville_arrivee_nom}</td><td>{formatDate(payment.date_depart)}</td><td>{formatPrice(payment.montant)}</td><td><span className={`company-status company-status--${payment.statut.toLowerCase()}`}>{statusLabel(payment.statut)}</span></td><td>{formatDate(payment.date_creation.slice(0, 10))}</td></tr>)}</tbody></table></div>
               ) : <p className="company-empty">Aucun paiement n’est encore associé à vos trajets.</p>}
+            </section>
+          </div>
+        ) : null}
+
+        {tab === "notifications" ? (
+          <div className="company-content">
+            <section className="company-panel">
+              <div className="company-panel-heading">
+                <div><h2>Notifications</h2><p>{notifications.filter((item) => !item.lue).length} non lue(s)</p></div>
+                {notifications.some((item) => !item.lue) ? (
+                  <button type="button" className="company-text-button" disabled={saving} onClick={() => void markAllNotificationsRead()}>
+                    Tout marquer comme lu
+                  </button>
+                ) : null}
+              </div>
+              {notifications.length ? (
+                <div className="company-notification-list">
+                  {notifications.map((notification) => (
+                    <article className={`company-notification-card ${notification.lue ? "" : "company-notification-card--unread"}`} key={notification.id_notification}>
+                      <div>
+                        <span className="company-notification-type">{notification.type}</span>
+                        <h3>{notification.titre}</h3>
+                        <p>{notification.message}</p>
+                        <time dateTime={notification.date_creation}>{formatDate(notification.date_creation.slice(0, 10))}</time>
+                      </div>
+                      {!notification.lue ? (
+                        <button type="button" disabled={saving} onClick={() => void markNotificationRead(notification)}>Marquer comme lu</button>
+                      ) : <span className="company-status company-status--active">Lue</span>}
+                    </article>
+                  ))}
+                </div>
+              ) : <p className="company-empty">Aucune notification pour le moment.</p>}
             </section>
           </div>
         ) : null}
@@ -716,6 +1071,30 @@ export default function CompanyWorkspace() {
               </form>
             </section>
           </div>
+        ) : null}
+        {agentToDelete ? (
+          <ConfirmationDialog
+            open
+            title="Retirer cet agent de l’équipe ?"
+            description={`Le compte de ${agentToDelete.prenoms} ${agentToDelete.nom} sera désactivé et retiré de votre équipe. Son historique d’opérations sera conservé.`}
+            confirmLabel="Retirer l’agent"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setAgentToDelete(null)}
+            onConfirm={() => deleteAgent(agentToDelete)}
+          />
+        ) : null}
+        {tariffToDelete ? (
+          <ConfirmationDialog
+            open
+            title="Supprimer ce tarif bagage ?"
+            description={`La tranche de ${tariffToDelete.poids_min} à ${tariffToDelete.poids_max} kg sera supprimée si aucun bagage enregistré ne l’utilise.`}
+            confirmLabel="Supprimer le tarif"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setTariffToDelete(null)}
+            onConfirm={() => deleteTariff(tariffToDelete)}
+          />
         ) : null}
       </section>
     </main>

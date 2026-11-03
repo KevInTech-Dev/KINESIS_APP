@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const STATUSES = [
@@ -56,6 +57,7 @@ type ManagedUser = {
   nom: string;
   prenoms: string;
   telephone: string;
+  photo_profil: string | null;
   role: UserRole;
   is_active: boolean;
   must_change_password: boolean;
@@ -149,6 +151,7 @@ function isManagedUser(value: unknown): value is ManagedUser {
     typeof value.nom !== "string" ||
     typeof value.prenoms !== "string" ||
     typeof value.telephone !== "string" ||
+    (typeof value.photo_profil !== "string" && value.photo_profil !== null) ||
     typeof value.role !== "string" ||
     !USER_ROLES.includes(value.role as UserRole) ||
     typeof value.is_active !== "boolean" ||
@@ -1004,9 +1007,12 @@ function UserCard({ user }: { user: ManagedUser }) {
   return (
     <article className="admin-user-card">
       <div className="admin-user-identity">
-        <span className="admin-user-avatar" aria-hidden="true">
-          {(displayName || user.email).slice(0, 1).toUpperCase()}
-        </span>
+        <ProfileAvatar
+          className="admin-user-avatar"
+          src={user.photo_profil}
+          name={displayName || user.email}
+          size={42}
+        />
         <div>
           <strong>{displayName || "Nom non renseigné"}</strong>
           <a href={`mailto:${user.email}`}>{user.email}</a>

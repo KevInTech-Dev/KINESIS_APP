@@ -205,3 +205,10 @@ class AgentDetailView(generics.RetrieveUpdateDestroyAPIView):
     @transaction.atomic
     def perform_update(self, serializer):
         serializer.save()
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        user = instance.utilisateur
+        user.is_active = False
+        user.save(update_fields=("is_active",))
+        instance.delete()

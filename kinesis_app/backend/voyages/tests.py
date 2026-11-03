@@ -173,6 +173,39 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id_voyage"], str(self.voyage.pk))
 
+    def test_public_catalog_accepts_optional_filters_and_minimum_seats(self):
+        response = self.client.get(
+            reverse("voyage-list"),
+            {
+                "ville_depart": str(self.depart.pk),
+                "prix_min": "4500",
+                "prix_max": "5500",
+                "date_depart_apres": self.future_date.isoformat(),
+                "date_depart_avant": (self.future_date + timedelta(days=1)).isoformat(),
+                "places_min": "45",
+                "ordering": "-prix",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id_voyage"], str(self.voyage.pk))
+
+        no_match = self.client.get(
+            reverse("voyage-list"),
+            {"places_min": "46"},
+        )
+        self.assertEqual(no_match.status_code, status.HTTP_200_OK)
+        self.assertEqual(no_match.data, [])
+
+    def test_public_catalog_rejects_reversed_price_ranges(self):
+        response = self.client.get(
+            reverse("voyage-list"),
+            {"prix_min": "6000", "prix_max": "5000"},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
     def test_public_results_show_remaining_seats_and_hide_full_trips(self):
         self.voyage.place_totale = 2
         self.voyage.save(update_fields=("place_totale",))
@@ -239,7 +272,7 @@ class VoyageApiTests(APITestCase):
                 "ville_depart": str(self.depart.pk),
                 "ville_arrivee": str(self.arrivee.pk),
                 "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
-                "heure_depart": "09:00",
+                "heure_depart": "09:00:45",
                 "place_totale": 32,
                 "prix": "7500",
                 "compagnie": "00000000-0000-0000-0000-000000000001",
@@ -248,7 +281,9 @@ class VoyageApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data["heure_depart"], "09:00")
         created = Voyage.objects.get(pk=response.data["id_voyage"])
+        self.assertEqual(created.heure_depart, time(9, 0))
         self.assertEqual(created.compagnie, self.company)
         self.assertEqual(created.statut, Voyage.Statut.PUBLIE)
 

@@ -88,9 +88,29 @@ class VoyageListCreateView(generics.ListCreateAPIView):
             public &= Q(ville_arrivee_id=filters["ville_arrivee"])
         if "date_depart" in filters:
             public &= Q(date_depart=filters["date_depart"])
+        if "date_depart_apres" in filters:
+            public &= Q(date_depart__gte=filters["date_depart_apres"])
+        if "date_depart_avant" in filters:
+            public &= Q(date_depart__lte=filters["date_depart_avant"])
+        if "compagnie" in filters:
+            public &= Q(compagnie_id=filters["compagnie"])
+        if "prix_min" in filters:
+            public &= Q(prix__gte=filters["prix_min"])
+        if "prix_max" in filters:
+            public &= Q(prix__lte=filters["prix_max"])
 
         queryset = _with_availability(queryset, now).filter(public)
         queryset = queryset.filter(_places_occupees__lt=F("place_totale"))
+        if "places_min" in filters:
+            queryset = queryset.filter(
+                _places_occupees__lte=F("place_totale") - filters["places_min"]
+            )
+        if "ordering" in filters:
+            queryset = queryset.order_by(
+                filters["ordering"],
+                "date_depart",
+                "heure_depart",
+            )
         user = self.request.user
         if user.is_authenticated and user.role == user.Role.COMPAGNIE:
             own_trips = _with_availability(

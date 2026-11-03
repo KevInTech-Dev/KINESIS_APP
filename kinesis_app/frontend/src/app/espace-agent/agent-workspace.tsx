@@ -13,6 +13,7 @@ import {
 import ConfirmationDialog, {
   type ConfirmationTone,
 } from "@/components/confirmation-dialog";
+import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const PERMISSIONS = {
@@ -103,7 +104,7 @@ const TABS: TabDefinition[] = [
   { id: "scan", label: "Billets" },
   { id: "boarding", label: "Embarquement" },
   { id: "baggage", label: "Bagages" },
-  { id: "notifications", label: "Notificationss" },
+  { id: "notifications", label: "Notifications" },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -803,7 +804,12 @@ export default function AgentWorkspace() {
           <span>KINESIS</span>
         </Link>
         <div className="agent-sidebar-profile">
-          <span className="agent-avatar">{profile.nom.slice(0, 1).toUpperCase()}</span>
+          <ProfileAvatar
+            className="agent-avatar"
+            src={profile.photo_profil}
+            name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+            size={40}
+          />
           <div>
             <strong>{profile.prenoms} {profile.nom}</strong>
             <span>{profile.compagnie_nom || "Agent de compagnie"}</span>

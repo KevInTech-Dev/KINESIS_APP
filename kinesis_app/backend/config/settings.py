@@ -180,7 +180,9 @@ EMAIL_BACKEND = env(
 FEDAPAY_ENVIRONMENT = env("FEDAPAY_ENVIRONMENT", default="sandbox")
 FEDAPAY_SECRET_KEY = env("FEDAPAY_SECRET_KEY", default="")
 FEDAPAY_WEBHOOK_SECRET = env("FEDAPAY_WEBHOOK_SECRET", default="")
-FEDAPAY_CALLBACK_URL = env("FEDAPAY_CALLBACK_URL", default="")
+FEDAPAY_CALLBACK_URL = env("FEDAPAY_CALLBACK_URL", default="").strip()
+if not FEDAPAY_CALLBACK_URL and DEBUG:
+    FEDAPAY_CALLBACK_URL = f"{FRONTEND_BASE_URL.rstrip('/')}/paiement/retour"
 EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)

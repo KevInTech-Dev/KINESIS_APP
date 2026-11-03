@@ -363,6 +363,8 @@ class CompanyApiTests(APITestCase):
         self.assertTrue(agent.utilisateur.must_change_password)
         self.assertTrue(agent.utilisateur.check_password("Temporary!Password-729"))
         self.assertEqual(response.data["id"], str(agent.utilisateur_id))
+        self.assertIn("photo_profil", response.data)
+        self.assertIsNone(response.data["photo_profil"])
 
         agent_login_response = self.client.post(
             reverse("token-obtain-pair"),
@@ -438,6 +440,32 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(changed_password_login.status_code, status.HTTP_200_OK)
         profile_response = self.client.get(reverse("current-user"))
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+
+    def test_company_can_remove_agent_without_leaving_an_active_orphan_account(self):
+        company_user, company = self.create_active_company("remove-agent@example.com")
+        agent_user = User.objects.create_user(
+            email="agent-to-remove@example.com",
+            password="Temporary!Password-729",
+            nom="Agent",
+            prenoms="À supprimer",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=company,
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
+        )
+
+        response = self.client.delete(
+            reverse("company-agent-detail", kwargs={"pk": agent.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(AgentCompagnie.objects.filter(pk=agent.pk).exists())
+        agent_user.refresh_from_db()
+        self.assertFalse(agent_user.is_active)
 
     def test_company_agent_list_includes_ids_and_uses_pagination(self):
         company_user, company = self.create_active_company("pagination@example.com")

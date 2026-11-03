@@ -1077,7 +1077,535 @@ select:focus-visible {
   .footer-main {
     width: min(100% - 36px, 1240px);
   }
+}
 
+  .trip-more {
+    display: flex;
+    justify-content: center;
+    margin-top: 30px;
+  }
+
+  .trip-more__button {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 0 20px;
+    border: 1px solid var(--green);
+    border-radius: 999px;
+    color: var(--green);
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+    transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+  }
+
+  .trip-more__button:hover {
+    transform: translateY(-2px);
+    background: var(--green);
+    color: white;
+  }
+
+  .voyage-catalog,
+  .voyage-detail-page {
+    min-height: 100vh;
+    background: #f7f9f6;
+    color: var(--ink);
+  }
+
+  .catalog-header {
+    display: flex;
+    width: min(100% - 48px, 1240px);
+    min-height: 78px;
+    align-items: center;
+    justify-content: space-between;
+    margin: 0 auto;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .catalog-brand {
+    color: var(--green);
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-decoration: none;
+  }
+
+  .catalog-home {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .catalog-home:hover {
+    color: var(--green);
+  }
+
+  .catalog-intro {
+    width: min(100% - 48px, 800px);
+    margin: 54px auto 38px;
+    text-align: center;
+  }
+
+  .catalog-intro h1,
+  .detail-state h1 {
+    margin: 20px 0 12px;
+    font-size: clamp(34px, 5vw, 56px);
+    font-weight: 850;
+    letter-spacing: -0.06em;
+  }
+
+  .catalog-intro h1 span {
+    color: var(--green);
+  }
+
+  .catalog-intro > p:last-child {
+    margin: 0;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1.7;
+  }
+
+  .catalog-layout {
+    display: grid;
+    width: min(100% - 48px, 1240px);
+    grid-template-columns: 280px minmax(0, 1fr);
+    align-items: start;
+    gap: 32px;
+    margin: 0 auto 80px;
+  }
+
+  .catalog-filters {
+    display: grid;
+    gap: 17px;
+    padding: 22px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: white;
+    box-shadow: 0 10px 35px rgb(22 52 40 / 5%);
+  }
+
+  .catalog-filters__heading,
+  .catalog-results__heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .catalog-filters__heading h2,
+  .catalog-results__heading h2 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 850;
+    letter-spacing: -0.035em;
+  }
+
+  .catalog-filters__heading button {
+    padding: 5px 0;
+    border: 0;
+    background: transparent;
+    color: var(--green);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .catalog-filters label {
+    display: grid;
+    min-width: 0;
+    gap: 7px;
+    color: var(--ink);
+    font-size: 12px;
+    font-weight: 750;
+  }
+
+  .catalog-filters input,
+  .catalog-filters select {
+    width: 100%;
+    min-height: 43px;
+    padding: 0 11px;
+    border: 1px solid #dfe7df;
+    border-radius: 10px;
+    outline: none;
+    background: white;
+    color: var(--ink);
+    font: inherit;
+    font-size: 13px;
+  }
+
+  .catalog-filters input:focus,
+  .catalog-filters select:focus {
+    border-color: var(--green);
+    box-shadow: 0 0 0 3px rgb(22 119 78 / 10%);
+  }
+
+  .catalog-filters__row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .catalog-submit {
+    display: inline-flex;
+    min-height: 48px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 18px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--green);
+    color: white;
+    cursor: pointer;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 850;
+    text-align: center;
+    text-decoration: none;
+    transition: background 160ms ease, transform 160ms ease;
+  }
+
+  .catalog-submit:hover {
+    transform: translateY(-1px);
+    background: #115c3d;
+  }
+
+  .catalog-results__heading {
+    min-height: 48px;
+    margin-bottom: 18px;
+  }
+
+  .catalog-results__heading > span {
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .catalog-card {
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    background: white;
+    color: inherit;
+    box-shadow: 0 8px 26px rgb(22 52 40 / 5%);
+    text-decoration: none;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+
+  .catalog-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 16px 34px rgb(22 52 40 / 12%);
+  }
+
+  .catalog-card__image {
+    position: relative;
+    height: 170px;
+    overflow: hidden;
+    background: linear-gradient(135deg, #1d6848, #a5c3a0);
+  }
+
+  .catalog-card__image img,
+  .voyage-detail__visual img {
+    object-fit: cover;
+  }
+
+  .catalog-card__image > span {
+    position: absolute;
+    z-index: 1;
+    right: 12px;
+    bottom: 12px;
+    padding: 7px 10px;
+    border-radius: 999px;
+    background: rgb(9 50 36 / 83%);
+    color: white;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .catalog-card__body {
+    padding: 17px;
+  }
+
+  .catalog-card__body > p {
+    margin: 0 0 6px;
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  .catalog-card__body h3 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 850;
+    letter-spacing: -0.04em;
+  }
+
+  .catalog-card__body h3 span {
+    padding: 0 3px;
+    color: var(--green);
+  }
+
+  .catalog-card__meta,
+  .catalog-card__footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .catalog-card__meta {
+    margin-top: 14px;
+    color: var(--muted);
+    font-size: 12px;
+    text-transform: capitalize;
+  }
+
+  .catalog-card__footer {
+    margin-top: 15px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+
+  .catalog-card__footer strong {
+    font-size: 17px;
+    font-weight: 900;
+  }
+
+  .catalog-card__footer > span {
+    color: var(--green);
+    font-size: 12px;
+    font-weight: 850;
+  }
+
+  .catalog-message {
+    margin: 10px 0 20px;
+    padding: 18px;
+    border-radius: 12px;
+    background: white;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .catalog-message--error {
+    color: #a02b2b;
+  }
+
+  .voyage-detail-page > .catalog-message {
+    width: min(100% - 48px, 1240px);
+    margin: 40px auto;
+  }
+
+  .voyage-detail {
+    display: grid;
+    width: min(100% - 48px, 1120px);
+    grid-template-columns: minmax(0, 1.1fr) minmax(340px, 0.9fr);
+    overflow: hidden;
+    margin: 48px auto 80px;
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    background: white;
+    box-shadow: 0 18px 55px rgb(22 52 40 / 9%);
+  }
+
+  .voyage-detail__visual {
+    position: relative;
+    min-height: 560px;
+    background: linear-gradient(135deg, #1d6848, #a5c3a0);
+  }
+
+  .voyage-detail__back {
+    position: absolute;
+    z-index: 1;
+    top: 20px;
+    left: 20px;
+    padding: 10px 14px;
+    border-radius: 999px;
+    background: rgb(255 255 255 / 92%);
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
+  .voyage-detail__content {
+    padding: clamp(26px, 4vw, 48px);
+  }
+
+  .voyage-detail__content > .eyebrow {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .voyage-detail__content > h1 {
+    margin: 24px 0 12px;
+    font-size: clamp(34px, 4vw, 48px);
+    font-weight: 900;
+    letter-spacing: -0.06em;
+    line-height: 1.1;
+  }
+
+  .voyage-detail__content > h1 span {
+    color: var(--green);
+  }
+
+  .voyage-detail__date {
+    margin: 0;
+    color: var(--muted);
+    font-size: 15px;
+    text-transform: capitalize;
+  }
+
+  .voyage-detail__facts {
+    display: grid;
+    gap: 0;
+    margin-top: 32px;
+    border-top: 1px solid var(--line);
+  }
+
+  .voyage-detail__facts > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    padding: 15px 0;
+    border-bottom: 1px solid var(--line);
+    font-size: 13px;
+  }
+
+  .voyage-detail__facts span,
+  .voyage-detail__booking > div > span {
+    color: var(--muted);
+  }
+
+  .voyage-detail__facts strong {
+    text-align: right;
+  }
+
+  .voyage-detail__booking {
+    display: grid;
+    gap: 17px;
+    margin-top: 25px;
+  }
+
+  .voyage-detail__booking > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .voyage-detail__booking > div strong {
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .detail-seats-warning {
+    margin: 0;
+    color: #a02b2b;
+    font-size: 13px;
+    line-height: 1.55;
+  }
+
+  .voyage-detail__secure {
+    margin: 16px 0 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .detail-state {
+    width: min(100% - 48px, 600px);
+    margin: 80px auto;
+    padding: 32px;
+    border: 1px solid var(--line);
+    border-radius: 20px;
+    background: white;
+    text-align: center;
+  }
+
+  .detail-state p {
+    margin: 0 0 25px;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  @media (max-width: 900px) {
+    .catalog-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .catalog-filters {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: end;
+    }
+
+    .catalog-filters__heading,
+    .catalog-filters > .catalog-submit {
+      grid-column: 1 / -1;
+    }
+
+    .voyage-detail {
+      grid-template-columns: 1fr;
+    }
+
+    .voyage-detail__visual {
+      min-height: 380px;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .catalog-header,
+    .catalog-layout,
+    .catalog-intro,
+    .voyage-detail,
+    .detail-state {
+      width: min(100% - 32px, 1240px);
+    }
+
+    .catalog-intro {
+      margin-top: 38px;
+    }
+
+    .catalog-filters {
+      grid-template-columns: 1fr;
+      padding: 17px;
+    }
+
+    .catalog-filters__heading,
+    .catalog-filters > .catalog-submit {
+      grid-column: auto;
+    }
+
+    .catalog-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .catalog-results__heading {
+      align-items: flex-start;
+    }
+
+    .voyage-detail__visual {
+      min-height: 270px;
+    }
+
+    .voyage-detail__content {
+      padding: 24px;
+    }
+
+    .catalog-home {
+      font-size: 12px;
+    }
+  }
+
+@media (max-width: 700px) {
   .header-inner {
     height: 68px;
   }
@@ -1378,6 +1906,12 @@ select:focus-visible {
   font-weight: 800;
 }
 
+.mobile-profile-link {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
 .account-button--profile {
   gap: 9px;
 }
@@ -1624,6 +2158,95 @@ select:focus-visible {
   margin-left: auto;
 }
 
+.traveler-detail-panel {
+  display: grid;
+  gap: 7px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #e4ebe3;
+  border-radius: 10px;
+  background: #f8faf7;
+  color: #64746a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.traveler-detail-panel strong {
+  color: var(--deep-green);
+  font-size: 11px;
+}
+
+.traveler-detail-panel ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.traveler-notifications {
+  margin-top: 48px;
+}
+
+.traveler-notification-list {
+  display: grid;
+  gap: 10px;
+}
+
+.traveler-notification-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 17px 19px;
+  border: 1px solid #e4ebe3;
+  border-radius: 13px;
+  background: white;
+}
+
+.traveler-notification-card--unread {
+  border-color: #c9e2d0;
+  background: #f7fbf6;
+}
+
+.traveler-notification-card h3 {
+  margin: 5px 0 0;
+  color: var(--deep-green);
+  font-size: 13px;
+}
+
+.traveler-notification-card p {
+  margin: 6px 0 0;
+  color: #64746a;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.traveler-notification-card time {
+  display: block;
+  margin-top: 8px;
+  color: #87938b;
+  font-size: 10px;
+}
+
+.traveler-notification-type {
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.traveler-notification-card > button {
+  flex: 0 0 auto;
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: white;
+  color: var(--deep-green);
+  font-size: 10px;
+  font-weight: 800;
+}
+
 .traveler-empty--compact {
   padding: 29px 20px;
 }
@@ -1742,6 +2365,83 @@ select:focus-visible {
   gap: 15px;
 }
 
+.booking-passenger-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid #e3ebe2;
+  border-radius: 14px;
+  background: linear-gradient(110deg, #f8fbf7, #f2f8f1);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.booking-passenger-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid #dfe9df;
+  border-radius: 13px;
+  background: white;
+  box-shadow: 0 3px 10px rgb(21 67 42 / 7%);
+}
+
+.booking-passenger-stepper button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 10px;
+  background: #edf6ed;
+  color: #07543d;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease, transform 160ms ease;
+}
+
+.booking-passenger-stepper button:not(:disabled):hover {
+  transform: translateY(-1px);
+  background: #07543d;
+  color: white;
+}
+
+.booking-passenger-stepper button:not(:disabled):active {
+  transform: scale(0.94);
+}
+
+.booking-passenger-stepper button:focus-visible {
+  outline: 3px solid #93c5a5;
+  outline-offset: 2px;
+}
+
+.booking-passenger-stepper button:disabled {
+  cursor: not-allowed;
+  background: #f5f6f4;
+  color: #a7b0a7;
+}
+
+.booking-passenger-stepper strong {
+  min-width: 34px;
+  color: #123d2c;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: center;
+}
+
+.booking-seats-available {
+  margin: -7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .booking-total {
   display: flex;
   align-items: center;
@@ -1773,7 +2473,7 @@ select:focus-visible {
 }
 
 .booking-submit:disabled {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.7;
 }
 
@@ -1805,6 +2505,16 @@ select:focus-visible {
 }
 
 @media (max-width: 700px) {
+  .booking-passenger-controls {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .booking-passenger-stepper {
+    align-self: flex-end;
+  }
+
   .traveler-welcome--row {
     align-items: flex-start;
     flex-direction: column;
@@ -1840,6 +2550,10 @@ select:focus-visible {
 
   .traveler-ticket-card .traveler-status {
     margin-left: 0;
+  }
+
+  .traveler-notification-card {
+    flex-direction: column;
   }
 
   .booking-header {
@@ -1910,6 +2624,66 @@ select:focus-visible {
 
   .benefit-card {
     min-height: auto;
+  }
+}
+
+.admin-topbar,
+.agent-topbar,
+.company-topbar {
+  position: sticky;
+  z-index: 20;
+  top: 12px;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 14px;
+  background: var(--deep-green);
+  box-shadow: 0 8px 24px rgb(3 35 26 / 16%);
+}
+
+.admin-topbar,
+.agent-topbar {
+  padding: 13px 18px;
+}
+
+.company-topbar {
+  padding-top: 16px;
+  padding-bottom: 16px;
+}
+
+.admin-topbar .admin-eyebrow,
+.agent-topbar .agent-eyebrow,
+.company-topbar .company-eyebrow {
+  color: var(--lime);
+}
+
+.admin-topbar h1,
+.agent-topbar h1,
+.company-topbar h1 {
+  color: white;
+}
+
+.admin-topbar-user,
+.agent-topbar-user,
+.company-user-summary {
+  color: rgb(255 255 255 / 78%);
+}
+
+.admin-topbar-user button,
+.agent-topbar-user button,
+.company-user-summary button {
+  border-color: rgb(255 255 255 / 24%);
+  background: rgb(255 255 255 / 10%);
+  color: white;
+}
+
+.company-user-avatar {
+  border-color: rgb(255 255 255 / 45%);
+}
+
+@media (max-width: 700px) {
+  .admin-topbar,
+  .agent-topbar,
+  .company-topbar {
+    top: 0;
   }
 }
 
@@ -3014,6 +3788,7 @@ select:focus-visible {
   color: var(--green);
   font-size: 14px;
   font-weight: 800;
+  object-fit: cover;
 }
 
 .admin-user-identity > div {
@@ -3815,6 +4590,7 @@ select:focus-visible {
   border-radius: 14px;
   background: linear-gradient(145deg, #f1f8ed, #e1f0df);
   font-size: 17px;
+  object-fit: cover;
 }
 
 .admin-user-identity > div {
@@ -4310,6 +5086,107 @@ select:focus-visible {
   font-weight: 800;
 }
 
+.traveler-payment-countdown {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 13px 14px;
+  border: 1px solid #e7d5a9;
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(255 218 123 / 24%), transparent 58%),
+    linear-gradient(135deg, #fffaf0, #fff5dc);
+  color: #62480f;
+  box-shadow: 0 5px 16px rgb(136 98 18 / 7%);
+}
+
+.traveler-payment-countdown__label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.4;
+}
+
+.traveler-payment-countdown__label svg {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  padding: 7px;
+  border: 1px solid rgb(158 114 22 / 14%);
+  border-radius: 11px;
+  background: rgb(255 255 255 / 72%);
+  color: #986a0d;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.traveler-payment-countdown__time {
+  display: grid;
+  min-width: 78px;
+  justify-items: center;
+  gap: 2px;
+  padding: 7px 10px 6px;
+  border: 1px solid rgb(114 82 18 / 12%);
+  border-radius: 10px;
+  background: #fff;
+  color: #62480f;
+  box-shadow: inset 0 -2px 0 rgb(136 98 18 / 5%);
+  font-size: 19px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  line-height: 1;
+}
+
+.traveler-payment-countdown__time small {
+  color: #947a43;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.traveler-payment-countdown--urgent {
+  border-color: #e8bbb3;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgb(255 180 165 / 22%), transparent 58%),
+    linear-gradient(135deg, #fff5f2, #ffebe7);
+  color: #852f27;
+  box-shadow: 0 5px 16px rgb(157 54 42 / 9%);
+}
+
+.traveler-payment-countdown--urgent .traveler-payment-countdown__label svg {
+  border-color: rgb(164 53 42 / 15%);
+  color: #a4352a;
+}
+
+.traveler-payment-countdown--urgent .traveler-payment-countdown__time {
+  border-color: rgb(164 53 42 / 15%);
+  color: #a4352a;
+}
+
+.traveler-payment-countdown--urgent .traveler-payment-countdown__time small {
+  color: #a7655d;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .traveler-payment-countdown--urgent:not(.traveler-payment-countdown--expired) {
+    animation: payment-countdown-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes payment-countdown-pulse {
+    50% {
+      box-shadow: 0 5px 20px rgb(157 54 42 / 16%);
+    }
+  }
+}
+
 .traveler-empty,
 .traveler-state {
   padding: 48px 24px;
@@ -4420,6 +5297,11 @@ select:focus-visible {
 
   .traveler-status {
     grid-column: 1 / -1;
+  }
+
+  .traveler-payment-countdown {
+    grid-column: 1 / -1;
+    justify-self: stretch;
   }
 
   .traveler-reference {
@@ -4630,6 +5512,7 @@ select:focus-visible {
   color: var(--deep-green);
   font-size: 16px;
   font-weight: 800;
+  object-fit: cover;
 }
 
 .company-sidebar-company > div {
@@ -4696,7 +5579,10 @@ select:focus-visible {
 .company-nav-icon--overview::after,
 .company-nav-icon--trips::after,
 .company-nav-icon--agents::after,
+.company-nav-icon--reservations::after,
+.company-nav-icon--tariffs::after,
 .company-nav-icon--payments::after,
+.company-nav-icon--notifications::after,
 .company-nav-icon--profile::after {
   position: absolute;
   inset: 4px;
@@ -4780,6 +5666,17 @@ select:focus-visible {
   gap: 12px;
   color: #75827a;
   font-size: 10px;
+}
+
+.company-user-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  border: 1px solid #dce8df;
+  border-radius: 50%;
+  background: #eaf4e9;
+  color: var(--deep-green);
+  object-fit: cover;
 }
 
 .company-user-summary button {
@@ -5190,6 +6087,126 @@ select:focus-visible {
   margin-top: 11px;
 }
 
+.company-reservation-list,
+.company-tariff-list,
+.company-notification-list {
+  display: grid;
+  gap: 10px;
+}
+
+.company-reservation-card,
+.company-tariff-card,
+.company-notification-card {
+  padding: 15px;
+  border: 1px solid #e6ece5;
+  border-radius: 12px;
+  background: #fdfefd;
+}
+
+.company-reservation-heading,
+.company-tariff-card,
+.company-notification-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.company-reservation-heading > div,
+.company-tariff-card > div:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.company-reservation-heading strong,
+.company-tariff-card strong {
+  color: var(--deep-green);
+  font-size: 12px;
+}
+
+.company-reservation-heading > div > span,
+.company-tariff-card > div:first-child > span,
+.company-reservation-meta {
+  color: #849087;
+  font-size: 10px;
+}
+
+.company-reservation-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 12px;
+}
+
+.company-reservation-passengers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.company-reservation-passengers li {
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: #f1f6f0;
+  color: #56665b;
+  font-size: 9px;
+}
+
+.company-tariff-card .company-row-actions {
+  justify-content: flex-end;
+}
+
+.company-notification-card {
+  align-items: flex-start;
+}
+
+.company-notification-card--unread {
+  border-color: #c9e2d0;
+  background: #f7fbf6;
+}
+
+.company-notification-card h3 {
+  margin: 5px 0 0;
+  color: var(--deep-green);
+  font-size: 12px;
+}
+
+.company-notification-card p {
+  margin: 6px 0 0;
+  color: #64746a;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.company-notification-card time {
+  display: block;
+  margin-top: 8px;
+  color: #87938b;
+  font-size: 9px;
+}
+
+.company-notification-type {
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+}
+
+.company-notification-card > button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: white;
+  color: var(--deep-green);
+  font-size: 9px;
+  font-weight: 800;
+}
+
 .company-table-wrap {
   overflow-x: auto;
 }
@@ -5363,7 +6380,7 @@ select:focus-visible {
 @media (max-width: 700px) {
   .company-app {
     display: block;
-    padding-bottom: 67px;
+    padding-bottom: 116px;
   }
 
   .company-sidebar {
@@ -5387,14 +6404,14 @@ select:focus-visible {
   }
 
   .company-navigation {
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 3px;
     margin: 0;
   }
 
   .company-navigation button {
     min-width: 0;
-    min-height: 52px;
+    min-height: 48px;
     display: grid;
     align-content: center;
     justify-items: center;
@@ -5491,6 +6508,20 @@ select:focus-visible {
 
   .company-panel-heading {
     align-items: flex-start;
+  }
+
+  .company-notification-card,
+  .company-tariff-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .company-reservation-meta {
+    display: grid;
+  }
+
+  .company-notification-card > button {
+    align-self: flex-start;
   }
 
   .company-payment-total {
@@ -5648,6 +6679,7 @@ select:focus-visible {
   color: #063e2e;
   font-size: 16px;
   font-weight: 800;
+  object-fit: cover;
 }
 
 .agent-sidebar-profile > div {
@@ -6571,6 +7603,1038 @@ select:focus-visible {
 
   .agent-content--split {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* Public voyage pages */
+.voyage-catalog,
+.voyage-detail-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 9% 12%, rgb(216 255 104 / 10%), transparent 25rem),
+    var(--page);
+  color: var(--ink);
+}
+
+.voyages-header {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  border-bottom: 1px solid rgb(220 232 223 / 75%);
+  background: var(--deep-green);
+  box-shadow: 0 5px 20px rgb(3 35 26 / 14%);
+}
+
+.voyages-header__inner {
+  display: flex;
+  width: min(100% - 48px, 1240px);
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 auto;
+}
+
+.voyages-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: white;
+}
+
+.voyages-brand img {
+  width: 42px;
+  height: 42px;
+  object-fit: contain;
+}
+
+.voyages-brand span {
+  font-size: 25px;
+  font-style: italic;
+  font-weight: 850;
+  letter-spacing: -0.07em;
+}
+
+.voyages-header__nav {
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  color: rgb(255 255 255 / 82%);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.voyages-header__nav a {
+  transition: color 160ms ease;
+}
+
+.voyages-header__nav a:hover,
+.voyages-header__nav a[aria-current="page"] {
+  color: var(--lime);
+}
+
+.voyages-header__action {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  gap: 9px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 9%);
+  color: white;
+  font-size: 13px;
+  font-weight: 800;
+  backdrop-filter: blur(12px);
+  transition: background 160ms ease, border-color 160ms ease;
+}
+
+.voyages-header__action:hover {
+  border-color: rgb(255 255 255 / 50%);
+  background: rgb(255 255 255 / 17%);
+}
+
+.voyages-header__action--profile {
+  padding-left: 7px;
+}
+
+.voyages-header .account-avatar {
+  border-color: rgb(255 255 255 / 50%);
+}
+
+.catalog-hero {
+  position: relative;
+  display: flex;
+  width: min(100% - 48px, 1240px);
+  min-height: 278px;
+  align-items: center;
+  justify-content: space-between;
+  overflow: hidden;
+  margin: 34px auto 0;
+  padding: 50px clamp(28px, 6vw, 82px);
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse at 91% 110%, rgb(216 255 104 / 24%), transparent 30rem),
+    linear-gradient(112deg, #063e2e 0%, #0b6b4b 61%, #13815b 100%);
+  box-shadow: 0 22px 58px rgb(6 62 46 / 17%);
+  color: white;
+}
+
+.catalog-hero::before,
+.catalog-hero::after {
+  position: absolute;
+  width: 350px;
+  height: 350px;
+  border: 1px solid rgb(255 255 255 / 11%);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.catalog-hero::before {
+  top: -225px;
+  right: 4%;
+}
+
+.catalog-hero::after {
+  right: -120px;
+  bottom: -240px;
+  width: 500px;
+  height: 500px;
+  border-color: rgb(216 255 104 / 20%);
+}
+
+.catalog-hero__content,
+.catalog-hero__stamp {
+  position: relative;
+  z-index: 1;
+}
+
+.catalog-hero__content {
+  max-width: 710px;
+}
+
+.catalog-hero__eyebrow,
+.catalog-results__eyebrow,
+.catalog-filters__eyebrow,
+.voyage-detail__section-label {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+}
+
+.catalog-hero__eyebrow {
+  color: var(--lime);
+}
+
+.catalog-hero h1 {
+  margin: 17px 0 12px;
+  font-size: clamp(36px, 5vw, 60px);
+  font-weight: 850;
+  letter-spacing: -0.065em;
+  line-height: 1.07;
+}
+
+.catalog-hero h1 span {
+  color: var(--lime);
+}
+
+.catalog-hero__content > p:last-child {
+  margin: 0;
+  color: rgb(255 255 255 / 76%);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.catalog-hero__stamp {
+  display: grid;
+  width: 142px;
+  height: 142px;
+  flex: 0 0 auto;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  margin-right: 4%;
+  border: 1px solid rgb(255 255 255 / 35%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 8%);
+  color: white;
+  transform: rotate(8deg);
+}
+
+.catalog-hero__stamp > span:first-child {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.catalog-hero__stamp strong {
+  color: var(--lime);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.catalog-hero__arrow {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--lime);
+  color: var(--deep-green);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.catalog-layout {
+  width: min(100% - 48px, 1240px);
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 34px;
+  margin-top: 40px;
+  margin-bottom: 90px;
+}
+
+.catalog-filters {
+  position: sticky;
+  top: 24px;
+  gap: 19px;
+  padding: 24px;
+  border: 1px solid #e4ebe4;
+  border-radius: 20px;
+  background: white;
+  box-shadow: 0 12px 35px rgb(24 51 42 / 5%);
+}
+
+.catalog-filters__heading {
+  align-items: flex-start;
+  margin-bottom: 2px;
+}
+
+.catalog-filters__heading > div {
+  display: grid;
+  gap: 7px;
+}
+
+.catalog-filters__eyebrow,
+.catalog-results__eyebrow {
+  color: var(--green);
+}
+
+.catalog-filters__heading h2 {
+  font-size: 20px;
+}
+
+.catalog-filters__heading button {
+  color: #748178;
+  font-size: 11px;
+}
+
+.catalog-filters__heading button:hover {
+  color: var(--green);
+}
+
+.catalog-filters label {
+  gap: 8px;
+  color: #4c5d53;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.catalog-filters input,
+.catalog-filters select {
+  min-height: 45px;
+  border-color: #e4ebe5;
+  border-radius: 10px;
+  background-color: #fbfcfa;
+  color: var(--ink);
+  font-size: 12px;
+}
+
+.catalog-filters input:hover,
+.catalog-filters select:hover {
+  border-color: #b8d2bf;
+}
+
+.catalog-filters input:focus,
+.catalog-filters select:focus {
+  border-color: var(--green);
+  background: white;
+  box-shadow: 0 0 0 3px rgb(11 107 75 / 9%);
+}
+
+.catalog-submit {
+  min-height: 50px;
+  gap: 10px;
+  border-radius: 12px;
+  background: var(--green);
+  box-shadow: 0 7px 16px rgb(11 107 75 / 18%);
+  font-size: 13px;
+}
+
+.catalog-results__heading {
+  min-height: 60px;
+  align-items: center;
+  margin: 0 0 17px;
+}
+
+.catalog-results__heading > div {
+  display: grid;
+  gap: 7px;
+}
+
+.catalog-results__eyebrow {
+  font-size: 9px;
+}
+
+.catalog-results__heading h2 {
+  font-size: clamp(21px, 2.4vw, 27px);
+  letter-spacing: -0.045em;
+}
+
+.catalog-results__count {
+  display: inline-flex;
+  min-width: 73px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 12px;
+  border: 1px solid #dce8df;
+  border-radius: 999px;
+  background: white;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.catalog-results__count strong {
+  color: var(--green);
+  font-size: 13px;
+}
+
+.catalog-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.catalog-card {
+  border-color: #e3ebe4;
+  border-radius: 18px;
+  box-shadow: 0 9px 26px rgb(24 51 42 / 5%);
+}
+
+.catalog-card:hover {
+  border-color: #c3dbc9;
+  box-shadow: 0 17px 38px rgb(24 51 42 / 12%);
+}
+
+.catalog-card__image {
+  height: 190px;
+  background:
+    linear-gradient(140deg, rgb(6 62 46 / 15%), rgb(216 255 104 / 12%)),
+    linear-gradient(135deg, #0b6b4b, #b2c9a8);
+}
+
+.catalog-card__image img {
+  transition: transform 650ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+
+.catalog-card:hover .catalog-card__image img {
+  transform: scale(1.05);
+}
+
+.catalog-card__image::after {
+  position: absolute;
+  inset: 45% 0 0;
+  background: linear-gradient(transparent, rgb(6 35 25 / 22%));
+  content: "";
+  pointer-events: none;
+}
+
+.catalog-card__image > span {
+  z-index: 2;
+  padding: 7px 10px;
+  border: 1px solid rgb(255 255 255 / 25%);
+  background: rgb(6 62 46 / 78%);
+  backdrop-filter: blur(8px);
+}
+
+.catalog-card__body {
+  padding: 19px;
+}
+
+.catalog-card__body > p {
+  margin-bottom: 8px;
+  color: #728078;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.catalog-card__body h3 {
+  font-size: clamp(17px, 1.8vw, 20px);
+}
+
+.catalog-card__meta {
+  margin-top: 15px;
+  font-size: 11px;
+}
+
+.catalog-card__footer {
+  margin-top: 16px;
+  padding-top: 15px;
+}
+
+.catalog-card__footer strong {
+  color: var(--deep-green);
+  font-size: 16px;
+}
+
+.catalog-card__footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.catalog-message {
+  border: 1px solid #e3ebe4;
+  box-shadow: 0 9px 26px rgb(24 51 42 / 4%);
+  font-size: 14px;
+}
+
+.voyage-detail-page__content {
+  width: min(100% - 48px, 1240px);
+  margin: 36px auto 80px;
+}
+
+.voyage-detail__cover {
+  position: relative;
+  display: flex;
+  min-height: 390px;
+  align-items: flex-end;
+  overflow: hidden;
+  padding: clamp(28px, 6vw, 70px);
+  border-radius: 26px;
+  background:
+    linear-gradient(110deg, #063e2e 0%, #0b6b4b 56%, #52936a 100%);
+  box-shadow: 0 22px 58px rgb(6 62 46 / 16%);
+  color: white;
+}
+
+.voyage-detail__cover > img {
+  object-fit: cover;
+  object-position: center 56%;
+}
+
+.voyage-detail__cover-shade {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 95% 8%, rgb(216 255 104 / 15%), transparent 24rem),
+    linear-gradient(90deg, rgb(2 43 31 / 91%), rgb(3 53 39 / 64%) 60%, rgb(4 46 34 / 35%));
+}
+
+.voyage-detail__cover::after {
+  position: absolute;
+  z-index: 1;
+  top: -180px;
+  right: -90px;
+  width: 490px;
+  height: 490px;
+  border: 1px solid rgb(255 255 255 / 19%);
+  border-radius: 50%;
+  content: "";
+  pointer-events: none;
+}
+
+.voyage-detail__back,
+.voyage-detail__cover-copy,
+.voyage-detail__company {
+  position: absolute;
+  z-index: 2;
+}
+
+.voyage-detail__back {
+  top: 25px;
+  left: 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: rgb(3 50 36 / 40%);
+  color: white;
+  font-size: 11px;
+  font-weight: 800;
+  backdrop-filter: blur(10px);
+  transition: background 160ms ease;
+}
+
+.voyage-detail__back:hover {
+  background: rgb(3 50 36 / 75%);
+}
+
+.voyage-detail__cover-copy {
+  right: 30px;
+  bottom: 60px;
+  left: clamp(28px, 6vw, 70px);
+}
+
+.voyage-detail__cover-copy > p {
+  margin: 0 0 13px;
+  color: var(--lime);
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.17em;
+}
+
+.voyage-detail__cover-copy h1 {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 10px;
+  margin: 0;
+  font-size: clamp(36px, 6vw, 68px);
+  font-weight: 850;
+  letter-spacing: -0.07em;
+  line-height: 1.04;
+  text-wrap: balance;
+}
+
+.voyage-detail__cover-copy h1 span {
+  color: var(--lime);
+}
+
+.voyage-detail__cover-copy h1 .voyage-detail__origin,
+.voyage-detail__cover-copy h1 .voyage-detail__destination {
+  color: white;
+}
+
+.voyage-detail__cover-copy h1 .voyage-detail__route-arrow {
+  color: var(--lime);
+}
+
+.voyage-detail__cover-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  color: rgb(255 255 255 / 85%);
+  font-size: 14px;
+  font-weight: 650;
+  text-transform: capitalize;
+}
+
+.voyage-detail__cover-date span {
+  color: var(--lime);
+}
+
+.voyage-detail__company {
+  right: 30px;
+  bottom: 24px;
+  color: rgb(255 255 255 / 76%);
+  font-size: 10px;
+}
+
+.voyage-detail__company strong {
+  color: white;
+}
+
+.voyage-detail__lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 370px;
+  align-items: start;
+  gap: 44px;
+  margin-top: 38px;
+}
+
+.voyage-detail__information {
+  padding: 18px 0;
+}
+
+.voyage-detail__section-label {
+  color: var(--green);
+  font-size: 9px;
+}
+
+.voyage-detail__information h2 {
+  margin: 12px 0 28px;
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 850;
+  letter-spacing: -0.055em;
+}
+
+.voyage-detail__facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  border: 0;
+}
+
+.voyage-detail__facts > div {
+  display: flex;
+  min-height: 110px;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 17px 14px;
+  border: 1px solid #e3ebe4;
+  border-radius: 15px;
+  background: rgb(255 255 255 / 72%);
+}
+
+.voyage-detail__fact-icon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: #eaf5e9;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 900;
+}
+
+.voyage-detail__facts > div > span:last-child {
+  display: grid;
+  gap: 7px;
+  padding-top: 2px;
+}
+
+.voyage-detail__facts small {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.voyage-detail__facts strong {
+  color: var(--ink);
+  font-size: 13px;
+  text-align: left;
+}
+
+.voyage-detail__booking {
+  position: sticky;
+  top: 25px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 24px;
+  border: 1px solid #e1e9e1;
+  border-radius: 19px;
+  background: white;
+  box-shadow: 0 15px 40px rgb(24 51 42 / 7%);
+}
+
+.voyage-detail__booking .voyage-detail__section-label {
+  margin-bottom: 6px;
+}
+
+.voyage-detail__price-caption {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.voyage-detail__price {
+  color: var(--deep-green);
+  font-size: 31px;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+}
+
+.voyage-detail__booking .catalog-submit {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.voyage-detail__secure {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.voyage-detail__secure > span {
+  display: grid;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  background: #e9f5e9;
+  color: var(--green);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.detail-seats-warning {
+  padding: 12px;
+  border: 1px solid #f0d7d1;
+  border-radius: 10px;
+  background: #fff7f4;
+}
+
+.voyage-detail__help {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 30px;
+  padding: 18px 21px;
+  border: 1px solid #dfeadd;
+  border-radius: 15px;
+  background: #eef5eb;
+}
+
+.voyage-detail__help > span {
+  color: var(--green);
+  font-size: 20px;
+}
+
+.voyage-detail__help p {
+  flex: 1;
+  margin: 0;
+  color: #53665b;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.voyage-detail__help a {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 7px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.voyage-detail__help a:hover {
+  color: var(--deep-green);
+}
+
+.voyage-detail-page > .catalog-message {
+  width: min(100% - 48px, 1240px);
+  margin: 35px auto;
+}
+
+.booking-header {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  box-shadow: 0 5px 20px rgb(3 35 26 / 12%);
+}
+
+.detail-state {
+  width: min(100% - 48px, 620px);
+  margin: 80px auto;
+  padding: 40px;
+  border: 1px solid #e3ebe4;
+  border-radius: 22px;
+  background: white;
+  box-shadow: 0 15px 40px rgb(24 51 42 / 6%);
+}
+
+.detail-state .catalog-submit {
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .catalog-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-filters {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: end;
+  }
+
+  .catalog-filters__heading,
+  .catalog-filters > .catalog-submit {
+    grid-column: 1 / -1;
+  }
+
+  .voyage-detail__lower {
+    grid-template-columns: minmax(0, 1fr) 320px;
+    gap: 24px;
+  }
+
+  .voyage-detail__facts {
+    grid-template-columns: 1fr;
+  }
+
+  .voyage-detail__facts > div {
+    min-height: auto;
+  }
+}
+
+@media (max-width: 620px) {
+  .voyages-header__inner,
+  .catalog-hero,
+  .catalog-layout,
+  .voyage-detail-page__content {
+    width: min(100% - 32px, 1240px);
+  }
+
+  .voyages-header__inner {
+    min-height: 68px;
+  }
+
+  .voyages-brand img {
+    width: 36px;
+    height: 36px;
+  }
+
+  .voyages-brand span {
+    font-size: 21px;
+  }
+
+  .voyages-header__nav {
+    gap: 16px;
+    font-size: 11px;
+  }
+
+  .voyages-header__action {
+    min-height: 37px;
+    padding: 0 11px;
+    font-size: 10px;
+  }
+
+  .voyages-header__action--profile {
+    padding-left: 5px;
+  }
+
+  .voyages-header__action .account-avatar {
+    width: 28px;
+    height: 28px;
+    flex-basis: 28px;
+  }
+
+  .catalog-hero {
+    min-height: 255px;
+    margin-top: 20px;
+    padding: 34px 25px;
+    border-radius: 20px;
+  }
+
+  .catalog-hero h1 {
+    max-width: 420px;
+    font-size: clamp(37px, 10vw, 51px);
+  }
+
+  .catalog-hero__content > p:last-child {
+    max-width: 360px;
+    font-size: 13px;
+  }
+
+  .catalog-hero__stamp {
+    position: absolute;
+    right: -25px;
+    bottom: -40px;
+    width: 122px;
+    height: 122px;
+    opacity: 0.42;
+  }
+
+  .catalog-layout {
+    gap: 25px;
+    margin-top: 24px;
+    margin-bottom: 55px;
+  }
+
+  .catalog-filters {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 19px;
+    border-radius: 16px;
+  }
+
+  .catalog-filters__heading,
+  .catalog-filters > .catalog-submit {
+    grid-column: auto;
+  }
+
+  .catalog-filters__row {
+    gap: 9px;
+  }
+
+  .catalog-results__heading {
+    min-height: 56px;
+  }
+
+  .catalog-results__heading h2 {
+    font-size: 21px;
+  }
+
+  .catalog-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+
+  .catalog-card__image {
+    height: 205px;
+  }
+
+  .catalog-card__body {
+    padding: 17px;
+  }
+
+  .voyage-detail-page__content {
+    margin-top: 20px;
+    margin-bottom: 45px;
+  }
+
+  .voyage-detail__cover {
+    min-height: 390px;
+    padding: 26px 23px;
+    border-radius: 20px;
+  }
+
+  .voyage-detail__back {
+    top: 18px;
+    left: 18px;
+    padding: 9px 12px;
+    font-size: 10px;
+  }
+
+  .voyage-detail__cover-copy {
+    right: 20px;
+    bottom: 62px;
+    left: 23px;
+  }
+
+  .voyage-detail__cover-copy h1 {
+    display: grid;
+    grid-template-columns: auto auto;
+    justify-content: start;
+    gap: 0 8px;
+    font-size: clamp(34px, 9.5vw, 49px);
+  }
+
+  .voyage-detail__cover-copy h1 .voyage-detail__destination {
+    grid-column: 1 / -1;
+  }
+
+  .voyage-detail__cover-date {
+    align-items: flex-start;
+    gap: 7px;
+    font-size: 12px;
+  }
+
+  .voyage-detail__company {
+    right: 20px;
+    bottom: 22px;
+    left: 23px;
+    font-size: 9px;
+  }
+
+  .voyage-detail__lower {
+    grid-template-columns: 1fr;
+    gap: 18px;
+    margin-top: 20px;
+  }
+
+  .voyage-detail__information {
+    padding: 13px 0 0;
+  }
+
+  .voyage-detail__information h2 {
+    margin-bottom: 18px;
+    font-size: 27px;
+  }
+
+  .voyage-detail__facts {
+    gap: 9px;
+  }
+
+  .voyage-detail__facts > div {
+    padding: 13px;
+  }
+
+  .voyage-detail__booking {
+    position: static;
+    padding: 21px;
+  }
+
+  .voyage-detail__help {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+    padding: 16px;
+  }
+
+  .voyage-detail__help p {
+    flex-basis: calc(100% - 35px);
+  }
+
+  .voyage-detail__help a {
+    margin-left: 30px;
+  }
+}
+
+@media (max-width: 390px) {
+  .voyages-header__nav {
+    gap: 10px;
+  }
+
+  .voyages-header__action {
+    padding: 0 9px;
+  }
+
+  .voyages-brand {
+    gap: 4px;
+  }
+
+  .voyages-brand span {
+    font-size: 18px;
   }
 }
 
