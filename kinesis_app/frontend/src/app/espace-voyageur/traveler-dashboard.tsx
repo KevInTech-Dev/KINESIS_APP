@@ -11,6 +11,7 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import ConfirmationDialog from "@/components/confirmation-dialog";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Reservation = {
@@ -178,6 +179,8 @@ export default function TravelerDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const [busyReservation, setBusyReservation] = useState<string | null>(null);
+  const [reservationToCancel, setReservationToCancel] =
+    useState<Reservation | null>(null);
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
@@ -406,9 +409,6 @@ export default function TravelerDashboard() {
   }
 
   async function cancelReservation(reservationId: string) {
-    if (!window.confirm("Voulez-vous vraiment annuler cette réservation ?")) {
-      return;
-    }
     setBusyReservation(reservationId);
     setError(null);
     try {
@@ -733,7 +733,7 @@ export default function TravelerDashboard() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => void cancelReservation(reservation.id_reservation)}
+                            onClick={() => setReservationToCancel(reservation)}
                             disabled={busyReservation === reservation.id_reservation}
                           >
                             Annuler
@@ -805,6 +805,21 @@ export default function TravelerDashboard() {
               </div>
             )}
           </section>
+            {reservationToCancel ? (
+              <ConfirmationDialog
+                open
+                title="Annuler cette réservation ?"
+                description={`La réservation ${reservationToCancel.reference} sera annulée. Cette action est définitive et les places associées seront libérées.`}
+                confirmLabel="Annuler la réservation"
+                tone="danger"
+                pending={busyReservation === reservationToCancel.id_reservation}
+                onCancel={() => setReservationToCancel(null)}
+                onConfirm={async () => {
+                  await cancelReservation(reservationToCancel.id_reservation);
+                  setReservationToCancel(null);
+                }}
+              />
+            ) : null}
           </>
         )}
       </section>

@@ -80,8 +80,20 @@ class CompanyActivationView(APIView):
             compagnie = get_object_or_404(
                 Compagnie.objects.select_for_update().select_related("utilisateur"),
                 pk=payload.get("compagnie_id"),
-                statut=Compagnie.Statut.EN_ATTENTE_ACTIVATION,
             )
+            if (
+                compagnie.statut == Compagnie.Statut.ACTIVE
+                and compagnie.utilisateur.is_active
+            ):
+                return Response(
+                    {"detail": "Votre compte compagnie est déjà activé."},
+                    status=HTTP_200_OK,
+                )
+            if compagnie.statut != Compagnie.Statut.EN_ATTENTE_ACTIVATION:
+                return Response(
+                    {"detail": "Ce compte ne peut plus être activé avec ce lien."},
+                    status=HTTP_400_BAD_REQUEST,
+                )
             compagnie.statut = Compagnie.Statut.ACTIVE
             compagnie.save(update_fields=("statut",))
             compagnie.utilisateur.is_active = True
@@ -120,7 +132,7 @@ class AdminCompanyActionView(APIView):
 
     def post(self, request, pk):
         if self.action == "approve":
-            company = approve_company(company_id=pk, request=request)
+            company = approve_company(company_id=pk)
         elif self.action == "refuse":
             company = refuse_company(company_id=pk)
         elif self.action == "deactivate":

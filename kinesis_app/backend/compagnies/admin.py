@@ -55,7 +55,11 @@ class CompagnieAdmin(admin.ModelAdmin):
         "adresse",
         "statut",
     )
-    actions = ("approve_and_send_activation", "refuse_companies", "deactivate_companies")
+    actions = (
+        "approve_and_send_activation",
+        "refuse_companies",
+        "deactivate_companies",
+    )
 
     def has_add_permission(self, request):
         return False
@@ -71,7 +75,7 @@ class CompagnieAdmin(admin.ModelAdmin):
         for compagnie in queryset.filter(
             statut=Compagnie.Statut.EN_ATTENTE_VALIDATION
         ).only("pk"):
-            approve_company(company_id=compagnie.pk, request=request)
+            approve_company(company_id=compagnie.pk)
             approved += 1
 
         self.message_user(request, f"{approved} lien(s) d’activation envoyé(s).")

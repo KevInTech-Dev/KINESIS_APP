@@ -41,12 +41,18 @@ avec l’URL publique `https://<domaine-frontend>/paiement/retour`.
 Les compagnies peuvent déposer leur dossier depuis `/inscription-compagnie`.
 Le formulaire transmet les justificatifs au backend Django ; l’équipe KINESIS
 doit ensuite valider le dossier et envoyer le lien d’activation avant que le
-compte puisse se connecter. Une fois activée, la compagnie est dirigée vers
+compte puisse se connecter. Le lien ouvre `/activation-compagnie`, qui affiche
+la confirmation d’activation dans l’interface KINESIS. Une fois activée, la compagnie est dirigée vers
 `/espace-compagnie`, qui permet de publier et gérer ses trajets, de créer et
 administrer les comptes agents et permissions, de consulter les paiements et de
 modifier la description, l’adresse et le logo. Les routes `/api/compagnie/*`
 servent de proxy serveur authentifié et les droits de propriété restent
 contrôlés par Django.
+
+Pour les e-mails d’activation en production, configurez `FRONTEND_BASE_URL`
+dans l’environnement Django avec le domaine public du frontend. Configurez
+également `DEFAULT_FROM_NAME` et `DEFAULT_FROM_EMAIL` avec le nom affiché et
+l’adresse expéditrice vérifiée dans Brevo (ou votre fournisseur SMTP).
 
 Les agents de compagnie sont redirigés vers `/espace-agent`. À la première
 connexion, ils doivent remplacer leur mot de passe provisoire avant d’accéder

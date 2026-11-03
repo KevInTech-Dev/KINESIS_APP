@@ -10,6 +10,9 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import ConfirmationDialog, {
+  type ConfirmationTone,
+} from "@/components/confirmation-dialog";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const PERMISSIONS = {
@@ -86,6 +89,13 @@ type ScanResult = {
   };
 };
 type Feedback = { kind: "success" | "error"; message: string };
+type ConfirmationRequest = {
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: ConfirmationTone;
+  action: () => Promise<void>;
+};
 type TabDefinition = { id: Tab; label: string };
 
 const TABS: TabDefinition[] = [
@@ -331,6 +341,8 @@ export default function AgentWorkspace() {
   const [scanCode, setScanCode] = useState("");
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null);
+  const [confirmation, setConfirmation] =
+    useState<ConfirmationRequest | null>(null);
 
   const permissions = profile?.agent_permissions ?? [];
   const canScan = permissions.includes(PERMISSIONS.scanTicket);
@@ -536,13 +548,6 @@ export default function AgentWorkspace() {
   }
 
   async function declareDeparture(trip: Trip) {
-    if (
-      !window.confirm(
-        `Confirmer le départ réel du trajet ${trip.ville_depart_nom} - ${trip.ville_arrivee_nom} ? Les billets non embarqués seront invalidés.`,
-      )
-    ) {
-      return;
-    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -610,9 +615,6 @@ export default function AgentWorkspace() {
   }
 
   async function markFeePaid(baggage: Baggage) {
-    if (!window.confirm(`Confirmer la réception de ${formatPrice(baggage.frais_total)} en espèces ?`)) {
-      return;
-    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -636,9 +638,6 @@ export default function AgentWorkspace() {
   }
 
   async function returnBaggage(baggage: Baggage) {
-    if (!window.confirm(`Confirmer la restitution du bagage ${baggage.reservation_reference} ?`)) {
-      return;
-    }
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -937,7 +936,7 @@ export default function AgentWorkspace() {
                       <span className={`agent-status ${trip.date_depart_effective ? "agent-status--done" : ""}`}>{trip.date_depart_effective ? `Départ enregistré · ${formatDateTime(trip.date_depart_effective)}` : statusLabel(trip.statut)}</span>
                     </div>
                     {!trip.date_depart_effective && trip.statut !== "ANNULEE" && trip.date_depart <= todayString() ? (
-                      <button type="button" className="agent-button agent-button--small" disabled={saving} onClick={() => void declareDeparture(trip)}>Enregistrer le départ</button>
+                      <button type="button" className="agent-button agent-button--small" disabled={saving} onClick={() => setConfirmation({ title: "Enregistrer le départ réel ?", description: `Confirmez le départ du trajet ${trip.ville_depart_nom} → ${trip.ville_arrivee_nom}. Les billets non embarqués seront invalidés.`, confirmLabel: "Enregistrer le départ", tone: "danger", action: () => declareDeparture(trip) })}>Enregistrer le départ</button>
                     ) : null}
                   </article>
                 ))}</div>
@@ -984,8 +983,8 @@ export default function AgentWorkspace() {
                       </div>
                       {baggage.description ? <p>{baggage.description}</p> : null}
                       <div className="agent-baggage-photos">{baggage.photos.map((photo) => <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id_photobagage}>Voir la photo</a>)}</div>
-                      {!baggage.frais_payes && canRegisterBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => void markFeePaid(baggage)}>Confirmer le paiement des frais</button> : null}
-                      {baggage.statut !== "RESTITUE" && baggage.frais_payes && canReturnBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => void returnBaggage(baggage)}>Confirmer la restitution</button> : null}
+                      {!baggage.frais_payes && canRegisterBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer le paiement en espèces ?", description: `Confirmez avoir reçu ${formatPrice(baggage.frais_total)} pour les frais du bagage de la réservation ${baggage.reservation_reference}.`, confirmLabel: "Confirmer le paiement", tone: "primary", action: () => markFeePaid(baggage) })}>Confirmer le paiement des frais</button> : null}
+                      {baggage.statut !== "RESTITUE" && baggage.frais_payes && canReturnBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer la restitution ?", description: `Confirmez la remise du bagage associé à la réservation ${baggage.reservation_reference} à son propriétaire.`, confirmLabel: "Confirmer la restitution", tone: "primary", action: () => returnBaggage(baggage) })}>Confirmer la restitution</button> : null}
                       {!baggage.frais_payes ? <span className="agent-fee-due">Frais à percevoir</span> : <span className="agent-fee-paid">Frais payés</span>}
                     </article>
                   ))}</div>
@@ -1014,6 +1013,21 @@ export default function AgentWorkspace() {
               ) : <p className="agent-empty">Vous n’avez aucune notification pour le moment.</p>}
             </section>
           </div>
+        ) : null}
+        {confirmation ? (
+          <ConfirmationDialog
+            open
+            title={confirmation.title}
+            description={confirmation.description}
+            confirmLabel={confirmation.confirmLabel}
+            tone={confirmation.tone}
+            pending={saving}
+            onCancel={() => setConfirmation(null)}
+            onConfirm={async () => {
+              await confirmation.action();
+              setConfirmation(null);
+            }}
+          />
         ) : null}
       </section>
     </main>

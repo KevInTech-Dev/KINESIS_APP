@@ -1,10 +1,11 @@
+from email.utils import formataddr
 from urllib.parse import urlencode
 
 from django.conf import settings
 from django.core import signing
 from django.core.mail import send_mail
 from django.db import transaction
-from django.urls import reverse
+from django.template.loader import render_to_string
 from rest_framework.exceptions import ValidationError
 
 from .models import Compagnie
@@ -12,8 +13,12 @@ from .models import Compagnie
 ACTIVATION_TOKEN_SALT = "compagnies.activation"
 
 
+def _sender_address():
+    return formataddr((settings.DEFAULT_FROM_NAME, settings.DEFAULT_FROM_EMAIL))
+
+
 @transaction.atomic
-def approve_company(*, company_id, request):
+def approve_company(*, company_id):
     try:
         company = (
             Compagnie.objects.select_for_update()
@@ -31,19 +36,36 @@ def approve_company(*, company_id, request):
         {"compagnie_id": str(company.pk)},
         salt=ACTIVATION_TOKEN_SALT,
     )
-    activation_url = request.build_absolute_uri(reverse("company-activate"))
-    activation_url = f"{activation_url}?{urlencode({'token': token})}"
+    activation_url = (
+        f"{settings.FRONTEND_BASE_URL.rstrip('/')}/activation-compagnie"
+        f"?{urlencode({'token': token})}"
+    )
+    html_message = render_to_string(
+        "compagnies/emails/company_activation.html",
+        {
+            "company_name": company.nom_commercial,
+            "activation_url": activation_url,
+        },
+    )
     sent = send_mail(
         subject="Activation de votre compte KINESIS",
         message=(
             f"Salut {company.nom_commercial},\n\n"
             "Votre demande d’inscription a été approuvée. "
-            "Activez votre compte avec ce lien, valable 24 heures :\n"
+            "Cliquez sur le lien ci-dessous pour activer votre compte "
+            "dans les prochaines 24 heures :\n"
+            "Activer mon compte KINESIS :\n"
             f"{activation_url}\n"
+            "\nSi le bouton ne fonctionne pas, copiez le lien ci-dessus "
+            "et collez-le dans votre navigateur.\n\n"
+            "Si vous n’êtes pas à l’origine de cette demande, ignorez "
+            "simplement cet e-mail.\n\n"
+            "L’équipe KINESIS"
         ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_sender_address(),
         recipient_list=[company.utilisateur.email],
         fail_silently=False,
+        html_message=html_message,
     )
     if not sent:
         raise ValidationError(
@@ -80,7 +102,7 @@ def refuse_company(*, company_id):
             "Après examen de votre demande d’inscription, nous ne pouvons "
             "pas donner suite à la création de votre compte compagnie.\n"
         ),
-        from_email=settings.DEFAULT_FROM_EMAIL,
+        from_email=_sender_address(),
         recipient_list=[company.utilisateur.email],
         fail_silently=False,
     )

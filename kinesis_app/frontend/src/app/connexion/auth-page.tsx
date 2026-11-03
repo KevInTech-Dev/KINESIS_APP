@@ -174,9 +174,14 @@ export default function AuthPage() {
       </Link>
 
       <section className="auth-panel" aria-labelledby="auth-title">
-        <Link className="auth-back-link" href="/">
-          ← Retour à l’accueil
-        </Link>
+        <div className="auth-panel-topline">
+          <Link className="auth-back-link" href="/">
+            ← Retour à l’accueil
+          </Link>
+          <Link className="auth-company-link" href="/inscription-compagnie">
+            Vous représentez une compagnie ? <strong>Créer un compte partenaire</strong>
+          </Link>
+        </div>
 
         <>
             <div className="auth-heading">
@@ -325,10 +330,6 @@ export default function AuthPage() {
               >
                 {mode === "login" ? "Créer un compte" : "Se connecter"}
               </button>
-            </p>
-            <p className="auth-company-link">
-              Vous représentez une compagnie ?{" "}
-              <Link href="/inscription-compagnie">Créer un compte partenaire</Link>
             </p>
         </>
       </section>

@@ -277,7 +277,11 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(company.statut, Compagnie.Statut.EN_ATTENTE_ACTIVATION)
         self.assertFalse(company_user.is_active)
 
-        activation_url = mail.outbox[0].body.splitlines()[-1]
+        activation_url = next(
+            line
+            for line in mail.outbox[0].body.splitlines()
+            if "/activation-compagnie?" in line
+        )
         activation_token = parse_qs(urlparse(activation_url).query)["token"][0]
         activation_response = self.client.get(
             reverse("company-activate"),
@@ -293,7 +297,8 @@ class CompanyApiTests(APITestCase):
             reverse("company-activate"),
             {"token": activation_token},
         )
-        self.assertEqual(replay_response.status_code, status.HTTP_404_NOT_FOUND)
+        self.assertEqual(replay_response.status_code, status.HTTP_200_OK)
+        self.assertIn("déjà activé", replay_response.data["detail"])
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_admin_refusal_sends_email_and_keeps_company_inactive(self):
@@ -569,7 +574,12 @@ class AdminCompanyApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(action_response.status_code, status.HTTP_403_FORBIDDEN)
 
-    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        DEFAULT_FROM_NAME="KINESIS",
+        DEFAULT_FROM_EMAIL="noreply@kinesis.local",
+        FRONTEND_BASE_URL="http://localhost:3000",
+    )
     def test_admin_approves_company_by_sending_activation_link(self):
         from django.core import mail
 
@@ -586,6 +596,16 @@ class AdminCompanyApiTests(APITestCase):
             Compagnie.Statut.EN_ATTENTE_ACTIVATION,
         )
         self.assertEqual(len(mail.outbox), 1)
+        email = mail.outbox[0]
+        self.assertIn("KINESIS", email.from_email)
+        self.assertIn("noreply@kinesis.local", email.from_email)
+        self.assertEqual(len(email.alternatives), 1)
+        html_message = email.alternatives[0][0]
+        self.assertIn('>Activer mon compte</a>', html_message)
+        self.assertIn(
+            'href="http://localhost:3000/activation-compagnie?token=',
+            html_message,
+        )
         self.pending_user.refresh_from_db()
         self.assertFalse(self.pending_user.is_active)
 

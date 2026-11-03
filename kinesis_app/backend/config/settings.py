@@ -170,6 +170,8 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 COMPANY_ACTIVATION_TOKEN_MAX_AGE = 60 * 60 * 24
+FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:3000")
+DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="KINESIS")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@kinesis.local")
 EMAIL_BACKEND = env(
     "EMAIL_BACKEND",

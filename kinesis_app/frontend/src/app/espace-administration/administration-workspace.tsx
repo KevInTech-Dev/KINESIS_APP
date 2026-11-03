@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import ConfirmationDialog from "@/components/confirmation-dialog";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const STATUSES = [
@@ -289,6 +290,10 @@ export default function AdministrationWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [confirmation, setConfirmation] = useState<{
+    company: CompanyApplication;
+    action: Action;
+  } | null>(null);
 
   const loadCompanies = useCallback(
     async (filter: StatusFilter, pageNumber: number) => {
@@ -423,13 +428,6 @@ export default function AdministrationWorkspace() {
     company: CompanyApplication,
     action: Action,
   ) {
-    const prompts: Record<Action, string> = {
-      approve: `Valider le dossier de ${company.nom_commercial ?? company.raison_sociale} et envoyer le lien d’activation à ${company.email} ?`,
-      refuse: `Refuser définitivement le dossier de ${company.nom_commercial ?? company.raison_sociale} et notifier ${company.email} ?`,
-      deactivate: `Désactiver le compte de ${company.nom_commercial ?? company.raison_sociale} ?`,
-    };
-    if (!window.confirm(prompts[action])) return;
-
     setBusyCompany(company.id);
     setError(null);
     setFeedback(null);
@@ -456,6 +454,7 @@ export default function AdministrationWorkspace() {
       });
     } finally {
       setBusyCompany(null);
+      setConfirmation(null);
     }
   }
 
@@ -684,7 +683,7 @@ export default function AdministrationWorkspace() {
                     key={company.id}
                     company={company}
                     busy={busyCompany === company.id}
-                    onAction={(action) => void actOnCompany(company, action)}
+                    onAction={(action) => setConfirmation({ company, action })}
                   />
                 ))}
               </div>
@@ -835,6 +834,38 @@ export default function AdministrationWorkspace() {
           )}
         </div>
       </section>
+      {confirmation ? (
+        <ConfirmationDialog
+          open
+          title={
+            confirmation.action === "approve"
+              ? "Valider ce dossier compagnie ?"
+              : confirmation.action === "refuse"
+                ? "Refuser cette inscription ?"
+                : "Désactiver ce compte compagnie ?"
+          }
+          description={
+            confirmation.action === "approve"
+              ? `La demande de ${confirmation.company.nom_commercial || confirmation.company.raison_sociale} sera approuvée. Un lien d’activation sera envoyé à ${confirmation.company.email}.`
+              : confirmation.action === "refuse"
+                ? `L’inscription de ${confirmation.company.nom_commercial || confirmation.company.raison_sociale} sera refusée et l’entreprise en sera informée.`
+                : `Le compte de ${confirmation.company.nom_commercial || confirmation.company.raison_sociale} ne pourra plus accéder à son espace compagnie.`
+          }
+          confirmLabel={
+            confirmation.action === "approve"
+              ? "Valider et envoyer"
+              : confirmation.action === "refuse"
+                ? "Refuser le dossier"
+                : "Désactiver le compte"
+          }
+          tone={confirmation.action === "approve" ? "primary" : "danger"}
+          pending={busyCompany === confirmation.company.id}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={() =>
+            actOnCompany(confirmation.company, confirmation.action)
+          }
+        />
+      ) : null}
     </main>
   );
 }
