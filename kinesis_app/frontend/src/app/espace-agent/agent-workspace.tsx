@@ -23,6 +23,7 @@ import ConfirmationDialog, {
   type ConfirmationTone,
 } from "@/components/confirmation-dialog";
 import { useListPagination } from "@/components/list-pagination";
+import ProfileAvatar from "@/components/profile-avatar";
 import TicketQrScanner from "@/components/ticket-qr-scanner";
 import RoleWorkspaceShell, {
   type RoleWorkspaceItem,
@@ -868,31 +869,117 @@ export default function AgentWorkspace() {
         {notice ? <p className="agent-alert agent-alert--success" role="status">{notice}</p> : null}
 
         {activeTab === "overview" ? (
-          <div className="agent-content">
-            <section className="agent-welcome-card">
-              <div>
-                <p className="agent-eyebrow">BIENVENUE, {profile.prenoms || profile.nom}</p>
-                <h2>Les bons gestes, au bon moment.</h2>
-                <p>Retrouvez les outils attribués par votre compagnie pour accompagner chaque départ.</p>
-              </div>
-            </section>
-            <div className="agent-stat-grid">
-              {canBoard ? <article className="agent-stat-card"><span>Billets à traiter</span><strong>{tickets.filter((ticket) => ticket.statut === "VALIDE").length}</strong><small>Billets valides à embarquer</small></article> : null}
-              {canConsultBaggage ? <article className="agent-stat-card"><span>Bagages enregistrés</span><strong>{baggages.length}</strong><small>{baggages.filter((baggage) => !baggage.frais_payes).length} frais à percevoir</small></article> : null}
-              {canRegisterBaggage ? <article className="agent-stat-card"><span>Réservations payées</span><strong>{availableReservations.length}</strong><small>Éligibles à l’enregistrement d’un bagage</small></article> : null}
-              <article className="agent-stat-card agent-stat-card--dark"><span>Notifications non lues</span><strong>{unreadCount}</strong><small>Informations de votre compagnie</small></article>
+          <div className="agent-content agent-overview-layout">
+            <aside className="agent-overview-profile">
+              <ProfileAvatar
+                className="agent-overview-avatar"
+                fallbackClassName="agent-overview-avatar--fallback"
+                src={profile.photo_profil}
+                name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+                size={260}
+                alt={`Photo de ${[profile.prenoms, profile.nom].filter(Boolean).join(" ")}`}
+              />
+              <h2>{[profile.prenoms, profile.nom].filter(Boolean).join(" ") || "Agent KINESIS"}</h2>
+              <p className="agent-overview-email">{profile.email}</p>
+              {profile.compagnie_nom ? (
+                <p className="agent-overview-company">{profile.compagnie_nom}</p>
+              ) : null}
+              {canScan ? (
+                <button
+                  type="button"
+                  className="agent-overview-primary"
+                  onClick={() => selectTab("scan")}
+                >
+                  Vérifier un billet
+                </button>
+              ) : null}
+              <p className="agent-overview-role">Agent de compagnie</p>
+            </aside>
+
+            <div className="agent-overview-main">
+              <section className="agent-overview-stats" aria-label="Résumé des opérations">
+                {canBoard ? (
+                  <article className="agent-overview-stat">
+                    <span>Billets à traiter</span>
+                    <strong>{tickets.filter((ticket) => ticket.statut === "VALIDE").length}</strong>
+                    <small>Billets valides à embarquer</small>
+                  </article>
+                ) : null}
+                {canConsultBaggage ? (
+                  <article className="agent-overview-stat">
+                    <span>Bagages enregistrés</span>
+                    <strong>{baggages.length}</strong>
+                    <small>{baggages.filter((baggage) => !baggage.frais_payes).length} frais à percevoir</small>
+                  </article>
+                ) : null}
+                {canRegisterBaggage ? (
+                  <article className="agent-overview-stat">
+                    <span>Réservations payées</span>
+                    <strong>{availableReservations.length}</strong>
+                    <small>Éligibles à l’enregistrement d’un bagage</small>
+                  </article>
+                ) : null}
+                <article className="agent-overview-stat">
+                  <span>Notifications non lues</span>
+                  <strong>{unreadCount}</strong>
+                  <small>Informations de votre compagnie</small>
+                </article>
+              </section>
+
+              <section className="agent-overview-panel">
+                <div className="agent-overview-panel-heading">
+                  <div>
+                    <h3>Outils qui vous sont attribués</h3>
+                    <p>Accédez rapidement aux opérations autorisées par votre compagnie.</p>
+                  </div>
+                </div>
+                <div className="agent-overview-tools">
+                  {tabs
+                    .filter((item) => item.id !== "overview")
+                    .map((item) => {
+                      const Icon = TAB_ICONS[item.id];
+                      return (
+                        <button
+                          type="button"
+                          key={item.id}
+                          onClick={() => selectTab(item.id)}
+                        >
+                          <span className="agent-overview-tool-icon"><Icon aria-hidden="true" /></span>
+                          <span>
+                            <strong>{item.label}</strong>
+                            <small>
+                              {item.id === "scan"
+                                ? "Contrôler un billet et son QR code"
+                                : item.id === "boarding"
+                                  ? "Suivre les départs et l’embarquement"
+                                  : item.id === "baggage"
+                                    ? "Enregistrer et suivre les bagages"
+                                    : "Consulter les messages reçus"}
+                            </small>
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </section>
+
+              <section className="agent-overview-panel agent-overview-permissions">
+                <div className="agent-overview-panel-heading">
+                  <div>
+                    <h3>Vos autorisations</h3>
+                    <p>Les accès disponibles sur votre compte agent.</p>
+                  </div>
+                </div>
+                <div className="agent-access-list">
+                  {permissions.map((permission) => (
+                    <span className="agent-access-tag" key={permission}>{permissionLabel(permission)}</span>
+                  ))}
+                  {permissions.length === 0 ? (
+                    <p>Aucune permission opérationnelle n’a été attribuée. Contactez votre compagnie.</p>
+                  ) : null}
+                </div>
+              </section>
             </div>
-            <section className="agent-panel">
-              <div className="agent-panel-heading">
-                <div><h2>Vos accès</h2><p>Les actions disponibles dépendent des permissions de votre compte.</p></div>
-              </div>
-              <div className="agent-access-list">
-                {permissions.map((permission) => (
-                  <span className="agent-access-tag" key={permission}>{permissionLabel(permission)}</span>
-                ))}
-                {permissions.length === 0 ? <p>Aucune permission opérationnelle n’a été attribuée. Contactez votre compagnie.</p> : null}
-              </div>
-            </section>
           </div>
         ) : null}
 
