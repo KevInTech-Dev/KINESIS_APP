@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import { useListPagination } from "@/components/list-pagination";
 import VoyagesPageHeader from "@/components/voyages-page-header";
 
 type Filters = {
@@ -127,6 +128,8 @@ function VoyagesCatalog() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { pageItems: pageTrips, pagination, resetPage } =
+    useListPagination(trips);
 
   useEffect(() => {
     let active = true;
@@ -176,6 +179,7 @@ function VoyagesCatalog() {
 
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    resetPage();
     if (
       filters.ville_depart &&
       filters.ville_arrivee &&
@@ -223,6 +227,7 @@ function VoyagesCatalog() {
   }
 
   async function clearFilters() {
+    resetPage();
     setFilters(emptyFilters);
     window.history.replaceState(null, "", "/voyages");
     setLoading(true);
@@ -391,7 +396,7 @@ function VoyagesCatalog() {
             <p className="catalog-message">Aucun voyage ne correspond à ces critères. Modifiez vos filtres et réessayez.</p>
           ) : null}
           <div className="catalog-grid">
-            {trips.map((trip) => (
+            {pageTrips.map((trip) => (
               <Link
                 className="catalog-card"
                 href={`/voyages/${encodeURIComponent(trip.id_voyage)}?passagers=${encodeURIComponent(filters.places_min || "1")}`}
@@ -416,6 +421,7 @@ function VoyagesCatalog() {
               </Link>
             ))}
           </div>
+          {pagination}
         </section>
       </div>
     </main>

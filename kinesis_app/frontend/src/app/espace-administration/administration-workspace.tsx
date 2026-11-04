@@ -1,11 +1,18 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Building2, ExternalLink, UsersRound } from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import {
+  ListPagination,
+  type ListPageSize,
+} from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import RoleWorkspaceShell, {
+  type RoleWorkspaceItem,
+} from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const STATUSES = [
@@ -15,8 +22,6 @@ const STATUSES = [
   "DESACTIVE",
   "REFUSEE",
 ] as const;
-const PAGE_SIZE = 20;
-
 type CompanyStatus = (typeof STATUSES)[number];
 type StatusFilter = CompanyStatus | "TOUTES";
 type Action = "approve" | "refuse" | "deactivate";
@@ -279,9 +284,11 @@ export default function AdministrationWorkspace() {
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("EN_ATTENTE_VALIDATION");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<ListPageSize>(10);
   const [data, setData] = useState<CompanyPage | null>(null);
   const [userFilter, setUserFilter] = useState<UserFilter>("TOUS");
   const [userPage, setUserPage] = useState(1);
+  const [userPageSize, setUserPageSize] = useState<ListPageSize>(10);
   const [users, setUsers] = useState<UserPage | null>(null);
   const [userSearchInput, setUserSearchInput] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -299,19 +306,23 @@ export default function AdministrationWorkspace() {
   } | null>(null);
 
   const loadCompanies = useCallback(
-    async (filter: StatusFilter, pageNumber: number) => {
+    async (filter: StatusFilter, pageNumber: number, itemsPerPage: number) => {
       setListLoading(true);
       setError(null);
       try {
         const query = new URLSearchParams({
           page: String(pageNumber),
-          page_size: String(PAGE_SIZE),
+          page_size: String(itemsPerPage),
         });
         if (filter !== "TOUTES") query.set("status", filter);
         const result = await requestAdministrationApi(
           `compagnies?${query.toString()}`,
         );
-        setData(parseCompanyPage(result));
+        const companyPage = parseCompanyPage(result);
+        setData(companyPage);
+        if (companyPage.results.length === 0 && pageNumber > 1) {
+          setPage(pageNumber - 1);
+        }
       } catch (loadError) {
         console.error("Administration company list loading failed", loadError);
         setError(
@@ -326,13 +337,18 @@ export default function AdministrationWorkspace() {
     [],
   );
   const loadUsers = useCallback(
-    async (filter: UserFilter, search: string, pageNumber: number) => {
+    async (
+      filter: UserFilter,
+      search: string,
+      pageNumber: number,
+      itemsPerPage: number,
+    ) => {
       setUsersLoading(true);
       setError(null);
       try {
         const query = new URLSearchParams({
           page: String(pageNumber),
-          page_size: String(PAGE_SIZE),
+          page_size: String(itemsPerPage),
         });
         if (filter !== "TOUS") query.set("role", filter);
         if (search) query.set("search", search);
@@ -407,12 +423,12 @@ export default function AdministrationWorkspace() {
     }
     let active = true;
     void Promise.resolve().then(() => {
-      if (active) return loadCompanies(statusFilter, page);
+      if (active) return loadCompanies(statusFilter, page, pageSize);
     });
     return () => {
       active = false;
     };
-  }, [loadCompanies, page, profile, reloadKey, section, statusFilter]);
+  },   [loadCompanies, page, pageSize, profile, reloadKey, section, statusFilter]);
 
   useEffect(() => {
     if (!profile || profile.role !== "ADMINISTRATEUR" || section !== "accounts") {
@@ -420,12 +436,21 @@ export default function AdministrationWorkspace() {
     }
     let active = true;
     void Promise.resolve().then(() => {
-      if (active) return loadUsers(userFilter, userSearch, userPage);
+      if (active) return loadUsers(userFilter, userSearch, userPage, userPageSize);
     });
     return () => {
       active = false;
     };
-  }, [loadUsers, profile, reloadKey, section, userFilter, userPage, userSearch]);
+  }, [
+    loadUsers,
+    profile,
+    reloadKey,
+    section,
+    userFilter,
+    userPage,
+    userPageSize,
+    userSearch,
+  ]);
 
   async function actOnCompany(
     company: CompanyApplication,
@@ -505,94 +530,33 @@ export default function AdministrationWorkspace() {
     );
   }
 
-  const pageCount = Math.max(1, Math.ceil((data?.count ?? 0) / PAGE_SIZE));
-  const userPageCount = Math.max(
-    1,
-    Math.ceil((users?.count ?? 0) / PAGE_SIZE),
-  );
+  const workspaceItems: RoleWorkspaceItem[] = [
+    { id: "companies", label: "Dossiers compagnies", icon: Building2, group: "operations" },
+    { id: "accounts", label: "Comptes utilisateurs", icon: UsersRound, group: "operations" },
+    { id: "website", label: "Voir le site", icon: ExternalLink, href: "/", group: "account" },
+  ];
+  function selectSection(nextSection: string) {
+    if (nextSection !== "companies" && nextSection !== "accounts") return;
+    setSection(nextSection);
+    setError(null);
+    setFeedback(null);
+  }
 
   return (
-    <main className="admin-app">
-      <aside className="admin-sidebar">
-        <Link className="admin-brand" href="/" aria-label="Kinesis, accueil">
-          <Image src="/kinesis-mark.png" width={42} height={42} alt="" priority />
-          <span>KINESIS</span>
-        </Link>
-        <div className="admin-role-badge">
-          <span aria-hidden="true">AD</span>
-          <div>
-            <strong>Administration</strong>
-            <span>Gestion KINESIS</span>
-          </div>
-        </div>
-        <nav className="admin-navigation" aria-label="Administration">
-          <button
-            type="button"
-            className={section === "companies" ? "is-active" : ""}
-            aria-current={section === "companies" ? "page" : undefined}
-            onClick={() => {
-              setSection("companies");
-              setError(null);
-              setFeedback(null);
-            }}
-          >
-            <span className="admin-navigation-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M3.75 7.25h6l1.8 2h8.7v8.5a1.5 1.5 0 0 1-1.5 1.5h-13a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2Z" />
-                <path d="M3.75 9.25h16.5" />
-              </svg>
-            </span>
-            <span className="admin-navigation-copy">
-              <strong>Dossiers compagnies</strong>
-              <span>Examiner les inscriptions</span>
-            </span>
-            <span className="admin-navigation-arrow" aria-hidden="true">→</span>
-          </button>
-          <button
-            type="button"
-            className={section === "accounts" ? "is-active" : ""}
-            aria-current={section === "accounts" ? "page" : undefined}
-            onClick={() => {
-              setSection("accounts");
-              setError(null);
-              setFeedback(null);
-            }}
-          >
-            <span className="admin-navigation-icon" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none">
-                <path d="M15.5 19.25v-1.5a3 3 0 0 0-3-3h-6a3 3 0 0 0-3 3v1.5" />
-                <circle cx="9.5" cy="7.5" r="3.25" />
-                <path d="M16 4.5a3.25 3.25 0 0 1 0 6.25M18.5 14.75a3 3 0 0 1 2 2.85v1.65" />
-              </svg>
-            </span>
-            <span className="admin-navigation-copy">
-              <strong>Comptes utilisateurs</strong>
-              <span>Rechercher et filtrer les accès</span>
-            </span>
-            <span className="admin-navigation-arrow" aria-hidden="true">→</span>
-          </button>
-        </nav>
-        <div className="admin-sidebar-bottom">
-          <Link href="/">Voir le site</Link>
-          <button type="button" onClick={() => void signOut()}>
-            Se déconnecter
-          </button>
-        </div>
-      </aside>
-
-      <section className="admin-main">
-        <header className="admin-topbar">
-          <div>
-            <p className="admin-eyebrow">ESPACE SÉCURISÉ</p>
-            <h1>Administration KINESIS</h1>
-          </div>
-          <div className="admin-topbar-user">
-            <span>{profile.email}</span>
-            <button type="button" onClick={() => void signOut()} aria-label="Se déconnecter">
-              ↗
-            </button>
-          </div>
-        </header>
+    <RoleWorkspaceShell
+      eyebrow="ESPACE ADMINISTRATION"
+      title={
+        section === "companies"
+          ? "Dossiers compagnies"
+          : "Comptes utilisateurs"
+      }
+      profile={profile}
+      activeId={section}
+      items={workspaceItems}
+      onSelect={selectSection}
+      onProfileUpdated={setProfile}
+      onLogout={() => void signOut()}
+    >
 
         <div className="admin-content">
           <section className="admin-welcome">
@@ -697,26 +661,18 @@ export default function AdministrationWorkspace() {
               </div>
             ) : null}
 
-            {data && pageCount > 1 ? (
-              <div className="admin-pagination">
-                <button
-                  type="button"
-                  disabled={!data.previous || listLoading}
-                  onClick={() => setPage((current) => Math.max(1, current - 1))}
-                >
-                  ← Précédent
-                </button>
-                <span>
-                  Page {page} sur {pageCount}
-                </span>
-                <button
-                  type="button"
-                  disabled={!data.next || listLoading}
-                  onClick={() => setPage((current) => current + 1)}
-                >
-                  Suivant →
-                </button>
-              </div>
+            {data ? (
+              <ListPagination
+                totalItems={data.count}
+                page={page}
+                pageSize={pageSize}
+                loading={listLoading}
+                onPageChange={setPage}
+                onPageSizeChange={(nextSize) => {
+                  setPageSize(nextSize);
+                  setPage(1);
+                }}
+              />
             ) : null}
           </section> : (
           <section className="admin-panel" aria-label="Comptes utilisateurs">
@@ -810,33 +766,22 @@ export default function AdministrationWorkspace() {
                 </div>
               ) : null}
 
-              {users && userPageCount > 1 ? (
-                <div className="admin-pagination">
-                  <button
-                    type="button"
-                    disabled={!users.previous || usersLoading}
-                    onClick={() =>
-                      setUserPage((current) => Math.max(1, current - 1))
-                    }
-                  >
-                    ← Précédent
-                  </button>
-                  <span>
-                    Page {userPage} sur {userPageCount}
-                  </span>
-                  <button
-                    type="button"
-                    disabled={!users.next || usersLoading}
-                    onClick={() => setUserPage((current) => current + 1)}
-                  >
-                    Suivant →
-                  </button>
-                </div>
+              {users ? (
+                <ListPagination
+                  totalItems={users.count}
+                  page={userPage}
+                  pageSize={userPageSize}
+                  loading={usersLoading}
+                  onPageChange={setUserPage}
+                  onPageSizeChange={(nextSize) => {
+                    setUserPageSize(nextSize);
+                    setUserPage(1);
+                  }}
+                />
               ) : null}
             </section>
           )}
         </div>
-      </section>
       {confirmation ? (
         <ConfirmationDialog
           open
@@ -869,7 +814,7 @@ export default function AdministrationWorkspace() {
           }
         />
       ) : null}
-    </main>
+    </RoleWorkspaceShell>
   );
 }
 

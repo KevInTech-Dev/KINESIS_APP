@@ -1,6 +1,11 @@
+from io import BytesIO
+from tempfile import TemporaryDirectory
+
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
+from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
@@ -93,6 +98,74 @@ class UserAuthenticationTests(APITestCase):
 		profile_response = self.client.get(reverse("current-user"))
 		self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
 		self.assertEqual(profile_response.data["email"], user.email)
+
+	def test_profile_updates_persist_for_every_role_and_photo_survives_reload(self):
+		with TemporaryDirectory() as media_root, override_settings(
+			MEDIA_ROOT=media_root,
+			STORAGES={
+				"default": {
+					"BACKEND": "django.core.files.storage.FileSystemStorage",
+				},
+				"staticfiles": {
+					"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+				},
+			},
+		):
+			for role in User.Role.values:
+				with self.subTest(role=role):
+					user = User.objects.create_user(
+						email=f"profile-{role.lower()}@example.com",
+						password=self.password,
+						nom="Nom initial",
+						prenoms="Prénom initial",
+						role=role,
+					)
+					self.client.force_authenticate(user=user)
+					response = self.client.patch(
+						reverse("current-user"),
+						{
+							"nom": "Nom modifié",
+							"prenoms": "Prénom modifié",
+							"telephone": "+22890000000",
+						},
+						format="multipart",
+					)
+
+					self.assertEqual(response.status_code, status.HTTP_200_OK)
+					user.refresh_from_db()
+					self.assertEqual(user.nom, "Nom modifié")
+					self.assertEqual(user.prenoms, "Prénom modifié")
+					self.assertEqual(user.telephone, "+22890000000")
+
+					if role == User.Role.COMPAGNIE:
+						image = BytesIO()
+						Image.new("RGB", (2, 2), color="green").save(
+							image,
+							format="PNG",
+						)
+						photo_response = self.client.patch(
+							reverse("current-user"),
+							{
+								"photo_profil": SimpleUploadedFile(
+									"profile.png",
+									image.getvalue(),
+									content_type="image/png",
+								),
+							},
+							format="multipart",
+						)
+						self.assertEqual(
+							photo_response.status_code,
+							status.HTTP_200_OK,
+						)
+						user.refresh_from_db()
+						self.assertTrue(user.photo_profil.name)
+
+						reloaded_profile = self.client.get(reverse("current-user"))
+						self.assertEqual(
+							reloaded_profile.data["photo_profil"],
+							photo_response.data["photo_profil"],
+						)
 
 	def test_logout_revokes_the_refresh_token(self):
 		user = User.objects.create_user(

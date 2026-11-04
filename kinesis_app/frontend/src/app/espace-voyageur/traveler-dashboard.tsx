@@ -12,6 +12,7 @@ import {
   type FormEvent,
 } from "react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
@@ -253,6 +254,12 @@ export default function TravelerDashboard() {
   const [telephone, setTelephone] = useState("");
   const [photo, setPhoto] = useState<File | null>(null);
   const photoInput = useRef<HTMLInputElement>(null);
+  const { pageItems: pageReservations, pagination: reservationPagination } =
+    useListPagination(data?.reservations ?? []);
+  const { pageItems: pageTickets, pagination: ticketPagination } =
+    useListPagination(data?.tickets ?? []);
+  const { pageItems: pageNotifications, pagination: notificationPagination } =
+    useListPagination(data?.notifications ?? []);
 
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
@@ -322,8 +329,8 @@ export default function TravelerDashboard() {
       }
 
       const [reservationsResponse, ticketsResponse, notificationsResponse] = await Promise.all([
-        fetch("/api/reservations", { cache: "no-store" }),
-        fetch("/api/billets", { cache: "no-store" }),
+        fetch("/api/reservations?page_size=100", { cache: "no-store" }),
+        fetch("/api/billets?page_size=100", { cache: "no-store" }),
         fetch("/api/notifications?page_size=100", { cache: "no-store" }),
       ]);
       if (
@@ -852,7 +859,7 @@ export default function TravelerDashboard() {
 
             {data?.reservations.length ? (
               <div className="traveler-booking-list">
-                {data.reservations.map((reservation) => (
+                {pageReservations.map((reservation) => (
                   <article
                     className="traveler-booking-card"
                     key={reservation.id_reservation}
@@ -998,6 +1005,7 @@ export default function TravelerDashboard() {
                 <Link href="/#search-form">Trouver un voyage</Link>
               </div>
             )}
+            {reservationPagination}
           </section>
 
           <section className="traveler-tickets" id="billets" aria-labelledby="tickets-title">
@@ -1013,7 +1021,7 @@ export default function TravelerDashboard() {
             </div>
             {data?.tickets.length ? (
               <div className="traveler-ticket-list">
-                {data.tickets.map((ticket) => (
+                {pageTickets.map((ticket) => (
                   <article className="traveler-ticket-card" key={ticket.id_billet}>
                     <QRCodeSVG
                       className="traveler-ticket-qr"
@@ -1078,6 +1086,7 @@ export default function TravelerDashboard() {
                 <p>Ils sont générés dès que votre paiement est confirmé.</p>
               </div>
             )}
+            {ticketPagination}
           </section>
 
           <section className="traveler-notifications" id="notifications" aria-labelledby="notifications-title">
@@ -1097,7 +1106,7 @@ export default function TravelerDashboard() {
             </div>
             {data?.notifications.length ? (
               <div className="traveler-notification-list">
-                {data.notifications.map((notification) => (
+                {pageNotifications.map((notification) => (
                   <article className={`traveler-notification-card ${notification.lue ? "" : "traveler-notification-card--unread"}`} key={notification.id_notification}>
                     <div>
                       <span className="traveler-notification-type">{notification.type}</span>
@@ -1117,6 +1126,7 @@ export default function TravelerDashboard() {
                 <p>Les informations liées à vos réservations et vos voyages apparaîtront ici.</p>
               </div>
             )}
+            {notificationPagination}
           </section>
             {reservationToCancel ? (
               <ConfirmationDialog

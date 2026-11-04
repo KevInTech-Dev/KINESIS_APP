@@ -1,4 +1,5 @@
 from io import BytesIO
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -168,6 +169,57 @@ class CompanyApiTests(APITestCase):
             statut=Compagnie.Statut.ACTIVE,
         )
         return user, company
+
+    def test_company_profile_logo_and_editable_fields_persist_after_reload(self):
+        with TemporaryDirectory() as media_root, override_settings(
+            MEDIA_ROOT=media_root,
+            STORAGES={
+                "default": {
+                    "BACKEND": "django.core.files.storage.FileSystemStorage",
+                },
+                "staticfiles": {
+                    "BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+                },
+            },
+        ):
+            user, company = self.create_active_company(
+                "profile-company@example.com"
+            )
+            self.client.force_authenticate(user=user)
+            image = BytesIO()
+            Image.new("RGB", (2, 2), color="green").save(image, format="PNG")
+
+            response = self.client.patch(
+                reverse("my-company"),
+                {
+                    "adresse": "Nouvelle adresse",
+                    "description": "Nouvelle description",
+                    "logo": SimpleUploadedFile(
+                        "logo.png",
+                        image.getvalue(),
+                        content_type="image/png",
+                    ),
+                },
+                format="multipart",
+            )
+
+            self.assertEqual(response.status_code, status.HTTP_200_OK)
+            company.refresh_from_db()
+            self.assertEqual(company.adresse, "Nouvelle adresse")
+            self.assertEqual(company.description, "Nouvelle description")
+            self.assertTrue(company.logo.name)
+
+            reloaded_profile = self.client.get(reverse("my-company"))
+            self.assertEqual(reloaded_profile.status_code, status.HTTP_200_OK)
+            self.assertEqual(reloaded_profile.data["adresse"], "Nouvelle adresse")
+            self.assertEqual(
+                reloaded_profile.data["description"],
+                "Nouvelle description",
+            )
+            self.assertEqual(
+                reloaded_profile.data["logo"],
+                response.data["logo"],
+            )
 
     def test_company_registration_stays_pending_and_cannot_login(self):
         with patch(
@@ -466,6 +518,43 @@ class CompanyApiTests(APITestCase):
         self.assertFalse(AgentCompagnie.objects.filter(pk=agent.pk).exists())
         agent_user.refresh_from_db()
         self.assertFalse(agent_user.is_active)
+
+    def test_company_can_disable_and_reactivate_an_agent(self):
+        company_user, company = self.create_active_company("toggle-agent@example.com")
+        agent_user = User.objects.create_user(
+            email="agent-to-toggle@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="À gérer",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=company,
+        )
+        self.client.force_authenticate(user=company_user)
+        url = reverse("company-agent-detail", kwargs={"pk": agent.pk})
+
+        deactivate_response = self.client.patch(
+            url,
+            {"is_active": False},
+            format="json",
+        )
+        self.assertEqual(deactivate_response.status_code, status.HTTP_200_OK)
+        self.assertIs(deactivate_response.data["is_active"], False)
+        agent_user.refresh_from_db()
+        self.assertFalse(agent_user.is_active)
+        self.assertTrue(AgentCompagnie.objects.filter(pk=agent.pk).exists())
+
+        reactivate_response = self.client.patch(
+            url,
+            {"is_active": True},
+            format="json",
+        )
+        self.assertEqual(reactivate_response.status_code, status.HTTP_200_OK)
+        self.assertIs(reactivate_response.data["is_active"], True)
+        agent_user.refresh_from_db()
+        self.assertTrue(agent_user.is_active)
 
     def test_company_agent_list_includes_ids_and_uses_pagination(self):
         company_user, company = self.create_active_company("pagination@example.com")

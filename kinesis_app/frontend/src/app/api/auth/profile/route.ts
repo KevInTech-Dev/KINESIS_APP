@@ -31,9 +31,9 @@ export async function PATCH(request: Request) {
     if (auth.status === 401) clearAuthCookies(response);
     return response;
   }
-  if (!isUserProfile(auth.session.profile) || auth.session.profile.role !== "VOYAGEUR") {
+  if (!isUserProfile(auth.session.profile)) {
     return NextResponse.json(
-      { detail: "La modification est réservée aux comptes voyageurs." },
+      { detail: "Le profil reçu du serveur est invalide." },
       { status: 403 },
     );
   }

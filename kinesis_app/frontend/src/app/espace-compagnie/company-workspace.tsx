@@ -4,8 +4,45 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  Bell,
+  BusFront,
+  Building2,
+  ChartNoAxesCombined,
+  ChevronRight,
+  CreditCard,
+  ExternalLink,
+  LayoutDashboard,
+  LogOut,
+  Luggage,
+  Plus,
+  TicketCheck,
+  UsersRound,
+  type LucideIcon,
+} from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import SidebarProfileMenu from "@/components/sidebar-profile-menu";
+import { Separator } from "@/components/ui/separator";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuBadge,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Company = {
@@ -98,6 +135,7 @@ type Tab =
   | "payments"
   | "notifications"
   | "profile";
+type PaymentRange = "7d" | "30d" | "90d";
 
 const PERMISSIONS = [
   ["ENREGISTRER_BAGAGE", "Enregistrer un bagage"],
@@ -107,15 +145,21 @@ const PERMISSIONS = [
   ["RESTITUER_BAGAGE", "Restituer un bagage"],
 ] as const;
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "overview", label: "Vue d’ensemble" },
-  { id: "trips", label: "Mes trajets" },
-  { id: "agents", label: "Équipe" },
-  { id: "reservations", label: "Réservations" },
-  { id: "tariffs", label: "Tarifs bagages" },
-  { id: "payments", label: "Paiements" },
-  { id: "notifications", label: "Notifications" },
-  { id: "profile", label: "Ma compagnie" },
+const TABS: { id: Tab; label: string; icon: LucideIcon; group: "operations" | "account" }[] = [
+  { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard, group: "operations" },
+  { id: "trips", label: "Mes trajets", icon: BusFront, group: "operations" },
+  { id: "agents", label: "Équipe", icon: UsersRound, group: "operations" },
+  { id: "reservations", label: "Réservations", icon: TicketCheck, group: "operations" },
+  { id: "tariffs", label: "Tarifs bagages", icon: Luggage, group: "operations" },
+  { id: "payments", label: "Paiements", icon: CreditCard, group: "operations" },
+  { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
+  { id: "profile", label: "Ma compagnie", icon: Building2, group: "account" },
+];
+
+const PAYMENT_RANGES: { id: PaymentRange; label: string; days: number }[] = [
+  { id: "7d", label: "7 jours", days: 7 },
+  { id: "30d", label: "30 jours", days: 30 },
+  { id: "90d", label: "3 mois", days: 90 },
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -322,6 +366,11 @@ function formatDate(value: string) {
   }).format(new Date(`${value}T12:00:00`));
 }
 
+function getTimeGreeting(date = new Date()) {
+  const hour = date.getHours();
+  return hour < 12 ? "BONJOUR" : "BONSOIR";
+}
+
 function statusLabel(status: string) {
   return (
     {
@@ -345,9 +394,210 @@ function isFuture(value: Trip) {
   return new Date(`${value.date_depart}T${value.heure_depart}`).getTime() >= Date.now();
 }
 
+function getPaymentBuckets(
+  payments: Payment[],
+  range: PaymentRange,
+  now: number,
+) {
+  const days = PAYMENT_RANGES.find((item) => item.id === range)?.days ?? 30;
+  const end = new Date(now);
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days + 1);
+  start.setHours(0, 0, 0, 0);
+
+  const bucketDuration = (end.getTime() - start.getTime() + 1) / 7;
+  const buckets = Array.from({ length: 7 }, (_, index) => {
+    const bucketStart = new Date(start.getTime() + bucketDuration * index);
+    return {
+      label: new Intl.DateTimeFormat("fr-FR", {
+        day: "numeric",
+        month: "short",
+      }).format(bucketStart),
+      amount: 0,
+      count: 0,
+    };
+  });
+
+  payments.forEach((payment) => {
+    if (payment.statut !== "CONFIRME") return;
+    const paidAt = new Date(payment.date_confirmation ?? payment.date_creation);
+    if (Number.isNaN(paidAt.getTime()) || paidAt < start || paidAt > end) return;
+    const index = Math.min(
+      Math.floor((paidAt.getTime() - start.getTime()) / bucketDuration),
+      buckets.length - 1,
+    );
+    buckets[index].amount += Number(payment.montant) || 0;
+    buckets[index].count += 1;
+  });
+
+  return buckets;
+}
+
+function CompanySidebar({
+  company,
+  profile,
+  tab,
+  onSelect,
+  onCreateTrip,
+  onLogout,
+  onProfileUpdated,
+  tripCount,
+  unreadCount,
+}: {
+  company: Company;
+  profile: UserProfile;
+  tab: Tab;
+  onSelect: (tab: Tab) => void;
+  onCreateTrip: () => void;
+  onLogout: () => void;
+  onProfileUpdated: (profile: UserProfile) => void;
+  tripCount: number;
+  unreadCount: number;
+}) {
+  const { isMobile, setOpenMobile } = useSidebar();
+  const selectTab = (nextTab: Tab) => {
+    onSelect(nextTab);
+    if (isMobile) setOpenMobile(false);
+  };
+  const operations = TABS.filter((item) => item.group === "operations");
+  const account = TABS.filter((item) => item.group === "account");
+
+  return (
+    <Sidebar className="company-sidebar" variant="inset" collapsible="icon">
+      <SidebarHeader className="company-sidebar__header">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              asChild
+              tooltip="KINESIS — Accueil"
+              className="company-sidebar__brand"
+            >
+              <Link href="/">
+                <span className="kinesis-logo-mark company-sidebar__brand-mark">
+                  <Image src="/kinesis-mark.png" width={34} height={34} alt="" priority />
+                </span>
+                <span>KINESIS</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton
+              tooltip="Publier un trajet"
+              className="company-sidebar__create"
+              onClick={() => {
+                onCreateTrip();
+                if (isMobile) setOpenMobile(false);
+              }}
+            >
+              <Plus />
+              <span>Publier un trajet</span>
+              <ChevronRight className="company-sidebar__create-arrow" />
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent className="company-sidebar__content">
+        <SidebarGroup>
+          <SidebarGroupLabel>Opérations</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {operations.map((item) => {
+                const Icon = item.icon;
+                const badge =
+                  item.id === "trips"
+                    ? tripCount
+                    : item.id === "notifications"
+                      ? unreadCount
+                      : 0;
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      type="button"
+                      isActive={tab === item.id}
+                      tooltip={item.label}
+                      onClick={() => selectTab(item.id)}
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                      {badge > 0 ? (
+                        <SidebarMenuBadge>{badge}</SidebarMenuBadge>
+                      ) : null}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Compte</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {account.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      type="button"
+                      isActive={tab === item.id}
+                      tooltip={item.label}
+                      onClick={() => selectTab(item.id)}
+                    >
+                      <Icon />
+                      <span>{item.label}</span>
+                      {item.id === "notifications" && unreadCount > 0 ? (
+                        <SidebarMenuBadge>{unreadCount}</SidebarMenuBadge>
+                      ) : null}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                );
+              })}
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild tooltip="Voir le site KINESIS">
+                  <Link href="/">
+                    <ExternalLink />
+                    <span>Voir le site</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+
+      <SidebarFooter className="company-sidebar__footer">
+        <Separator />
+        <SidebarMenu>
+          <SidebarProfileMenu
+            profile={profile}
+            onProfileUpdated={onProfileUpdated}
+            onLogout={onLogout}
+            buttonClassName="company-sidebar__user"
+            avatarClassName="company-user-avatar"
+            copyClassName="company-sidebar__user-copy"
+            displayName={company.nom_commercial}
+            avatarSrc={company.logo}
+            companyAction={{
+              label: "Ma compagnie",
+              onClick: () => selectTab("profile"),
+            }}
+          />
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
+  );
+}
+
 export default function CompanyWorkspace() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
+  const [paymentRange, setPaymentRange] = useState<PaymentRange>("30d");
+  const [dashboardNow, setDashboardNow] = useState<number | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cities, setCities] = useState<City[]>([]);
@@ -365,6 +615,7 @@ export default function CompanyWorkspace() {
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [editingTariff, setEditingTariff] = useState<BaggageTariff | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
+  const [agentToDeactivate, setAgentToDeactivate] = useState<Agent | null>(null);
   const [tariffToDelete, setTariffToDelete] = useState<BaggageTariff | null>(null);
   const [agentPermissions, setAgentPermissions] = useState<Record<string, string[]>>({});
 
@@ -443,10 +694,85 @@ export default function CompanyWorkspace() {
     void Promise.resolve().then(loadWorkspace);
   }, [loadWorkspace]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDashboardNow(Date.now()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const activeTrips = useMemo(
     () => trips.filter((trip) => trip.statut === "PUBLIE" && isFuture(trip)),
     [trips],
   );
+  const { pageItems: pageTrips, pagination: tripPagination } =
+    useListPagination(trips);
+  const { pageItems: pageAgents, pagination: agentPagination } =
+    useListPagination(agents);
+  const { pageItems: pageReservations, pagination: reservationPagination } =
+    useListPagination(reservations);
+  const { pageItems: pageTariffs, pagination: tariffPagination } =
+    useListPagination(tariffs);
+  const { pageItems: pagePayments, pagination: paymentPagination } =
+    useListPagination(payments);
+  const { pageItems: pageNotifications, pagination: notificationPagination } =
+    useListPagination(notifications);
+  const recentReservations = useMemo(
+    () =>
+      [...reservations]
+        .sort(
+          (first, second) =>
+            new Date(second.date_reservation).getTime() -
+            new Date(first.date_reservation).getTime(),
+        )
+        .slice(0, 5),
+    [reservations],
+  );
+  const unreadNotificationCount = notifications.filter((item) => !item.lue).length;
+  const pendingReservationCount = reservations.filter(
+    (reservation) => reservation.statut === "EN_ATTENTE_PAIEMENT",
+  ).length;
+  const activeAgentCount = agents.filter((agent) => agent.is_active).length;
+  const paymentBuckets = useMemo(
+    () =>
+      dashboardNow === null
+        ? []
+        : getPaymentBuckets(payments, paymentRange, dashboardNow),
+    [dashboardNow, payments, paymentRange],
+  );
+  const maximumBucketPayment = Math.max(
+    0,
+    ...paymentBuckets.map((bucket) => bucket.amount),
+  );
+  const rangePaymentTotal = paymentBuckets.reduce(
+    (total, bucket) => total + bucket.amount,
+    0,
+  );
+  const rangePaymentCount = paymentBuckets.reduce(
+    (total, bucket) => total + bucket.count,
+    0,
+  );
+  const chartMaximum = Math.max(1, maximumBucketPayment);
+  const chartPoints = paymentBuckets.map((bucket, index) => {
+    const x = 70 + (index * 710) / Math.max(paymentBuckets.length - 1, 1);
+    const y = 198 - (bucket.amount / chartMaximum) * 166;
+    return { ...bucket, x, y };
+  });
+  const chartLinePath = chartPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+  const chartAreaPath = chartPoints.length
+    ? `${chartLinePath} L ${chartPoints[chartPoints.length - 1].x} 198 L ${chartPoints[0].x} 198 Z`
+    : "";
+
+  function selectTab(nextTab: Tab) {
+    setTab(nextTab);
+    setError(null);
+    setNotice(null);
+  }
+
+  function startTripCreation() {
+    setEditingTrip(null);
+    selectTab("trips");
+  }
 
   async function handleLogout() {
     try {
@@ -555,10 +881,12 @@ export default function CompanyWorkspace() {
       await requestApi(`agents/${agent.id}`, "PATCH", changes);
       await loadWorkspace();
       setNotice(`Le compte de ${agent.prenoms} ${agent.nom} a été mis à jour.`);
+      return true;
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "Impossible de mettre à jour l’agent.",
       );
+      return false;
     } finally {
       setSaving(false);
     }
@@ -729,79 +1057,73 @@ export default function CompanyWorkspace() {
     );
   }
 
-  const confirmedRevenue = payments
+  const confirmedPaymentAmount = payments
     .filter((payment) => payment.statut === "CONFIRME")
     .reduce((total, payment) => total + Number(payment.montant), 0);
 
   return (
-    <main className="company-app">
-      <aside className="company-sidebar">
-        <Link className="company-brand" href="/" aria-label="Kinesis, accueil">
-          <Image src="/kinesis-mark.png" width={42} height={42} alt="" priority />
-          <span>KINESIS</span>
-        </Link>
-        <div className="company-sidebar-company">
-          <ProfileAvatar
-            className="company-avatar"
-            src={company.logo}
-            name={company.nom_commercial}
-            size={42}
-          />
-          <div>
-            <strong>{company.nom_commercial}</strong>
-            <span>Compte compagnie</span>
-          </div>
-        </div>
-        <nav className="company-navigation" aria-label="Navigation compagnie">
-          {TABS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={tab === item.id ? "is-active" : ""}
-              onClick={() => {
-                setTab(item.id);
-                setError(null);
-                setNotice(null);
-              }}
-            >
-              <span className={`company-nav-icon company-nav-icon--${item.id}`} aria-hidden="true" />
-              {item.label}
-              {item.id === "trips" ? <span className="company-nav-count">{trips.length}</span> : null}
-              {item.id === "notifications" && notifications.some((notification) => !notification.lue) ? (
-                <span className="company-nav-count">
-                  {notifications.filter((notification) => !notification.lue).length}
-                </span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-        <div className="company-sidebar-bottom">
-          <Link href="/">Voir le site</Link>
-          <button type="button" onClick={() => void handleLogout()}>
-            Se déconnecter
-          </button>
-        </div>
-      </aside>
+    <TooltipProvider>
+      <SidebarProvider
+        className="company-app"
+        style={
+          {
+            "--sidebar-width": "16rem",
+            "--sidebar-width-icon": "3.5rem",
+          } as React.CSSProperties
+        }
+      >
+        <CompanySidebar
+          company={company}
+          profile={profile}
+          tab={tab}
+          onSelect={selectTab}
+          onCreateTrip={startTripCreation}
+          onLogout={() => void handleLogout()}
+          onProfileUpdated={setProfile}
+          tripCount={trips.length}
+          unreadCount={unreadNotificationCount}
+        />
+        <SidebarInset className="company-main">
+          <header className="company-topbar">
+            <div className="company-topbar__title">
+              <SidebarTrigger
+                className="company-sidebar-trigger"
+                aria-label="Afficher ou réduire le menu"
+              />
+              <Separator orientation="vertical" className="company-topbar__separator" />
+              <div>
+                <p className="company-eyebrow">ESPACE COMPAGNIE</p>
+                <h1>{TABS.find((item) => item.id === tab)?.label}</h1>
+              </div>
+            </div>
+            <div className="company-user-summary">
+              <button
+                type="button"
+                className="company-notifications-button"
+                aria-label={`Notifications, ${unreadNotificationCount} non lue(s)`}
+                title="Notifications"
+                onClick={() => selectTab("notifications")}
+              >
+                <Bell aria-hidden="true" />
+                {unreadNotificationCount > 0 ? (
+                  <span className="company-notifications-badge" aria-hidden="true">
+                    {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                  </span>
+                ) : null}
+              </button>
+              <button
+                type="button"
+                className="company-logout-button"
+                aria-label="Se déconnecter"
+                title="Se déconnecter"
+                onClick={() => void handleLogout()}
+              >
+                <LogOut aria-hidden="true" />
+              </button>
+            </div>
+          </header>
 
-      <section className="company-main">
-        <header className="company-topbar">
-          <div>
-            <p className="company-eyebrow">ESPACE PARTENAIRE</p>
-            <h1>{TABS.find((item) => item.id === tab)?.label}</h1>
-          </div>
-          <div className="company-user-summary">
-            <ProfileAvatar
-              className="company-user-avatar"
-              src={profile?.photo_profil}
-              name={[profile?.prenoms, profile?.nom].filter(Boolean).join(" ")}
-              size={34}
-            />
-            <span>{company.email}</span>
-            <button type="button" aria-label="Se déconnecter" onClick={() => void handleLogout()}>
-              ↗
-            </button>
-          </div>
-        </header>
+          <main className="company-main-content">
 
         {error ? <p className="company-alert company-alert--error" role="alert">{error}</p> : null}
         {notice ? <p className="company-alert company-alert--success" role="status">{notice}</p> : null}
@@ -810,49 +1132,145 @@ export default function CompanyWorkspace() {
           <div className="company-content">
             <section className="company-welcome-card">
               <div>
-                <p className="company-eyebrow">BONJOUR, {company.nom_commercial.toUpperCase()}</p>
-                <h2>Pilotez vos départs en toute simplicité.</h2>
-                <p>Retrouvez ici l’activité de votre compagnie sur KINESIS.</p>
-                <button type="button" className="company-button" onClick={() => setTab("trips")}>
-                  Gérer mes trajets <span aria-hidden="true">→</span>
+                <p className="company-eyebrow">{getTimeGreeting()}, {company.nom_commercial.toUpperCase()}</p>
+                <h2>Le point sur votre activité.</h2>
+                <p>Retrouvez vos départs, réservations et paiements au même endroit.</p>
+                <button type="button" className="company-button" onClick={startTripCreation}>
+                  Publier un trajet <Plus aria-hidden="true" size={16} />
                 </button>
-              </div>
-              <div className="company-welcome-art" aria-hidden="true">
               </div>
             </section>
             <div className="company-stat-grid">
               <article className="company-stat-card">
+                <span className="company-stat-card__icon"><BusFront aria-hidden="true" /></span>
                 <span>Départs à venir</span>
                 <strong>{activeTrips.length}</strong>
-                <small>Trajets publiés et futurs</small>
+                <small>Trajets publiés</small>
               </article>
               <article className="company-stat-card">
-                <span>Trajets au total</span>
-                <strong>{trips.length}</strong>
-                <small>Votre activité sur la plateforme</small>
+                <span className="company-stat-card__icon company-stat-card__icon--amber"><TicketCheck aria-hidden="true" /></span>
+                <span>Réservations à suivre</span>
+                <strong>{pendingReservationCount}</strong>
+                <small>En attente de paiement</small>
               </article>
               <article className="company-stat-card">
-                <span>Agents</span>
-                <strong>{agents.length}</strong>
-                <small>Comptes rattachés à la compagnie</small>
+                <span className="company-stat-card__icon company-stat-card__icon--blue"><UsersRound aria-hidden="true" /></span>
+                <span>Agents actifs</span>
+                <strong>{activeAgentCount}</strong>
+                <small>Sur {agents.length} compte(s) d’équipe</small>
               </article>
-              <article className="company-stat-card company-stat-card--dark">
-                <span>Paiements confirmés</span>
-                <strong>{formatPrice(confirmedRevenue)}</strong>
-                <small>{payments.filter((payment) => payment.statut === "CONFIRME").length} transaction(s)</small>
+              <article className="company-stat-card">
+                <span className="company-stat-card__icon company-stat-card__icon--gold"><CreditCard aria-hidden="true" /></span>
+                <span>Montant payé</span>
+                <strong>{formatPrice(confirmedPaymentAmount)}</strong>
+                <small>{payments.filter((payment) => payment.statut === "CONFIRME").length} paiement(s) confirmé(s)</small>
               </article>
             </div>
-            <section className="company-panel">
-              <div className="company-panel-heading">
-                <div><h2>Prochains départs</h2><p>Vos voyages publiés les plus proches</p></div>
-                <button type="button" className="company-text-button" onClick={() => setTab("trips")}>Tous les trajets →</button>
-              </div>
-              {activeTrips.length ? (
-                <div className="company-trip-list">
-                  {activeTrips.slice(0, 4).map((trip) => <TripRow key={trip.id_voyage} trip={trip} />)}
+            <section className="company-panel company-payment-chart-panel">
+              <div className="company-panel-heading company-payment-chart-heading">
+                <div>
+                  <h2><ChartNoAxesCombined aria-hidden="true" /> Évolution des paiements</h2>
+                  <p>{formatPrice(rangePaymentTotal)} · {rangePaymentCount} paiement(s) confirmé(s)</p>
                 </div>
-              ) : <p className="company-empty">Aucun départ publié à venir. Créez votre premier trajet.</p>}
+                <div className="company-payment-range-switch" aria-label="Période du graphique">
+                  {PAYMENT_RANGES.map((range) => (
+                    <button
+                      type="button"
+                      key={range.id}
+                      aria-pressed={paymentRange === range.id}
+                      onClick={() => setPaymentRange(range.id)}
+                    >
+                      {range.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {rangePaymentCount > 0 ? (
+                <svg
+                  className="company-payment-chart"
+                  viewBox="0 0 820 250"
+                  role="img"
+                  aria-label={`Montants des paiements confirmés sur ${PAYMENT_RANGES.find((range) => range.id === paymentRange)?.label}`}
+                >
+                  <defs>
+                    <linearGradient id="company-payment-area" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#27835f" stopOpacity="0.2" />
+                      <stop offset="100%" stopColor="#27835f" stopOpacity="0.01" />
+                    </linearGradient>
+                  </defs>
+                  {[32, 115, 198].map((y, index) => (
+                    <g key={y}>
+                      <line className="company-payment-chart__grid" x1="70" x2="790" y1={y} y2={y} />
+                      <text className="company-payment-chart__axis-label" x="58" y={y + 4} textAnchor="end">
+                        {new Intl.NumberFormat("fr-FR", {
+                          notation: "compact",
+                          maximumFractionDigits: 1,
+                        }).format((chartMaximum * (2 - index)) / 2)}
+                      </text>
+                    </g>
+                  ))}
+                  {chartAreaPath ? <path className="company-payment-chart__area" d={chartAreaPath} /> : null}
+                  {chartLinePath ? <path className="company-payment-chart__line" d={chartLinePath} /> : null}
+                  {chartPoints.map((point) => (
+                    <g key={point.label}>
+                      <circle className="company-payment-chart__point-halo" cx={point.x} cy={point.y} r="7" />
+                      <circle className="company-payment-chart__point" cx={point.x} cy={point.y} r="3.5">
+                        <title>{`${point.label} : ${formatPrice(point.amount)} (${point.count} paiement(s))`}</title>
+                      </circle>
+                      <text className="company-payment-chart__date" x={point.x} y="229" textAnchor="middle">
+                        {point.label}
+                      </text>
+                    </g>
+                  ))}
+                </svg>
+              ) : (
+                <p className="company-empty">Aucun paiement confirmé sur cette période.</p>
+              )}
             </section>
+            <div className="company-content--split company-dashboard-lower">
+              <section className="company-panel company-dashboard-table-panel">
+                <div className="company-panel-heading">
+                  <div><h2>Dernières réservations</h2><p>Les cinq réservations les plus récentes</p></div>
+                  <button type="button" className="company-text-button" onClick={() => selectTab("reservations")}>Tout voir <ChevronRight aria-hidden="true" size={15} /></button>
+                </div>
+                {recentReservations.length ? (
+                  <div className="company-table-wrap">
+                    <table className="company-table">
+                      <thead>
+                        <tr><th>Voyage</th><th>Départ</th><th>Passagers</th><th>Statut</th><th>Montant</th></tr>
+                      </thead>
+                      <tbody>
+                        {recentReservations.map((reservation) => (
+                          <tr key={reservation.id_reservation}>
+                            <td>
+                              <strong>{reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}</strong>
+                              <small>{reservation.reference}</small>
+                            </td>
+                            <td>{formatDate(reservation.voyage.date_depart)} · {reservation.voyage.heure_depart.slice(0, 5)}</td>
+                            <td>{reservation.places.length}</td>
+                            <td><span className={`company-status company-status--${reservation.statut.toLowerCase()}`}>{statusLabel(reservation.statut)}</span></td>
+                            <td>{formatPrice(reservation.montant_total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="company-empty">Les réservations de vos voyages apparaîtront ici.</p>
+                )}
+              </section>
+              <section className="company-panel">
+                <div className="company-panel-heading">
+                  <div><h2>Prochains départs</h2><p>Vos voyages publiés les plus proches</p></div>
+                  <button type="button" className="company-text-button" onClick={() => selectTab("trips")}>Tout voir <ChevronRight aria-hidden="true" size={15} /></button>
+                </div>
+                {activeTrips.length ? (
+                  <div className="company-trip-list">
+                    {activeTrips.slice(0, 4).map((trip) => <TripRow key={trip.id_voyage} trip={trip} />)}
+                  </div>
+                ) : <p className="company-empty">Aucun départ publié à venir. Créez votre premier trajet.</p>}
+              </section>
+            </div>
           </div>
         ) : null}
 
@@ -881,7 +1299,7 @@ export default function CompanyWorkspace() {
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading"><div><h2>Vos trajets</h2><p>{trips.length} trajet(s)</p></div></div>
               {trips.length ? (
-                <div className="company-trip-list">{trips.map((trip) => (
+                <div className="company-trip-list">{pageTrips.map((trip) => (
                   <article className="company-trip-row" key={trip.id_voyage}>
                     <TripRow trip={trip} />
                     <div className="company-row-actions">
@@ -891,6 +1309,7 @@ export default function CompanyWorkspace() {
                   </article>
                 ))}</div>
               ) : <p className="company-empty">Aucun trajet publié pour le moment.</p>}
+              {tripPagination}
             </section>
           </div>
         ) : null}
@@ -913,18 +1332,19 @@ export default function CompanyWorkspace() {
             </section>
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>{agents.length} agent(s) rattaché(s)</p></div></div>
-              {agents.length ? <div className="company-agent-list">{agents.map((agent) => (
+              {agents.length ? <div className="company-agent-list">{pageAgents.map((agent) => (
                 <article className="company-agent-card" key={agent.id}>
                   <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.is_active ? "Actif" : "Désactivé"}</span></div>
                   {agent.telephone ? <p className="company-agent-phone">{agent.telephone}</p> : null}
                   <fieldset className="company-permissions company-permissions--compact"><legend>Permissions</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" checked={(agentPermissions[agent.id] ?? []).includes(code)} onChange={(event) => setAgentPermissions((current) => ({...current, [agent.id]: event.target.checked ? [...(current[agent.id] ?? []), code] : (current[agent.id] ?? []).filter((item) => item !== code)}))} /><span>{label}</span></label>)}</fieldset>
                   <div className="company-row-actions">
                     <button type="button" disabled={saving} onClick={() => void saveAgent(agent, { permissions: agentPermissions[agent.id] ?? [] })}>Enregistrer les permissions</button>
-                    <button type="button" className={agent.is_active ? "is-danger" : ""} disabled={saving} onClick={() => void saveAgent(agent, { is_active: !agent.is_active })}>{agent.is_active ? "Désactiver" : "Réactiver"}</button>
+                    <button type="button" className={agent.is_active ? "is-danger" : ""} disabled={saving} onClick={() => agent.is_active ? setAgentToDeactivate(agent) : void saveAgent(agent, { is_active: true })}>{agent.is_active ? "Désactiver" : "Réactiver"}</button>
                     <button type="button" className="is-danger" disabled={saving} onClick={() => setAgentToDelete(agent)}>Retirer de l’équipe</button>
                   </div>
                 </article>
               ))}</div> : <p className="company-empty">Aucun agent pour le moment.</p>}
+              {agentPagination}
             </section>
           </div>
         ) : null}
@@ -937,7 +1357,7 @@ export default function CompanyWorkspace() {
               </div>
               {reservations.length ? (
                 <div className="company-reservation-list">
-                  {reservations.map((reservation) => (
+                  {pageReservations.map((reservation) => (
                     <article className="company-reservation-card" key={reservation.id_reservation}>
                       <div className="company-reservation-heading">
                         <div>
@@ -962,6 +1382,7 @@ export default function CompanyWorkspace() {
                   ))}
                 </div>
               ) : <p className="company-empty">Aucune réservation n’est encore liée à vos trajets.</p>}
+              {reservationPagination}
             </section>
           </div>
         ) : null}
@@ -993,7 +1414,7 @@ export default function CompanyWorkspace() {
               </div>
               {tariffs.length ? (
                 <div className="company-tariff-list">
-                  {tariffs.map((tariff) => (
+                  {pageTariffs.map((tariff) => (
                     <article className="company-tariff-card" key={tariff.id_tarif}>
                       <div><strong>{tariff.poids_min} – {tariff.poids_max} kg</strong><span>{formatPrice(tariff.prix)}</span></div>
                       <div className="company-row-actions">
@@ -1004,6 +1425,7 @@ export default function CompanyWorkspace() {
                   ))}
                 </div>
               ) : <p className="company-empty">Aucun tarif bagage. Ajoutez vos premières tranches.</p>}
+              {tariffPagination}
             </section>
           </div>
         ) : null}
@@ -1011,10 +1433,11 @@ export default function CompanyWorkspace() {
         {tab === "payments" ? (
           <div className="company-content">
             <section className="company-panel">
-              <div className="company-panel-heading"><div><h2>Suivi des paiements</h2><p>Transactions liées aux réservations de vos trajets.</p></div><strong className="company-payment-total">{formatPrice(confirmedRevenue)} confirmés</strong></div>
+              <div className="company-panel-heading"><div><h2>Suivi des paiements</h2><p>Transactions liées aux réservations de vos trajets.</p></div><strong className="company-payment-total">{formatPrice(confirmedPaymentAmount)} confirmés</strong></div>
               {payments.length ? (
-                <div className="company-table-wrap"><table className="company-table"><thead><tr><th>Référence</th><th>Trajet</th><th>Départ</th><th>Montant</th><th>Statut</th><th>Créé le</th></tr></thead><tbody>{payments.map((payment) => <tr key={payment.id_paiement}><td>{payment.reference_interne}</td><td>{payment.ville_depart_nom} → {payment.ville_arrivee_nom}</td><td>{formatDate(payment.date_depart)}</td><td>{formatPrice(payment.montant)}</td><td><span className={`company-status company-status--${payment.statut.toLowerCase()}`}>{statusLabel(payment.statut)}</span></td><td>{formatDate(payment.date_creation.slice(0, 10))}</td></tr>)}</tbody></table></div>
+                <div className="company-table-wrap"><table className="company-table"><thead><tr><th>Référence</th><th>Trajet</th><th>Départ</th><th>Montant</th><th>Statut</th><th>Créé le</th></tr></thead><tbody>{pagePayments.map((payment) => <tr key={payment.id_paiement}><td>{payment.reference_interne}</td><td>{payment.ville_depart_nom} → {payment.ville_arrivee_nom}</td><td>{formatDate(payment.date_depart)}</td><td>{formatPrice(payment.montant)}</td><td><span className={`company-status company-status--${payment.statut.toLowerCase()}`}>{statusLabel(payment.statut)}</span></td><td>{formatDate(payment.date_creation.slice(0, 10))}</td></tr>)}</tbody></table></div>
               ) : <p className="company-empty">Aucun paiement n’est encore associé à vos trajets.</p>}
+              {paymentPagination}
             </section>
           </div>
         ) : null}
@@ -1032,7 +1455,7 @@ export default function CompanyWorkspace() {
               </div>
               {notifications.length ? (
                 <div className="company-notification-list">
-                  {notifications.map((notification) => (
+                  {pageNotifications.map((notification) => (
                     <article className={`company-notification-card ${notification.lue ? "" : "company-notification-card--unread"}`} key={notification.id_notification}>
                       <div>
                         <span className="company-notification-type">{notification.type}</span>
@@ -1047,6 +1470,7 @@ export default function CompanyWorkspace() {
                   ))}
                 </div>
               ) : <p className="company-empty">Aucune notification pour le moment.</p>}
+              {notificationPagination}
             </section>
           </div>
         ) : null}
@@ -1054,18 +1478,31 @@ export default function CompanyWorkspace() {
         {tab === "profile" ? (
           <div className="company-content">
             <section className="company-panel company-profile-panel">
-              <div className="company-panel-heading"><div><h2>Informations de la compagnie</h2><p>Les informations légales sont verrouillées après validation.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
+              <div className="company-panel-heading">              <div><h2>Informations de la compagnie</h2><p>Les coordonnées légales restent en lecture seule après validation. Vous pouvez modifier l’adresse, la description et le logo.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
+              <div className="company-profile-identity">
+              <ProfileAvatar
+                className="company-profile-identity__logo"
+                src={company.logo}
+                name={company.nom_commercial}
+                size={56}
+              />
+              <div>
+                <strong>{company.nom_commercial}</strong>
+                <span>{company.raison_sociale}</span>
+              </div>
+              </div>
               <form className="company-form" onSubmit={submitCompanyProfile}>
-                <div className="company-form-grid">
-                  <label><span>Nom commercial</span><input value={company.nom_commercial} disabled /></label>
-                  <label><span>Raison sociale</span><input value={company.raison_sociale} disabled /></label>
-                  <label><span>E-mail</span><input value={company.email} disabled /></label>
-                  <label><span>Téléphone</span><input value={company.telephone} disabled /></label>
-                  <label><span>NIF</span><input value={company.nif} disabled /></label>
-                  <label><span>RCCM</span><input value={company.rccm} disabled /></label>
-                </div>
-                <label><span>Adresse</span><input name="adresse" maxLength={255} defaultValue={company.adresse} /></label>
-                <label><span>Description</span><textarea name="description" rows={4} defaultValue={company.description} /></label>
+              <div className="company-form-grid">
+                <label><span>Nom commercial</span><input value={company.nom_commercial} disabled readOnly /></label>
+                <label><span>Raison sociale</span><input value={company.raison_sociale} disabled readOnly /></label>
+                <label><span>E-mail</span><input value={company.email} disabled readOnly /></label>
+                <label><span>Téléphone principal</span><input value={company.telephone} disabled readOnly /></label>
+                <label><span>Téléphone secondaire</span><input value={company.telephone_secondaire || "Non renseigné"} disabled readOnly /></label>
+                <label><span>NIF</span><input value={company.nif || "Non renseigné"} disabled readOnly /></label>
+                <label><span>RCCM</span><input value={company.rccm || "Non renseigné"} disabled readOnly /></label>
+              </div>
+              <label><span>Adresse <small>(modifiable)</small></span><input name="adresse" maxLength={255} defaultValue={company.adresse} /></label>
+              <label><span>Description <small>(modifiable)</small></span><textarea name="description" rows={4} defaultValue={company.description} /></label>
                 <label><span>Logo <small>(image, facultatif)</small></span><input name="logo" type="file" accept="image/*" /></label>
                 <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer les changements"}</button>
               </form>
@@ -1076,12 +1513,28 @@ export default function CompanyWorkspace() {
           <ConfirmationDialog
             open
             title="Retirer cet agent de l’équipe ?"
-            description={`Le compte de ${agentToDelete.prenoms} ${agentToDelete.nom} sera désactivé et retiré de votre équipe. Son historique d’opérations sera conservé.`}
+            description={`Le lien avec l’équipe et ses permissions seront supprimés. Son compte restera désactivé et son adresse e-mail restera réservée ; il ne pourra plus se connecter ni être recréé avec cette adresse. Les opérations déjà enregistrées sont conservées.`}
             confirmLabel="Retirer l’agent"
             tone="danger"
             pending={saving}
             onCancel={() => setAgentToDelete(null)}
             onConfirm={() => deleteAgent(agentToDelete)}
+          />
+        ) : null}
+        {agentToDeactivate ? (
+          <ConfirmationDialog
+            open
+            title="Désactiver l’accès de cet agent ?"
+            description={`${agentToDeactivate.prenoms} ${agentToDeactivate.nom} ne pourra plus se connecter ni utiliser les outils de la compagnie. Son compte, ses permissions et son historique restent en place. Vous pourrez réactiver son accès ici.`}
+            confirmLabel="Désactiver l’accès"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setAgentToDeactivate(null)}
+            onConfirm={async () => {
+              if (await saveAgent(agentToDeactivate, { is_active: false })) {
+                setAgentToDeactivate(null);
+              }
+            }}
           />
         ) : null}
         {tariffToDelete ? (
@@ -1096,8 +1549,10 @@ export default function CompanyWorkspace() {
             onConfirm={() => deleteTariff(tariffToDelete)}
           />
         ) : null}
-      </section>
-    </main>
+          </main>
+        </SidebarInset>
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }
 

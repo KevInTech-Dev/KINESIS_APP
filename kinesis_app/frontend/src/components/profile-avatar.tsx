@@ -21,7 +21,11 @@ export default function ProfileAvatar({
   alt = "",
 }: ProfileAvatarProps) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
-  const initials = name.trim().slice(0, 1).toLocaleUpperCase("fr-FR") || "K";
+  const nameParts = name.trim().split(/\s+/).filter(Boolean);
+  const initials =
+    nameParts.length > 1
+      ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toLocaleUpperCase("fr-FR")
+      : nameParts[0]?.[0]?.toLocaleUpperCase("fr-FR") || "K";
 
   if (src && failedSource !== src) {
     return (
@@ -39,7 +43,7 @@ export default function ProfileAvatar({
 
   return (
     <span
-      className={`${className} ${fallbackClassName ?? ""}`.trim()}
+      className={`${className} profile-avatar-fallback ${fallbackClassName ?? ""}`.trim()}
       role={alt ? "img" : undefined}
       aria-label={alt || undefined}
       aria-hidden={alt ? undefined : true}

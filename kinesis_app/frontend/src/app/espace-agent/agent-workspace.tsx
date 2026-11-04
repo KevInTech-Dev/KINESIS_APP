@@ -4,6 +4,15 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
+  Bell,
+  BusFront,
+  ExternalLink,
+  LayoutDashboard,
+  Luggage,
+  ScanLine,
+  type LucideIcon,
+} from "lucide-react";
+import {
   useCallback,
   useEffect,
   useMemo,
@@ -13,7 +22,11 @@ import {
 import ConfirmationDialog, {
   type ConfirmationTone,
 } from "@/components/confirmation-dialog";
-import ProfileAvatar from "@/components/profile-avatar";
+import { useListPagination } from "@/components/list-pagination";
+import TicketQrScanner from "@/components/ticket-qr-scanner";
+import RoleWorkspaceShell, {
+  type RoleWorkspaceItem,
+} from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 const PERMISSIONS = {
@@ -106,6 +119,13 @@ const TABS: TabDefinition[] = [
   { id: "baggage", label: "Bagages" },
   { id: "notifications", label: "Notifications" },
 ];
+const TAB_ICONS: Record<Tab, LucideIcon> = {
+  overview: LayoutDashboard,
+  scan: ScanLine,
+  boarding: BusFront,
+  baggage: Luggage,
+  notifications: Bell,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -344,6 +364,14 @@ export default function AgentWorkspace() {
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null);
   const [confirmation, setConfirmation] =
     useState<ConfirmationRequest | null>(null);
+  const { pageItems: pageTrips, pagination: tripPagination } =
+    useListPagination(trips);
+  const { pageItems: pageTickets, pagination: ticketPagination } =
+    useListPagination(tickets);
+  const { pageItems: pageBaggages, pagination: baggagePagination } =
+    useListPagination(baggages);
+  const { pageItems: pageNotifications, pagination: notificationPagination } =
+    useListPagination(notifications);
 
   const permissions = profile?.agent_permissions ?? [];
   const canScan = permissions.includes(PERMISSIONS.scanTicket);
@@ -365,6 +393,13 @@ export default function AgentWorkspace() {
     [canBoard, canConsultBaggage, canRegisterBaggage, canReturnBaggage, canScan],
   );
   const activeTab = tabs.some((item) => item.id === tab) ? tab : "overview";
+  function selectTab(nextTab: string) {
+    const item = tabs.find((candidate) => candidate.id === nextTab);
+    if (!item) return;
+    setTab(item.id);
+    setError(null);
+    setNotice(null);
+  }
 
   const loadWorkspace = useCallback(async () => {
     setError(null);
@@ -491,15 +526,16 @@ export default function AgentWorkspace() {
     }
   }
 
-  async function submitScan(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  const verifyScan = useCallback(async (code: string) => {
+    if (!code.trim()) return;
+    setScanCode(code);
     setSaving(true);
     setError(null);
     setNotice(null);
     setScanResult(null);
     try {
       const result = await requestAgentApi("scan", "POST", {
-        code_qr: scanCode.trim(),
+        code_qr: code.trim(),
       });
       if (!isScanResult(result)) {
         throw new Error("Les informations du billet scanné sont invalides.");
@@ -515,6 +551,11 @@ export default function AgentWorkspace() {
     } finally {
       setSaving(false);
     }
+  }, []);
+
+  async function submitScan(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await verifyScan(scanCode);
   }
 
   async function confirmBoarding() {
@@ -726,6 +767,18 @@ export default function AgentWorkspace() {
 
   const unreadCount = notifications.filter((notification) => !notification.lue).length;
   const availableReservations = reservations.filter((reservation) => reservation.statut === "PAYEE");
+  const workspaceItems: RoleWorkspaceItem[] = [
+    ...tabs.map((item) => ({
+      id: item.id,
+      label: item.label,
+      icon: TAB_ICONS[item.id],
+      group: item.id === "notifications" ? "account" as const : "operations" as const,
+      ...(item.id === "notifications" && unreadCount > 0
+        ? { badge: unreadCount }
+        : {}),
+    })),
+    { id: "website", label: "Voir le site", icon: ExternalLink, href: "/", group: "account" },
+  ];
 
   if (loading || redirecting) {
     return (
@@ -797,61 +850,19 @@ export default function AgentWorkspace() {
   }
 
   return (
-    <main className="agent-app">
-      <aside className="agent-sidebar">
-        <Link className="agent-brand" href="/" aria-label="Kinesis, accueil">
-          <Image src="/kinesis-mark.png" width={42} height={42} alt="" priority />
-          <span>KINESIS</span>
-        </Link>
-        <div className="agent-sidebar-profile">
-          <ProfileAvatar
-            className="agent-avatar"
-            src={profile.photo_profil}
-            name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
-            size={40}
-          />
-          <div>
-            <strong>{profile.prenoms} {profile.nom}</strong>
-            <span>{profile.compagnie_nom || "Agent de compagnie"}</span>
-          </div>
-        </div>
-        <nav className="agent-navigation" aria-label="Navigation agent">
-          {tabs.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={activeTab === item.id ? "is-active" : ""}
-              onClick={() => {
-                setTab(item.id);
-                setError(null);
-                setNotice(null);
-              }}
-            >
-              <span className={`agent-nav-icon agent-nav-icon--${item.id}`} aria-hidden="true" />
-              {item.label}
-              {item.id === "notifications" && unreadCount > 0 ? (
-                <span className="agent-nav-count">{unreadCount}</span>
-              ) : null}
-            </button>
-          ))}
-        </nav>
-        <div className="agent-sidebar-bottom">
-          <Link href="/">Voir le site</Link>
-          <button type="button" onClick={() => void logout()}>Se déconnecter</button>
-        </div>
-      </aside>
-
-      <section className="agent-main">
-        <header className="agent-topbar">
-          <div>
-            <p className="agent-eyebrow">ESPACE AGENT</p>
-            <h1>{tabs.find((item) => item.id === activeTab)?.label ?? "Accueil"}</h1>
-          </div>
-          <div className="agent-topbar-user">
-            <span>{profile.email}</span>
-            <button type="button" aria-label="Se déconnecter" onClick={() => void logout()}>↗</button>
-          </div>
-        </header>
+    <RoleWorkspaceShell
+      eyebrow="ESPACE AGENT"
+      title={tabs.find((item) => item.id === activeTab)?.label ?? "Accueil"}
+      profile={profile}
+      activeId={activeTab}
+      items={workspaceItems}
+      notificationCount={unreadCount}
+      onSelect={selectTab}
+      onNotificationsClick={() => selectTab("notifications")}
+      onProfileUpdated={setProfile}
+      onLogout={() => void logout()}
+    >
+      <div className="agent-workspace-content">
 
         {error ? <p className="agent-alert agent-alert--error" role="alert">{error}</p> : null}
         {notice ? <p className="agent-alert agent-alert--success" role="status">{notice}</p> : null}
@@ -889,11 +900,12 @@ export default function AgentWorkspace() {
           <div className="agent-content agent-content--narrow">
             <section className="agent-panel">
               <div className="agent-panel-heading">
-                <div><h2>Vérifier un billet</h2><p>Scannez le QR code avec votre lecteur ou saisissez son code.</p></div>
+                <div><h2>Vérifier un billet</h2><p>Scannez le QR code avec la caméra ou saisissez son code manuellement.</p></div>
               </div>
+              <TicketQrScanner onDetected={(code) => void verifyScan(code)} />
               <form className="agent-scan-form" onSubmit={submitScan}>
                 <label>
-                  <span>Code du billet / contenu du QR code</span>
+                  <span>Code du billet / contenu du QR code (saisie manuelle)</span>
                   <input value={scanCode} onChange={(event) => setScanCode(event.target.value)} autoComplete="off" autoFocus required placeholder="Placez le curseur ici puis scannez…" />
                 </label>
                 <button className="agent-button" type="submit" disabled={saving || !scanCode.trim()}>
@@ -923,7 +935,8 @@ export default function AgentWorkspace() {
             {canBoard ? (
               <section className="agent-panel">
                 <div className="agent-panel-heading"><div><h2>Billets récents</h2><p>La liste ne révèle jamais le code QR secret.</p></div></div>
-                {tickets.length ? <div className="agent-ticket-list">{tickets.slice(0, 30).map((ticket) => <TicketRow key={ticket.id_billet} ticket={ticket} />)}</div> : <p className="agent-empty">Aucun billet n’est encore associé aux trajets de votre compagnie.</p>}
+                {tickets.length ? <div className="agent-ticket-list">{pageTickets.map((ticket) => <TicketRow key={ticket.id_billet} ticket={ticket} />)}</div> : <p className="agent-empty">Aucun billet n’est encore associé aux trajets de votre compagnie.</p>}
+                {ticketPagination}
               </section>
             ) : null}
           </div>
@@ -934,7 +947,7 @@ export default function AgentWorkspace() {
             <section className="agent-panel">
               <div className="agent-panel-heading"><div><h2>Départs de la compagnie</h2><p>Le départ réel ne peut être enregistré qu’à partir de la date prévue.</p></div></div>
               {trips.length ? (
-                <div className="agent-trip-list">{trips.map((trip) => (
+                <div className="agent-trip-list">{pageTrips.map((trip) => (
                   <article className="agent-trip-row" key={trip.id_voyage}>
                     <div className="agent-trip-details">
                       <strong>{trip.ville_depart_nom} <span aria-hidden="true">→</span> {trip.ville_arrivee_nom}</strong>
@@ -947,10 +960,12 @@ export default function AgentWorkspace() {
                   </article>
                 ))}</div>
               ) : <p className="agent-empty">Aucun trajet n’est disponible pour votre compagnie.</p>}
+              {tripPagination}
             </section>
             <section className="agent-panel">
               <div className="agent-panel-heading"><div><h2>Billets et embarquement</h2><p>Un billet doit être vérifié avant de valider l’embarquement.</p></div><button className="agent-text-button" type="button" onClick={() => setTab("scan")}>Vérifier un billet →</button></div>
-              {tickets.length ? <div className="agent-ticket-list">{tickets.slice(0, 30).map((ticket) => <TicketRow key={ticket.id_billet} ticket={ticket} />)}</div> : <p className="agent-empty">Aucun billet à afficher.</p>}
+              {tickets.length ? <div className="agent-ticket-list">{pageTickets.map((ticket) => <TicketRow key={ticket.id_billet} ticket={ticket} />)}</div> : <p className="agent-empty">Aucun billet à afficher.</p>}
+              {ticketPagination}
             </section>
           </div>
         ) : null}
@@ -981,7 +996,7 @@ export default function AgentWorkspace() {
               <section className="agent-panel">
                 <div className="agent-panel-heading"><div><h2>Suivi des bagages</h2><p>Bagages enregistrés pour les voyages de votre compagnie.</p></div></div>
                 {baggages.length ? (
-                  <div className="agent-baggage-list">{baggages.map((baggage) => (
+                  <div className="agent-baggage-list">{pageBaggages.map((baggage) => (
                     <article className="agent-baggage-card" key={baggage.id_bagage}>
                       <div className="agent-baggage-heading">
                         <div><strong>Réservation {baggage.reservation_reference}</strong><span>{baggage.poids} kg · {formatPrice(baggage.frais_total)}</span></div>
@@ -995,6 +1010,7 @@ export default function AgentWorkspace() {
                     </article>
                   ))}</div>
                 ) : <p className="agent-empty">{canConsultBaggage || canReturnBaggage ? "Aucun bagage enregistré." : "Les bagages enregistrés pendant cette session apparaîtront ici pour le suivi des frais."}</p>}
+                {baggagePagination}
               </section>
             ) : null}
             {!canRegisterBaggage && !canConsultBaggage && !canReturnBaggage ? <section className="agent-panel"><p className="agent-empty">Aucun accès bagage ne vous a été attribué.</p></section> : null}
@@ -1009,7 +1025,7 @@ export default function AgentWorkspace() {
                 {unreadCount > 0 ? <button type="button" className="agent-text-button" disabled={saving} onClick={() => void markAllNotificationsRead()}>Tout marquer comme lu</button> : null}
               </div>
               {notifications.length ? (
-                <div className="agent-notification-list">{notifications.map((notification) => (
+                <div className="agent-notification-list">{pageNotifications.map((notification) => (
                   <button type="button" className={`agent-notification ${notification.lue ? "is-read" : ""}`} key={notification.id_notification} onClick={() => void markNotificationRead(notification)} disabled={saving || notification.lue}>
                     <span className="agent-notification-dot" />
                     <span className="agent-notification-copy"><strong>{notification.titre}</strong><span>{notification.message}</span><small>{formatDateTime(notification.date_creation)}</small></span>
@@ -1017,6 +1033,7 @@ export default function AgentWorkspace() {
                   </button>
                 ))}</div>
               ) : <p className="agent-empty">Vous n’avez aucune notification pour le moment.</p>}
+              {notificationPagination}
             </section>
           </div>
         ) : null}
@@ -1035,8 +1052,8 @@ export default function AgentWorkspace() {
             }}
           />
         ) : null}
-      </section>
-    </main>
+      </div>
+    </RoleWorkspaceShell>
   );
 }
 
