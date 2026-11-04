@@ -329,16 +329,27 @@ export default function TravelerDashboard() {
       const paymentId = new URLSearchParams(window.location.search).get(
         "payment_id",
       );
-      if (
+      const validPaymentId =
         paymentId &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
           paymentId,
         )
-      ) {
-        const paymentResponse = await fetch(
-          `/api/paiements/${encodeURIComponent(paymentId)}`,
-          { cache: "no-store" },
-        );
+          ? paymentId
+          : null;
+
+      const [reservationsResponse, ticketsResponse, notificationsResponse, paymentResponse] =
+        await Promise.all([
+          fetch("/api/reservations?page_size=100", { cache: "no-store" }),
+          fetch("/api/billets?page_size=100", { cache: "no-store" }),
+          fetch("/api/notifications?page_size=100", { cache: "no-store" }),
+          validPaymentId
+            ? fetch(`/api/paiements/${encodeURIComponent(validPaymentId)}`, {
+                cache: "no-store",
+              })
+            : Promise.resolve(null),
+        ]);
+
+      if (paymentResponse) {
         if (paymentResponse.ok) {
           const payment: unknown = await paymentResponse.json();
           const paymentStatus =
@@ -363,11 +374,6 @@ export default function TravelerDashboard() {
         window.history.replaceState(null, "", "/espace-voyageur");
       }
 
-      const [reservationsResponse, ticketsResponse, notificationsResponse] = await Promise.all([
-        fetch("/api/reservations?page_size=100", { cache: "no-store" }),
-        fetch("/api/billets?page_size=100", { cache: "no-store" }),
-        fetch("/api/notifications?page_size=100", { cache: "no-store" }),
-      ]);
       if (
         reservationsResponse.status === 401 ||
         ticketsResponse.status === 401 ||
@@ -1016,16 +1022,19 @@ export default function TravelerDashboard() {
                         <BusFront aria-hidden="true" />
                         {reservation.voyage.compagnie_nom}
                       </p>
-                      <p className="traveler-departure">
-                        <Clock3 aria-hidden="true" />
-                        Départ le{" "}
-                        {formatDate(reservation.voyage.date_depart, {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}{" "}
-                        à {reservation.voyage.heure_depart.slice(0, 5)}
-                      </p>
+                      <div className="traveler-booking-summary">
+                        <p className="traveler-reference">
+                          <FileText aria-hidden="true" />
+                          Réf. {reservation.reference}
+                        </p>
+                        <p className="traveler-price">
+                          {formatPrice(reservation.montant_total)}
+                        </p>
+                        <p className="traveler-seats">
+                          {reservation.places.length} place
+                          {reservation.places.length > 1 ? "s" : ""}
+                        </p>
+                      </div>
                     </div>
                     <div className="traveler-booking-details">
                       <span
@@ -1033,16 +1042,15 @@ export default function TravelerDashboard() {
                       >
                         {statusLabels[reservation.statut] ?? reservation.statut}
                       </span>
-                      <p className="traveler-reference">
-                        <FileText aria-hidden="true" />
-                        Réf. {reservation.reference}
-                      </p>
-                      <p className="traveler-price">
-                        {formatPrice(reservation.montant_total)}
-                      </p>
-                      <p className="traveler-seats">
-                        {reservation.places.length} place
-                        {reservation.places.length > 1 ? "s" : ""}
+                      <p className="traveler-departure">
+                        <Clock3 aria-hidden="true" />
+                        {formatDate(reservation.voyage.date_depart, {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                        {" · "}
+                        {reservation.voyage.heure_depart.slice(0, 5)}
                       </p>
                       {reservation.statut === "EN_ATTENTE_PAIEMENT" &&
                       reservation.date_expiration &&

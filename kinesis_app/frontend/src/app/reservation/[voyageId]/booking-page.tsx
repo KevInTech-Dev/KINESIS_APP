@@ -79,9 +79,11 @@ export default function BookingPage({
   const [trip, setTrip] = useState<Trip | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [names, setNames] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loadingTrip, setLoadingTrip] = useState(true);
+  const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const [createdReservation, setCreatedReservation] = useState<string | null>(
     null,
   );
@@ -95,37 +97,15 @@ export default function BookingPage({
 
   useEffect(() => {
     let active = true;
-    void Promise.all([
-      fetch(`/api/voyages/${encodeURIComponent(voyageId)}`, {
-        cache: "no-store",
-      }),
-      fetch("/api/auth/session", { cache: "no-store" }),
-    ])
-      .then(async ([tripResponse, profileResponse]) => {
+    void fetch(`/api/voyages/${encodeURIComponent(voyageId)}`, {
+      cache: "no-store",
+    })
+      .then(async (tripResponse) => {
         if (!tripResponse.ok) throw new Error(await responseMessage(tripResponse));
         const tripData: unknown = await tripResponse.json();
         if (!isTrip(tripData)) throw new Error("Les détails du voyage sont invalides.");
         if (!active) return;
         setTrip(tripData);
-        let loadedProfile: UserProfile | null = null;
-        if (profileResponse.ok) {
-          const currentProfile: unknown = await profileResponse.json();
-          if (isUserProfile(currentProfile)) {
-            loadedProfile = currentProfile;
-            setProfile(currentProfile);
-          }
-        } else if (profileResponse.status !== 401) {
-          throw new Error(await responseMessage(profileResponse));
-        }
-        setNames(
-          Array.from({ length: initialCount }, (_, index) =>
-            index === 0 && loadedProfile?.nom
-              ? [loadedProfile.prenoms, loadedProfile.nom]
-                  .filter(Boolean)
-                  .join(" ")
-              : "",
-          ),
-        );
       })
       .catch((loadError: unknown) => {
         if (!active) return;
@@ -136,7 +116,40 @@ export default function BookingPage({
         );
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (active) setLoadingTrip(false);
+      });
+
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (profileResponse) => {
+        if (profileResponse.ok) {
+          const currentProfile: unknown = await profileResponse.json();
+          if (isUserProfile(currentProfile)) {
+            if (!active) return;
+            setProfile(currentProfile);
+            setNames(
+              Array.from({ length: initialCount }, (_, index) =>
+                index === 0 && currentProfile.nom
+                  ? [currentProfile.prenoms, currentProfile.nom]
+                      .filter(Boolean)
+                      .join(" ")
+                  : "",
+              ),
+            );
+          }
+        } else if (profileResponse.status !== 401) {
+          throw new Error(await responseMessage(profileResponse));
+        }
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setProfileError(
+          loadError instanceof Error
+            ? loadError.message
+            : "La session ne peut pas être vérifiée.",
+        );
+      })
+      .finally(() => {
+        if (active) setLoadingProfile(false);
       });
     return () => {
       active = false;
@@ -252,7 +265,7 @@ export default function BookingPage({
       <section className="booking-content">
         <p className="traveler-eyebrow">RÉSERVER VOTRE VOYAGE</p>
         <h1>Votre trajet, en quelques étapes.</h1>
-        {loading ? (
+        {loadingTrip ? (
           <div className="booking-card">
             <KinesisLoader message="Chargement du voyage…" variant="inline" />
           </div>
@@ -282,7 +295,18 @@ export default function BookingPage({
               <strong>{formatPrice(trip.prix)} / place</strong>
             </section>
 
-            {profile?.role === "VOYAGEUR" ? (
+            {loadingProfile ? (
+              <div className="booking-card">
+                <KinesisLoader
+                  message="Vérification de votre compte…"
+                  variant="inline"
+                />
+              </div>
+            ) : profileError ? (
+              <div className="traveler-state traveler-state--error" role="alert">
+                {profileError}
+              </div>
+            ) : profile?.role === "VOYAGEUR" ? (
               <form className="booking-card booking-passengers" onSubmit={submitBooking}>
                 <div className="booking-card-heading">
                   <h2>Informations des passagers</h2>

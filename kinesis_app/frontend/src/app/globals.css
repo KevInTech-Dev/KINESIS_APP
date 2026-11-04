@@ -7691,10 +7691,37 @@ select:focus-visible {
   border-top: 1px solid #e5eae5;
 }
 
+.traveler-workspace-content .traveler-booking-list {
+  padding: 0 18px 18px;
+  gap: 10px;
+  border-top: 0;
+}
+
 .traveler-workspace-content .traveler-booking-card,
 .traveler-workspace-content .traveler-ticket-card {
   padding: 18px 19px;
   border-bottom-color: #e8ede8;
+}
+
+.traveler-workspace-content .traveler-booking-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid #e4ebe3;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 4px 14px rgb(22 52 40 / 3%);
+}
+
+.traveler-workspace-content .traveler-booking-card:hover {
+  border-color: #c9dccd;
+  background: #fbfcfb;
+}
+
+.traveler-workspace-content .traveler-booking-main {
+  min-width: 0;
 }
 
 .traveler-workspace-content .traveler-route {
@@ -7702,8 +7729,33 @@ select:focus-visible {
   font-size: 16px;
 }
 
+.traveler-workspace-content .traveler-booking-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 16px;
+  margin-top: 8px;
+}
+
+.traveler-workspace-content .traveler-booking-summary > p {
+  margin: 0;
+}
+
+.traveler-workspace-content .traveler-booking-summary .traveler-price {
+  font-size: 14px;
+}
+
 .traveler-workspace-content .traveler-booking-details {
-  flex-basis: 210px;
+  min-width: 0;
+  justify-items: end;
+}
+
+.traveler-workspace-content .traveler-booking-details .traveler-departure {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin: 8px 0 0;
+  text-align: right;
 }
 
 .traveler-workspace-content .traveler-status {
@@ -7780,6 +7832,25 @@ select:focus-visible {
   .traveler-workspace-content .traveler-booking-card,
   .traveler-workspace-content .traveler-ticket-card {
     padding: 15px 12px;
+  }
+
+  .traveler-workspace-content .traveler-booking-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    padding: 13px;
+  }
+
+  .traveler-workspace-content .traveler-booking-list {
+    padding: 0 12px 12px;
+  }
+
+  .traveler-workspace-content .traveler-booking-details {
+    width: 100%;
+    justify-items: end;
+  }
+
+  .traveler-workspace-content .traveler-booking-summary {
+    gap: 6px 12px;
   }
 }
 

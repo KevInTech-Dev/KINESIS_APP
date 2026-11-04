@@ -332,7 +332,8 @@ export default function HomePage() {
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
   const [passengers, setPassengers] = useState(1);
-  const [loading, setLoading] = useState(true);
+  const [loadingCities, setLoadingCities] = useState(true);
+  const [loadingTrips, setLoadingTrips] = useState(true);
   const [minimumDate, setMinimumDate] = useState("");
   const [cityError, setCityError] = useState("");
   const [tripError, setTripError] = useState("");
@@ -355,7 +356,6 @@ export default function HomePage() {
     let active = true;
 
     async function loadHomeData() {
-      setLoading(true);
       const tomorrow = new Date();
       tomorrow.setDate(tomorrow.getDate() + 1);
       setMinimumDate(localDateString(new Date()));
@@ -384,45 +384,50 @@ export default function HomePage() {
           }
         });
 
-      const [cityResponse, tripResponse] = await Promise.allSettled([
-        getList("/api/villes", isVille),
-        getList("/api/voyages", isVoyage),
-      ]);
+      async function loadCities() {
+        try {
+          const cityList = await getList("/api/villes", isVille);
+          if (!active) return;
 
-      if (!active) {
-        return;
-      }
-
-      if (cityResponse.status === "fulfilled") {
-        setCities(cityResponse.value);
-        setCityError(
-          cityResponse.value.length === 0
-            ? "Aucune ville n’est encore configurée."
-            : "",
-        );
-        if (cityResponse.value.length > 0) {
-          setFrom((current) => current || cityResponse.value[0].id_ville);
-          setTo(
-            (current) =>
-              current ||
-              cityResponse.value.find(
-                (city) => city.id_ville !== cityResponse.value[0].id_ville,
-              )?.id_ville ||
-              "",
+          setCities(cityList);
+          setCityError(
+            cityList.length === 0
+              ? "Aucune ville n’est encore configurée."
+              : "",
           );
+          if (cityList.length > 0) {
+            setFrom((current) => current || cityList[0].id_ville);
+            setTo(
+              (current) =>
+                current ||
+                cityList.find((city) => city.id_ville !== cityList[0].id_ville)
+                  ?.id_ville ||
+                "",
+            );
+          }
+        } catch (error) {
+          if (active) setCityError(getErrorMessage(error));
+        } finally {
+          if (active) setLoadingCities(false);
         }
-      } else {
-        setCityError(getErrorMessage(cityResponse.reason));
       }
 
-      if (tripResponse.status === "fulfilled") {
-        setTrips(tripResponse.value);
-        setTripError("");
-      } else {
-        setTripError(getErrorMessage(tripResponse.reason));
+      async function loadTrips() {
+        try {
+          const tripList = await getList("/api/voyages", isVoyage);
+          if (!active) return;
+
+          setTrips(tripList);
+          setTripError("");
+        } catch (error) {
+          if (active) setTripError(getErrorMessage(error));
+        } finally {
+          if (active) setLoadingTrips(false);
+        }
       }
 
-      setLoading(false);
+      void loadCities();
+      void loadTrips();
     }
 
     void loadHomeData();
@@ -758,7 +763,7 @@ export default function HomePage() {
             <button
               className="search-button"
               type="submit"
-              disabled={searching || loading || cities.length < 2}
+              disabled={searching || loadingCities || cities.length < 2}
             >
               {searching ? "Recherche…" : "Rechercher"}
               <span>
@@ -846,7 +851,7 @@ export default function HomePage() {
                 Aucun voyage ne correspond à la recherche.
               </p>
             )
-          ) : loading ? (
+          ) : loadingTrips ? (
             <KinesisLoader message="Chargement des prochains départs…" variant="inline" />
           ) : tripError ? (
             <p className="empty-state">

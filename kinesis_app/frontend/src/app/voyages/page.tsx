@@ -137,25 +137,19 @@ function VoyagesCatalog() {
     async function load() {
       setLoading(true);
       try {
-        const [cityList, allVoyages] = await Promise.all([
+        const query = buildQuery(filtersFromQuery(initialQuery));
+        const [cityList, allVoyages, visibleTrips] = await Promise.all([
           getList("/api/villes", isVille),
           getList("/api/voyages", isVoyage),
+          query.size > 0
+            ? getList(`/api/voyages?${query.toString()}`, isVoyage)
+            : Promise.resolve(null),
         ]);
         if (!active) return;
         setCities(cityList);
         setAllTrips(allVoyages);
-        const query = buildQuery(filtersFromQuery(initialQuery));
-        const visibleTrips =
-          query.size > 0
-            ? await getList(
-                `/api/voyages?${query.toString()}`,
-                isVoyage,
-              )
-            : allVoyages;
-        if (active) {
-          setTrips(visibleTrips);
-          setError("");
-        }
+        setTrips(visibleTrips ?? allVoyages);
+        setError("");
       } catch (loadError) {
         if (active) {
           setError(
