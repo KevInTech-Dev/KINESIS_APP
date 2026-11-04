@@ -5739,102 +5739,43 @@ select:focus-visible {
 
 .traveler-payment-countdown {
   display: flex;
-  width: 100%;
+  width: max-content;
+  max-width: 100%;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 13px 14px;
-  border: 1px solid #e7d5a9;
-  border-radius: 14px;
-  background:
-    radial-gradient(ellipse at 100% 0%, rgb(255 218 123 / 24%), transparent 58%),
-    linear-gradient(135deg, #fffaf0, #fff5dc);
+  gap: 6px;
+  margin-top: 8px;
   color: #62480f;
-  box-shadow: 0 5px 16px rgb(136 98 18 / 7%);
 }
 
 .traveler-payment-countdown__label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 10px;
+  font-weight: 600;
   line-height: 1.4;
 }
 
-.traveler-payment-countdown__label svg {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  padding: 7px;
-  border: 1px solid rgb(158 114 22 / 14%);
-  border-radius: 11px;
-  background: rgb(255 255 255 / 72%);
-  color: #986a0d;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.7;
-}
-
 .traveler-payment-countdown__time {
-  display: grid;
-  min-width: 78px;
-  justify-items: center;
-  gap: 2px;
-  padding: 7px 10px 6px;
-  border: 1px solid rgb(114 82 18 / 12%);
-  border-radius: 10px;
-  background: #fff;
   color: #62480f;
-  box-shadow: inset 0 -2px 0 rgb(136 98 18 / 5%);
-  font-size: 19px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  font-weight: 850;
-  letter-spacing: 0.06em;
-  line-height: 1;
-}
-
-.traveler-payment-countdown__time small {
-  color: #947a43;
-  font-size: 8px;
   font-weight: 800;
-  letter-spacing: 0.1em;
+  line-height: 1.4;
 }
 
 .traveler-payment-countdown--urgent {
-  border-color: #e8bbb3;
-  background:
-    radial-gradient(ellipse at 100% 0%, rgb(255 180 165 / 22%), transparent 58%),
-    linear-gradient(135deg, #fff5f2, #ffebe7);
   color: #852f27;
-  box-shadow: 0 5px 16px rgb(157 54 42 / 9%);
-}
-
-.traveler-payment-countdown--urgent .traveler-payment-countdown__label svg {
-  border-color: rgb(164 53 42 / 15%);
-  color: #a4352a;
 }
 
 .traveler-payment-countdown--urgent .traveler-payment-countdown__time {
-  border-color: rgb(164 53 42 / 15%);
   color: #a4352a;
 }
 
-.traveler-payment-countdown--urgent .traveler-payment-countdown__time small {
-  color: #a7655d;
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .traveler-payment-countdown--urgent:not(.traveler-payment-countdown--expired) {
+  .traveler-payment-countdown--urgent:not(.traveler-payment-countdown--expired) .traveler-payment-countdown__time {
     animation: payment-countdown-pulse 2s ease-in-out infinite;
   }
 
   @keyframes payment-countdown-pulse {
-    50% {
-      box-shadow: 0 5px 20px rgb(157 54 42 / 16%);
-    }
+    50% { opacity: 0.65; }
   }
 }
 
@@ -5952,7 +5893,7 @@ select:focus-visible {
 
   .traveler-payment-countdown {
     grid-column: 1 / -1;
-    justify-self: stretch;
+    justify-self: start;
   }
 
   .traveler-reference {
@@ -9938,6 +9879,152 @@ select:focus-visible {
   font-size: 10px;
 }
 
+.agent-baggage-photo-field {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-baggage-photo-field__heading,
+.agent-baggage-photo-field__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.agent-baggage-photo-field__heading > span:first-child {
+  display: grid;
+  gap: 4px;
+  color: var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.agent-baggage-photo-field__heading small,
+.agent-baggage-photo-field__actions > small {
+  color: var(--muted-foreground);
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.agent-baggage-photo-field__heading > span:last-child {
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: #e9f3e9;
+  color: #176345;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.agent-baggage-photo-inputs {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 9px;
+}
+
+.agent-form .agent-baggage-photo-input {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 68px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px dashed #cbdacc;
+  border-radius: 12px;
+  background: #fbfdfb;
+  cursor: pointer;
+  transition: border-color 150ms ease, background 150ms ease;
+}
+
+.agent-form .agent-baggage-photo-input:hover,
+.agent-form .agent-baggage-photo-input:focus-within {
+  border-color: #69a27c;
+  background: #f3f8f2;
+}
+
+.agent-form .agent-baggage-photo-input input[type="file"] {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.agent-baggage-photo-input__icon {
+  display: grid;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  place-items: center;
+  border-radius: 10px;
+  background: #eaf3e9;
+  color: #176345;
+}
+
+.agent-baggage-photo-input__copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.agent-baggage-photo-input__copy strong {
+  overflow: hidden;
+  color: #26372c;
+  font-size: 10px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-baggage-photo-input__copy small {
+  overflow: hidden;
+  color: #758278;
+  font-size: 8px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-baggage-photo-input__action {
+  flex: 0 0 auto;
+  color: #176345;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.agent-baggage-photo-field__actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.agent-baggage-add-photo,
+.agent-baggage-remove-photo {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 10px;
+  border: 1px solid #d5e5d7;
+  border-radius: 9px;
+  background: #f4f8f3;
+  color: #176345;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.agent-baggage-remove-photo {
+  border-color: #ead9d6;
+  color: #8b3c32;
+}
+
 .agent-form .agent-button {
   width: 100%;
   margin-top: 2px;
@@ -10194,11 +10281,12 @@ select:focus-visible {
 
 .agent-baggage-card {
   display: grid;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #e8eee8;
-  border-radius: 12px;
-  background: #fff;
+  gap: 11px;
+  padding: 15px;
+  border: 1px solid #e1e9e1;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff, #fbfdfb);
+  box-shadow: 0 5px 16px rgb(32 58 41 / 4%);
 }
 
 .agent-baggage-heading {
@@ -10238,6 +10326,13 @@ select:focus-visible {
   color: var(--green);
   font-size: 9px;
   font-weight: 800;
+}
+
+.agent-baggage-card > p {
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: #f7f9f6;
+  line-height: 1.5;
 }
 
 .agent-fee-due,
@@ -12249,6 +12344,226 @@ select:focus-visible {
 
   .agent-workspace-content .agent-unread-label {
     margin-left: 22px;
+  }
+}
+
+.booking-baggage-tariffs {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #e1e9e1;
+  border-radius: 10px;
+}
+
+.booking-baggage-tariffs > legend {
+  padding: 0 5px;
+  color: #27382d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.booking-baggage-answer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.booking-baggage-answer label {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: #fff;
+  color: #31503c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.booking-baggage-answer input {
+  width: 15px;
+  height: 15px;
+  accent-color: #16834b;
+}
+
+.booking-baggage-tariff-table-wrap {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.booking-baggage-tariff-table-wrap > p,
+.booking-baggage-tariffs > p {
+  margin: 0;
+  color: #657369;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.booking-baggage-tariff-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid #e1e9e1;
+  border-radius: 8px;
+  font-size: 12px;
+  text-align: left;
+}
+
+.booking-baggage-tariff-table th,
+.booking-baggage-tariff-table td {
+  padding: 9px 11px;
+  border-bottom: 1px solid #e8eee8;
+}
+
+.booking-baggage-tariff-table th {
+  background: #f6f9f6;
+  color: #34483a;
+  font-size: 11px;
+}
+
+.booking-baggage-tariff-table td:last-child {
+  color: #176345;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.booking-baggage-tariff-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.booking-baggage-tariff-table td small {
+  display: block;
+  margin-top: 2px;
+  color: #758078;
+  font-size: 10px;
+}
+
+.booking-baggage-tariff-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: #8b2f27;
+  font-size: 12px;
+}
+
+.booking-baggage-tariff-error button {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid #e5c7c3;
+  border-radius: 7px;
+  background: #fff;
+  color: #8b2f27;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.traveler-workspace-content .traveler-baggages {
+  margin-top: 0;
+  overflow: hidden;
+  border: 1px solid #dfe6df;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.traveler-workspace-content .traveler-baggage-list {
+  display: grid;
+  gap: 10px;
+  padding: 0 18px 18px;
+}
+
+.traveler-workspace-content .traveler-baggage-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+  align-items: center;
+  gap: 16px;
+  padding: 17px;
+  border: 1px solid #e1e9e1;
+  border-radius: 14px;
+  background: linear-gradient(145deg, #fff, #fbfdfb);
+  box-shadow: 0 5px 16px rgb(32 58 41 / 4%);
+}
+
+.traveler-baggage-main,
+.traveler-baggage-status {
+  display: grid;
+  justify-items: start;
+  gap: 7px;
+  min-width: 0;
+}
+
+.traveler-baggage-main > strong,
+.traveler-baggage-status > strong {
+  color: #26372c;
+  font-size: 13px;
+}
+
+.traveler-baggage-main > span,
+.traveler-baggage-main > p,
+.traveler-baggage-main > small,
+.traveler-baggage-status > small {
+  margin: 0;
+  color: #657369;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.traveler-baggage-status {
+  justify-items: end;
+  align-self: stretch;
+  align-content: center;
+  padding-left: 16px;
+  border-left: 1px solid #e8eee8;
+}
+
+.traveler-baggage-status > small.is-paid {
+  color: #176345;
+}
+
+.traveler-baggage-status > small.is-due {
+  color: #875a09;
+}
+
+.traveler-baggage-photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.traveler-baggage-photos a {
+  padding: 6px 9px;
+  border: 1px solid #dce8df;
+  border-radius: 8px;
+  background: #f7faf6;
+  color: #176345;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .traveler-workspace-content .traveler-baggage-list {
+    padding: 0 12px 12px;
+  }
+
+  .traveler-workspace-content .traveler-baggage-card {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+    padding: 13px;
+  }
+
+  .traveler-baggage-status {
+    width: 100%;
+    justify-items: start;
+    padding-top: 12px;
+    padding-left: 0;
+    border-top: 1px solid #e8eee8;
+    border-left: 0;
   }
 }
 

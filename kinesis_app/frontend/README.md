@@ -63,6 +63,13 @@ et suivi des bagages, ainsi que notifications. Les sections affichées suivent
 les permissions de l’agent ; Django vérifie de nouveau chaque action et limite
 les données aux voyages de sa compagnie.
 
+Lors de la réservation, le voyageur peut indiquer s’il aura des bagages et
+consulter les tarifs de la compagnie du voyage. Cette indication est
+facultative : aucun bagage n’est préenregistré. Le jour du départ, l’agent
+enregistre les bagages présents avec 1 à 5 photos obligatoires par bagage
+(5 Mo maximum chacune). Le voyageur retrouve ensuite leurs frais et leur statut
+dans l’onglet « Mes bagages » de son espace.
+
 Les comptes administrateur KINESIS sont dirigés vers `/espace-administration`.
 Cet espace permet d’examiner les dossiers compagnie et leurs pièces privées,
 d’envoyer le lien d’activation après validation, de refuser un dossier ou de

@@ -7,8 +7,10 @@ import {
   Bell,
   BusFront,
   ExternalLink,
+  ImagePlus,
   LayoutDashboard,
   Luggage,
+  Plus,
   ScanLine,
   type LucideIcon,
 } from "lucide-react";
@@ -362,6 +364,9 @@ export default function AgentWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [scanCode, setScanCode] = useState("");
+  const [baggagePhotoSlots, setBaggagePhotoSlots] = useState<(string | null)[]>([
+    null,
+  ]);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null);
   const [confirmation, setConfirmation] =
@@ -628,7 +633,17 @@ export default function AgentWorkspace() {
     event.preventDefault();
     const form = event.currentTarget;
     const formData = new FormData(form);
-    const photos = formData.getAll("photos").filter((item) => item instanceof File && item.size > 0);
+    const photos = formData
+      .getAll("photos")
+      .filter((item): item is File => item instanceof File && item.size > 0);
+    if (photos.length < 1 || photos.length > 5) {
+      setError("Ajoutez de 1 à 5 photos pour le bagage.");
+      return;
+    }
+    if (photos.some((photo) => photo.size > 5 * 1024 * 1024)) {
+      setError("Chaque photo doit faire 5 Mo maximum.");
+      return;
+    }
     formData.delete("photos");
     for (const photo of photos) formData.append("photos", photo);
     setSaving(true);
@@ -640,6 +655,7 @@ export default function AgentWorkspace() {
         throw new Error("Les informations du bagage enregistré sont invalides.");
       }
       form.reset();
+      setBaggagePhotoSlots([null]);
       setNotice(
         `Bagage enregistré pour ${result.reservation_reference}. Frais : ${formatPrice(result.frais_total)}.`,
       );
@@ -1062,7 +1078,77 @@ export default function AgentWorkspace() {
                   <label><span>Réservation du voyageur</span><select name="reservation_id" required defaultValue=""><option value="" disabled>Choisir une réservation payée</option>{availableReservations.map((reservation) => <option value={reservation.id_reservation} key={reservation.id_reservation}>{reservation.reference} · {reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}</option>)}</select></label>
                   <label><span>Poids (kg)</span><input name="poids" type="number" min="0" step="1" required /></label>
                   <label><span>Description <small>(facultative)</small></span><textarea name="description" rows={3} /></label>
-                  <label><span>Photos du bagage <small>(image(s), 5 Mo maximum chacune)</small></span><input name="photos" type="file" accept="image/*" multiple required /></label>
+                  <div className="agent-baggage-photo-field">
+                    <div className="agent-baggage-photo-field__heading">
+                      <span>Photos du bagage <small>1 à 5 photos obligatoires</small></span>
+                      <span>{baggagePhotoSlots.filter(Boolean).length}/5</span>
+                    </div>
+                    <div className="agent-baggage-photo-inputs">
+                      {baggagePhotoSlots.map((fileName, index) => (
+                        <label className="agent-baggage-photo-input" key={index}>
+                          <input
+                            name="photos"
+                            type="file"
+                            accept="image/*"
+                            required={index === 0}
+                            onChange={(event) =>
+                              setBaggagePhotoSlots((current) =>
+                                current.map((name, slotIndex) =>
+                                  slotIndex === index
+                                    ? event.target.files?.[0]?.name ?? null
+                                    : name,
+                                ),
+                              )
+                            }
+                          />
+                          <span className="agent-baggage-photo-input__icon">
+                            <ImagePlus aria-hidden="true" size={18} />
+                          </span>
+                          <span className="agent-baggage-photo-input__copy">
+                            <strong>
+                              {fileName ?? `Choisir une photo ${index + 1}`}
+                            </strong>
+                            <small>
+                              {fileName
+                                ? "Photo prête à être enregistrée"
+                                : index === 0
+                                  ? "Obligatoire · JPG, PNG ou WEBP"
+                                  : "Facultative · JPG, PNG ou WEBP"}
+                            </small>
+                          </span>
+                          <span className="agent-baggage-photo-input__action">
+                            {fileName ? "Modifier" : "Parcourir"}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                    <div className="agent-baggage-photo-field__actions">
+                      {baggagePhotoSlots.length < 5 ? (
+                        <button
+                          type="button"
+                          className="agent-baggage-add-photo"
+                          onClick={() =>
+                            setBaggagePhotoSlots((current) => [...current, null])
+                          }
+                        >
+                          <Plus aria-hidden="true" size={15} />
+                          Ajouter une photo
+                        </button>
+                      ) : null}
+                      {baggagePhotoSlots.length > 1 ? (
+                        <button
+                          type="button"
+                          className="agent-baggage-remove-photo"
+                          onClick={() =>
+                            setBaggagePhotoSlots((current) => current.slice(0, -1))
+                          }
+                        >
+                          Retirer la dernière
+                        </button>
+                      ) : null}
+                      <small>Images uniquement · 5 Mo maximum par photo</small>
+                    </div>
+                  </div>
                   <details className="agent-special-fee">
                     <summary>Poids hors grille tarifaire ?</summary>
                     <p>À renseigner uniquement si aucun tarif de la compagnie ne couvre ce poids.</p>

@@ -3,11 +3,13 @@ from drf_spectacular.utils import extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from compagnies.permissions import IsActiveCompany
+from compagnies.models import Compagnie
+from voyages.models import Voyage
 
 from .models import Bagage, TarifBagage
 from .permissions import (
@@ -29,6 +31,28 @@ class TarifListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         company = company_for_user(self.request.user)
         return TarifBagage.objects.filter(compagnie=company)
+
+
+class VoyageTarifListView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, voyage_id):
+        voyage = (
+            Voyage.objects.select_related("compagnie")
+            .filter(
+                pk=voyage_id,
+                statut=Voyage.Statut.PUBLIE,
+                compagnie__statut=Compagnie.Statut.ACTIVE,
+            )
+            .first()
+        )
+        if voyage is None:
+            return Response(
+                {"detail": "Voyage introuvable ou indisponible."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        tariffs = TarifBagage.objects.filter(compagnie=voyage.compagnie)
+        return Response(TarifBagageSerializer(tariffs, many=True).data)
 
 
 class TarifDetailView(generics.RetrieveUpdateDestroyAPIView):

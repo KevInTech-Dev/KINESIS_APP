@@ -91,6 +91,7 @@ class BagageCreateSerializer(serializers.Serializer):
     photos = serializers.ListField(
         child=serializers.ImageField(),
         min_length=1,
+        max_length=5,
         write_only=True,
     )
 

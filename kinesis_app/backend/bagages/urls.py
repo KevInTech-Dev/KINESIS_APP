@@ -7,10 +7,16 @@ from .views import (
     RestitutionBagageView,
     TarifDetailView,
     TarifListCreateView,
+    VoyageTarifListView,
 )
 
 urlpatterns = [
     path("tarifs/", TarifListCreateView.as_view(), name="tarif-bagage-list"),
+    path(
+        "tarifs/voyage/<uuid:voyage_id>/",
+        VoyageTarifListView.as_view(),
+        name="voyage-tarif-bagage-list",
+    ),
     path("tarifs/<uuid:pk>/", TarifDetailView.as_view(), name="tarif-bagage-detail"),
     path("", BagageListCreateView.as_view(), name="bagage-list"),
     path("<uuid:pk>/", BagageDetailView.as_view(), name="bagage-detail"),

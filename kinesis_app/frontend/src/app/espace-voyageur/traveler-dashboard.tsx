@@ -13,6 +13,7 @@ import {
   CreditCard,
   FileText,
   LayoutDashboard,
+  Luggage,
   Search,
   Ticket,
   UserRound,
@@ -72,6 +73,25 @@ type Ticket = {
   };
 };
 
+type Baggage = {
+  id_bagage: string;
+  reservation: string;
+  reservation_reference: string;
+  description: string;
+  poids: string | number;
+  frais_total: string | number;
+  frais_payes: boolean;
+  statut: string;
+  date_creation: string;
+  date_paiement_frais: string | null;
+  date_restitution: string | null;
+  photos: Array<{
+    id_photobagage: string;
+    url: string;
+    created_at: string;
+  }>;
+};
+
 type Notification = {
   id_notification: string;
   type: string;
@@ -85,12 +105,14 @@ type DashboardData = {
   profile: UserProfile | null;
   reservations: Reservation[];
   tickets: Ticket[];
+  baggages: Baggage[];
   notifications: Notification[];
 };
 
 type TravelerTab =
   | "overview"
   | "reservations"
+  | "baggages"
   | "tickets"
   | "notifications"
   | "profile";
@@ -102,6 +124,7 @@ const travelerTabs: {
 }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "reservations", label: "Réservations", icon: CalendarDays },
+  { id: "baggages", label: "Mes bagages", icon: Luggage },
   { id: "tickets", label: "Mes billets", icon: Ticket },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "profile", label: "Mon profil", icon: UserRound },
@@ -113,6 +136,61 @@ const statusLabels: Record<string, string> = {
   EXPIREE: "Expirée",
   ANNULEE: "Annulée",
 };
+
+const baggageStatusLabels: Record<string, string> = {
+  ENREGISTRE: "Enregistré",
+  RESTITUE: "Restitué",
+};
+
+function isBaggageList(value: unknown): value is Baggage[] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (baggage: unknown) =>
+        typeof baggage === "object" &&
+        baggage !== null &&
+        "id_bagage" in baggage &&
+        typeof baggage.id_bagage === "string" &&
+        "reservation" in baggage &&
+        typeof baggage.reservation === "string" &&
+        "reservation_reference" in baggage &&
+        typeof baggage.reservation_reference === "string" &&
+        "description" in baggage &&
+        typeof baggage.description === "string" &&
+        "poids" in baggage &&
+        (typeof baggage.poids === "string" ||
+          typeof baggage.poids === "number") &&
+        "frais_total" in baggage &&
+        (typeof baggage.frais_total === "string" ||
+          typeof baggage.frais_total === "number") &&
+        "frais_payes" in baggage &&
+        typeof baggage.frais_payes === "boolean" &&
+        "statut" in baggage &&
+        typeof baggage.statut === "string" &&
+        "date_creation" in baggage &&
+        typeof baggage.date_creation === "string" &&
+        "date_paiement_frais" in baggage &&
+        (typeof baggage.date_paiement_frais === "string" ||
+          baggage.date_paiement_frais === null) &&
+        "date_restitution" in baggage &&
+        (typeof baggage.date_restitution === "string" ||
+          baggage.date_restitution === null) &&
+        "photos" in baggage &&
+        Array.isArray(baggage.photos) &&
+        baggage.photos.every(
+          (photo: unknown) =>
+            typeof photo === "object" &&
+            photo !== null &&
+            "id_photobagage" in photo &&
+            typeof photo.id_photobagage === "string" &&
+            "url" in photo &&
+            typeof photo.url === "string" &&
+            "created_at" in photo &&
+            typeof photo.created_at === "string",
+        ),
+    )
+  );
+}
 
 function isTicketList(value: unknown): value is { results: Ticket[] } {
   return (
@@ -293,6 +371,8 @@ export default function TravelerDashboard() {
     useListPagination(data?.reservations ?? []);
   const { pageItems: pageTickets, pagination: ticketPagination } =
     useListPagination(data?.tickets ?? []);
+  const { pageItems: pageBaggages, pagination: baggagePagination } =
+    useListPagination(data?.baggages ?? []);
   const { pageItems: pageNotifications, pagination: notificationPagination } =
     useListPagination(data?.notifications ?? []);
 
@@ -322,7 +402,13 @@ export default function TravelerDashboard() {
       }
 
       if (profileData.role !== "VOYAGEUR") {
-        setData({ profile: profileData, reservations: [], tickets: [], notifications: [] });
+        setData({
+          profile: profileData,
+          reservations: [],
+          tickets: [],
+          baggages: [],
+          notifications: [],
+        });
         return;
       }
 
@@ -337,10 +423,17 @@ export default function TravelerDashboard() {
           ? paymentId
           : null;
 
-      const [reservationsResponse, ticketsResponse, notificationsResponse, paymentResponse] =
+      const [
+        reservationsResponse,
+        ticketsResponse,
+        baggagesResponse,
+        notificationsResponse,
+        paymentResponse,
+      ] =
         await Promise.all([
           fetch("/api/reservations?page_size=100", { cache: "no-store" }),
           fetch("/api/billets?page_size=100", { cache: "no-store" }),
+          fetch("/api/bagages", { cache: "no-store" }),
           fetch("/api/notifications?page_size=100", { cache: "no-store" }),
           validPaymentId
             ? fetch(`/api/paiements/${encodeURIComponent(validPaymentId)}`, {
@@ -377,6 +470,7 @@ export default function TravelerDashboard() {
       if (
         reservationsResponse.status === 401 ||
         ticketsResponse.status === 401 ||
+        baggagesResponse.status === 401 ||
         notificationsResponse.status === 401
       ) {
         router.replace("/connexion");
@@ -388,18 +482,25 @@ export default function TravelerDashboard() {
       if (!ticketsResponse.ok) {
         throw new Error(await getErrorMessage(ticketsResponse));
       }
+      if (!baggagesResponse.ok) {
+        throw new Error(await getErrorMessage(baggagesResponse));
+      }
       if (!notificationsResponse.ok) {
         throw new Error(await getErrorMessage(notificationsResponse));
       }
 
       const reservationsData: unknown = await reservationsResponse.json();
       const ticketsData: unknown = await ticketsResponse.json();
+      const baggagesData: unknown = await baggagesResponse.json();
       const notificationsData: unknown = await notificationsResponse.json();
       if (!isReservationList(reservationsData)) {
         throw new Error("La liste des réservations reçue est invalide.");
       }
       if (!isTicketList(ticketsData)) {
         throw new Error("La liste des billets reçue est invalide.");
+      }
+      if (!isBaggageList(baggagesData)) {
+        throw new Error("La liste des bagages reçue est invalide.");
       }
       if (!isNotificationList(notificationsData)) {
         throw new Error("La liste des notifications reçue est invalide.");
@@ -408,6 +509,7 @@ export default function TravelerDashboard() {
         profile: profileData,
         reservations: reservationsData.results,
         tickets: ticketsData.results,
+        baggages: baggagesData,
         notifications: notificationsData.results,
       });
       setNom(profileData.nom);
@@ -1071,21 +1173,12 @@ export default function TravelerDashboard() {
                               }
                             >
                               <span className="traveler-payment-countdown__label">
-                                <svg
-                                  aria-hidden="true"
-                                  viewBox="0 0 24 24"
-                                  fill="none"
-                                >
-                                  <circle cx="12" cy="12" r="9" />
-                                  <path d="M12 7v5l3 2" />
-                                </svg>
                                 {countdown.expired
                                   ? "Délai de paiement expiré"
-                                  : "Temps restant pour payer"}
+                                  : "Temps restant"}
                               </span>
                               <strong className="traveler-payment-countdown__time">
                                 {countdown.text}
-                                <small>MIN : SEC</small>
                               </strong>
                             </div>
                           ) : null;
@@ -1159,6 +1252,107 @@ export default function TravelerDashboard() {
             {reservationPagination}
           </section>
           </>
+        ) : null}
+
+        {activeTab === "baggages" ? (
+          <section className="traveler-baggages" id="bagages" aria-labelledby="baggages-title">
+            <div className="traveler-section-heading">
+              <div>
+                <p className="traveler-eyebrow">SUIVI DE VOS BAGAGES</p>
+                <h2 id="baggages-title">
+                  <Luggage aria-hidden="true" />
+                  Mes bagages
+                </h2>
+              </div>
+              <span className="traveler-count">
+                {data?.baggages.length ?? 0} bagage
+                {(data?.baggages.length ?? 0) > 1 ? "s" : ""}
+              </span>
+            </div>
+            {data?.baggages.length ? (
+              <div className="traveler-baggage-list">
+                {pageBaggages.map((baggage) => (
+                  <article className="traveler-baggage-card" key={baggage.id_bagage}>
+                    <div className="traveler-baggage-main">
+                      <strong>Réservation {baggage.reservation_reference}</strong>
+                      <span>{baggage.poids} kg</span>
+                      {baggage.description ? <p>{baggage.description}</p> : null}
+                      {baggage.photos.length ? (
+                        <div className="traveler-baggage-photos">
+                          {baggage.photos.map((photo, index) => (
+                            <a
+                              href={photo.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              key={photo.id_photobagage}
+                            >
+                              Photo {index + 1}
+                            </a>
+                          ))}
+                        </div>
+                      ) : null}
+                      <small>
+                        Enregistré le{" "}
+                        {formatDate(baggage.date_creation, {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </small>
+                    </div>
+                    <div className="traveler-baggage-status">
+                      <span
+                        className={`traveler-status traveler-status--${baggage.statut.toLowerCase()}`}
+                      >
+                        {baggageStatusLabels[baggage.statut] ?? baggage.statut}
+                      </span>
+                      <strong>{formatPrice(baggage.frais_total)}</strong>
+                      <small className={baggage.frais_payes ? "is-paid" : "is-due"}>
+                        {baggage.frais_payes
+                          ? "Frais réglés"
+                          : "Frais à régler à la gare"}
+                      </small>
+                      {baggage.date_paiement_frais ? (
+                        <small>
+                          Réglés le{" "}
+                          {formatDate(baggage.date_paiement_frais, {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </small>
+                      ) : null}
+                      {baggage.date_restitution ? (
+                        <small>
+                          Restitué le{" "}
+                          {formatDate(baggage.date_restitution, {
+                            day: "numeric",
+                            month: "long",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </small>
+                      ) : null}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <div className="traveler-empty traveler-empty--compact">
+                <h3>Aucun bagage enregistré</h3>
+                <p>
+                  Les bagages enregistrés par la compagnie le jour du départ
+                  apparaîtront ici.
+                </p>
+              </div>
+            )}
+            {baggagePagination}
+          </section>
         ) : null}
 
         {activeTab === "tickets" ? (

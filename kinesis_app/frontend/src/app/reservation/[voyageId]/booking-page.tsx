@@ -19,6 +19,13 @@ type Trip = {
   statut: string;
 };
 
+type BaggageTariff = {
+  id_tarif: string;
+  poids_min: string | number;
+  poids_max: string | number;
+  prix: string | number;
+};
+
 function isTrip(value: unknown): value is Trip {
   return (
     typeof value === "object" &&
@@ -79,6 +86,16 @@ export default function BookingPage({
   const [trip, setTrip] = useState<Trip | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [names, setNames] = useState<string[]>([]);
+  const [baggageAnswer, setBaggageAnswer] = useState<"yes" | "no" | null>(
+    null,
+  );
+  const [baggageTariffs, setBaggageTariffs] = useState<BaggageTariff[] | null>(
+    null,
+  );
+  const [loadingBaggageTariffs, setLoadingBaggageTariffs] = useState(false);
+  const [baggageTariffError, setBaggageTariffError] = useState<string | null>(
+    null,
+  );
   const [loadingTrip, setLoadingTrip] = useState(true);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -94,6 +111,58 @@ export default function BookingPage({
     () => (trip ? Number(trip.prix) * count : 0),
     [trip, count],
   );
+
+  async function answerBaggageQuestion(answer: "yes" | "no") {
+    setBaggageAnswer(answer);
+    setBaggageTariffError(null);
+    if (answer !== "yes" || baggageTariffs !== null || !trip) return;
+
+    setLoadingBaggageTariffs(true);
+    try {
+      const response = await fetch(
+        `/api/voyages/${encodeURIComponent(trip.id_voyage)}/tarifs-bagages`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error(await responseMessage(response));
+      const payload: unknown = await response.json();
+      const items =
+        typeof payload === "object" &&
+        payload !== null &&
+        "results" in payload &&
+        Array.isArray(payload.results)
+          ? payload.results
+          : payload;
+      if (
+        !Array.isArray(items) ||
+        !items.every(
+          (item): item is BaggageTariff =>
+            typeof item === "object" &&
+            item !== null &&
+            "id_tarif" in item &&
+            typeof item.id_tarif === "string" &&
+            "poids_min" in item &&
+            (typeof item.poids_min === "string" ||
+              typeof item.poids_min === "number") &&
+            "poids_max" in item &&
+            (typeof item.poids_max === "string" ||
+              typeof item.poids_max === "number") &&
+            "prix" in item &&
+            (typeof item.prix === "string" || typeof item.prix === "number"),
+        )
+      ) {
+        throw new Error("Les tarifs de bagages reçus sont invalides.");
+      }
+      setBaggageTariffs(items);
+    } catch (loadError) {
+      setBaggageTariffError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Impossible de charger les tarifs des bagages.",
+      );
+    } finally {
+      setLoadingBaggageTariffs(false);
+    }
+  }
 
   useEffect(() => {
     let active = true;
@@ -359,6 +428,76 @@ export default function BookingPage({
                     />
                   </label>
                 ))}
+                <fieldset className="booking-baggage-tariffs">
+                  <legend>Avez-vous des bagages ?</legend>
+                  <div className="booking-baggage-answer">
+                    <label>
+                      <input
+                        type="radio"
+                        name="has-baggage"
+                        checked={baggageAnswer === "yes"}
+                        onChange={() => void answerBaggageQuestion("yes")}
+                      />
+                      Oui
+                    </label>
+                    <label>
+                      <input
+                        type="radio"
+                        name="has-baggage"
+                        checked={baggageAnswer === "no"}
+                        onChange={() => void answerBaggageQuestion("no")}
+                      />
+                      Non
+                    </label>
+                  </div>
+                  {baggageAnswer === "yes" ? (
+                    loadingBaggageTariffs ? (
+                      <p role="status">Chargement des tarifs de bagages…</p>
+                    ) : baggageTariffError ? (
+                      <div className="booking-baggage-tariff-error" role="alert">
+                        <span>{baggageTariffError}</span>
+                        <button
+                          type="button"
+                          onClick={() => void answerBaggageQuestion("yes")}
+                        >
+                          Réessayer
+                        </button>
+                      </div>
+                    ) : baggageTariffs?.length ? (
+                      <div className="booking-baggage-tariff-table-wrap">
+                        <table className="booking-baggage-tariff-table">
+                          <thead>
+                            <tr>
+                              <th scope="col">Poids</th>
+                              <th scope="col">Frais de bagage</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {baggageTariffs.map((tariff) => (
+                              <tr key={tariff.id_tarif}>
+                                <td>
+                                  De {tariff.poids_min} kg à moins de{" "}
+                                  {tariff.poids_max} kg
+                                </td>
+                                <td>{formatPrice(tariff.prix)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                        <p>
+                          Ces tarifs sont à titre indicatif. Le bagage sera
+                          pesé et enregistré à la gare ; ses frais seront réglés
+                          sur place.
+                        </p>
+                      </div>
+                    ) : (
+                      <p>
+                        La compagnie n’a pas encore publié de tarif pour les
+                        bagages. Vous pourrez vous renseigner à la gare.
+                      </p>
+                    )
+                  ) : null}
+                </fieldset>
                 <div className="booking-total">
                   <span>Total à régler</span>
                   <strong>{formatPrice(total)}</strong>

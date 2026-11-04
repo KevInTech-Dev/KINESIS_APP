@@ -61,7 +61,7 @@ class BagageServiceTests(TestCase):
         )
         departure = Ville.objects.create(nom="Lome")
         arrival = Ville.objects.create(nom="Sokode")
-        voyage = Voyage.objects.create(
+        self.voyage = Voyage.objects.create(
             compagnie=self.company,
             ville_depart=departure,
             ville_arrivee=arrival,
@@ -72,7 +72,7 @@ class BagageServiceTests(TestCase):
         )
         self.reservation = create_reservation(
             voyageur=self.traveler,
-            voyage_id=voyage.pk,
+            voyage_id=self.voyage.pk,
             passenger_names=["Jane Doe"],
         )
         self.reservation.statut = Reservation.Statut.PAYEE
@@ -258,7 +258,7 @@ class BagageApiTests(APITestCase):
         )
         departure = Ville.objects.create(nom="Kara")
         arrival = Ville.objects.create(nom="Atakpame")
-        voyage = Voyage.objects.create(
+        self.voyage = Voyage.objects.create(
             compagnie=self.company,
             ville_depart=departure,
             ville_arrivee=arrival,
@@ -276,7 +276,7 @@ class BagageApiTests(APITestCase):
         )
         self.reservation = create_reservation(
             voyageur=self.traveler,
-            voyage_id=voyage.pk,
+            voyage_id=self.voyage.pk,
             passenger_names=["Jane Doe"],
         )
         self.reservation.statut = Reservation.Statut.PAYEE
@@ -309,6 +309,49 @@ class BagageApiTests(APITestCase):
         self.assertEqual(response.data["frais_total"], "1000")
         self.assertEqual(response.data["photos"][0]["url"], "https://signed.example/private")
         self.assertEqual(_save.call_count, 1)
+
+    def test_public_voyage_tariffs_only_show_the_selected_company_rates(self):
+        other_company_user = User.objects.create_user(
+            email="autre-compagnie@example.com",
+            password=self.password,
+            nom="Autre",
+            role=User.Role.COMPAGNIE,
+        )
+        other_company = Compagnie.objects.create(
+            utilisateur=other_company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        TarifBagage.objects.create(
+            compagnie=other_company,
+            poids_min=0,
+            poids_max=30,
+            prix=2500,
+        )
+        response = self.client.get(
+            reverse(
+                "voyage-tarif-bagage-list",
+                kwargs={"voyage_id": self.voyage.pk},
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["prix"], "1000")
+
+    def test_agent_registration_rejects_more_than_five_photos(self):
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+        response = self.client.post(
+            reverse("bagage-list"),
+            {
+                "reservation_id": str(self.reservation.pk),
+                "poids": "12",
+                "photos": [make_image(f"{index}.png") for index in range(6)],
+            },
+            format="multipart",
+        )
+        self.assertEqual(response.status_code, 400)
 
     @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
     def test_traveler_only_lists_baggage_from_owned_reservations(self, _save):
