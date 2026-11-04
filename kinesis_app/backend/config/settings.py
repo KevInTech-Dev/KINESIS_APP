@@ -34,6 +34,10 @@ REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
     ],
+    "DEFAULT_THROTTLE_RATES": {
+        "password_reset_request": "5/hour",
+        "password_reset_confirm": "10/hour",
+    },
 }
 
 SIMPLE_JWT = {
@@ -170,6 +174,7 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 COMPANY_ACTIVATION_TOKEN_MAX_AGE = 60 * 60 * 24
+PASSWORD_RESET_TIMEOUT = 60 * 60
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:3000")
 DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="KINESIS")
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="noreply@kinesis.local")

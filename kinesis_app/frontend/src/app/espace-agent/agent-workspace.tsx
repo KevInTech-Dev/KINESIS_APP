@@ -27,6 +27,7 @@ import ConfirmationDialog, {
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import PasswordInput from "@/components/password-input";
 import TicketQrScanner from "@/components/ticket-qr-scanner";
 import RoleWorkspaceShell, {
   type RoleWorkspaceItem,
@@ -835,15 +836,15 @@ export default function AgentWorkspace() {
           <form className="agent-form" onSubmit={submitPasswordChange}>
             <label>
               <span>Mot de passe provisoire</span>
-              <input name="old_password" type="password" autoComplete="current-password" required />
+              <PasswordInput name="old_password" autoComplete="current-password" required />
             </label>
             <label>
               <span>Nouveau mot de passe</span>
-              <input name="new_password" type="password" autoComplete="new-password" minLength={8} required />
+              <PasswordInput name="new_password" autoComplete="new-password" minLength={8} required />
             </label>
             <label>
               <span>Confirmer le nouveau mot de passe</span>
-              <input name="password_confirmation" type="password" autoComplete="new-password" minLength={8} required />
+              <PasswordInput name="password_confirmation" autoComplete="new-password" minLength={8} required />
             </label>
             {passwordFeedback ? (
               <p className={`agent-feedback agent-feedback--${passwordFeedback.kind}`} role="status">

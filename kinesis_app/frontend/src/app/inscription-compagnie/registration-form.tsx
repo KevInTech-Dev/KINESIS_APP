@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import PasswordInput from "@/components/password-input";
 import { useState, type FormEvent } from "react";
 
 type Feedback = { kind: "success" | "error"; message: string };
@@ -154,11 +155,11 @@ export default function CompanyRegistration() {
             <div className="company-form-grid">
               <label>
                 <span>Mot de passe</span>
-                <input name="password" type="password" autoComplete="new-password" required minLength={8} />
+                <PasswordInput name="password" autoComplete="new-password" required minLength={8} />
               </label>
               <label>
                 <span>Confirmer le mot de passe</span>
-                <input name="password_confirmation" type="password" autoComplete="new-password" required minLength={8} />
+                <PasswordInput name="password_confirmation" autoComplete="new-password" required minLength={8} />
               </label>
             </div>
           </fieldset>

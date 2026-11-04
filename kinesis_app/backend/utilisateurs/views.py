@@ -1,5 +1,8 @@
 from datetime import timedelta
+from urllib.parse import urlsplit
 
+from django.conf import settings
+from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
@@ -11,6 +14,7 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -23,6 +27,8 @@ from .serializers import (
 	AdminUserListSerializer,
 	LogoutRequestSerializer,
 	PasswordChangeRequestSerializer,
+	PasswordResetConfirmSerializer,
+	PasswordResetRequestSerializer,
 	UserProfileSerializer,
 	UserRegistrationSerializer,
 )
@@ -187,4 +193,61 @@ class ChangePasswordView(APIView):
 		user.set_password(new_password)
 		user.must_change_password = False
 		user.save(update_fields=("password", "must_change_password"))
+		return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class PasswordResetRequestView(APIView):
+	permission_classes = (AllowAny,)
+	authentication_classes = ()
+	throttle_classes = (ScopedRateThrottle,)
+	throttle_scope = "password_reset_request"
+
+	@extend_schema(request=PasswordResetRequestSerializer, responses={200: None})
+	def post(self, request):
+		serializer = PasswordResetRequestSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+
+		form = PasswordResetForm({"email": serializer.validated_data["email"]})
+		if form.is_valid():
+			frontend = urlsplit(settings.FRONTEND_BASE_URL)
+			form.save(
+				domain_override=frontend.netloc,
+				use_https=frontend.scheme == "https",
+				from_email=settings.DEFAULT_FROM_EMAIL,
+				email_template_name="utilisateurs/emails/password_reset_email.txt",
+				html_email_template_name=(
+					"utilisateurs/emails/password_reset_email.html"
+				),
+				subject_template_name=(
+					"utilisateurs/emails/password_reset_subject.txt"
+				),
+			)
+
+		return Response(
+			{
+				"detail": (
+					"Si un compte actif correspond à cette adresse, "
+					"un lien de réinitialisation lui sera envoyé."
+				)
+			},
+			status=status.HTTP_200_OK,
+		)
+
+
+class PasswordResetConfirmView(APIView):
+	permission_classes = (AllowAny,)
+	authentication_classes = ()
+	throttle_classes = (ScopedRateThrottle,)
+	throttle_scope = "password_reset_confirm"
+
+	@extend_schema(
+		request=PasswordResetConfirmSerializer,
+		responses={204: None},
+	)
+	def post(self, request):
+		serializer = PasswordResetConfirmSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = serializer.validated_data["user"]
+		user.set_password(serializer.validated_data["new_password"])
+		user.save(update_fields=("password",))
 		return Response(status=status.HTTP_204_NO_CONTENT)

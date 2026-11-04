@@ -25,6 +25,15 @@ Les routes `/api/auth/inscription`, `/api/auth/connexion` et
 correspondantes. Les jetons de connexion sont conservés dans des cookies
 `HttpOnly`, inaccessibles au JavaScript du navigateur.
 
+Le lien « Mot de passe oublié ? » envoie une demande de réinitialisation à
+`/api/auth/password-reset`. Le backend répond sans révéler si l’adresse est
+associée à un compte et envoie, pour un compte actif, un lien unique valable
+une heure. Le nouveau mot de passe est appliqué par
+`/api/auth/password-reset/confirm` après validation du jeton et des règles de
+mot de passe Django. Les deux opérations sont limitées en fréquence. En
+production, configurez l’adresse publique HTTPS du frontend, un expéditeur
+vérifié et un fournisseur e-mail SMTP fonctionnel dans l’environnement backend.
+
 Après connexion, `/espace-voyageur` restaure la session avec
 `/api/auth/session` et affiche les réservations réelles via `/api/reservations`.
 Le renouvellement des jetons expirés est effectué côté serveur ; les jetons ne
@@ -34,6 +43,10 @@ Le parcours voyageur permet aussi de modifier son profil et sa photo via
 `/api/auth/profile`, de réserver un départ, d’initier un paiement FedaPay et de
 retrouver ses réservations et billets dans l’espace. Les actions de réservation,
 paiement et annulation sont relayées côté serveur vers les API Django.
+Chaque billet dispose d’une commande de téléchargement/impression. Elle ouvre
+la boîte de dialogue d’impression du navigateur, où le voyageur peut
+sélectionner « Enregistrer au format PDF » ; le document contient le QR code
+nécessaire à l’embarquement.
 Pour que FedaPay ramène le voyageur vers son profil et que l’état du paiement
 soit actualisé au retour, configure `FEDAPAY_CALLBACK_URL` dans le backend
 avec l’URL publique `https://<domaine-frontend>/paiement/retour`. En mode

@@ -2666,7 +2666,11 @@ select:focus-visible {
 }
 
 .traveler-booking-actions button {
+  display: inline-flex;
   min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 11px;
   border: 0;
   border-radius: 8px;
@@ -2724,6 +2728,19 @@ select:focus-visible {
   margin: 5px 0 0;
   color: var(--muted-foreground);
   font-size: 12px;
+}
+
+.traveler-ticket-card .traveler-ticket-brand {
+  margin: 0 0 6px;
+  color: #176345;
+  font-size: 9px;
+  font-weight: 850;
+  letter-spacing: 0.12em;
+}
+
+.traveler-ticket-card .traveler-ticket-departure {
+  color: #34473b;
+  font-weight: 700;
 }
 
 .traveler-ticket-card .traveler-status {
@@ -3405,6 +3422,57 @@ select:focus-visible {
   box-shadow: 0 0 0 3px rgb(11 107 75 / 9%);
 }
 
+.password-input {
+  position: relative;
+  display: block;
+  width: 100%;
+}
+
+.password-input__field {
+  padding-right: 44px !important;
+}
+
+.password-input__toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  transform: translateY(-50%);
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #718078;
+  cursor: pointer;
+}
+
+.password-input__toggle:hover,
+.password-input__toggle:focus-visible {
+  background: #edf4ed;
+  color: var(--deep-green);
+}
+
+.password-input__toggle:focus-visible {
+  outline: 2px solid #70aa87;
+  outline-offset: 1px;
+}
+
+.auth-password-reset {
+  justify-self: end;
+  margin-top: -6px;
+  color: var(--green);
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.auth-password-reset:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .auth-submit {
   display: inline-flex;
   min-height: 48px;
@@ -3421,6 +3489,28 @@ select:focus-visible {
   transition:
     transform 180ms ease,
     box-shadow 180ms ease;
+}
+
+.auth-reset-invalid {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid #f0d7d2;
+  border-radius: 12px;
+  background: #fff8f6;
+  color: #71352e;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.auth-reset-invalid p {
+  margin: 0;
+}
+
+.auth-reset-invalid a {
+  color: var(--green);
+  font-weight: 800;
 }
 
 .auth-submit:hover:not(:disabled) {

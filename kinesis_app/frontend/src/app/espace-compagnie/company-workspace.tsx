@@ -24,6 +24,7 @@ import ConfirmationDialog from "@/components/confirmation-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import PasswordInput from "@/components/password-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -1365,7 +1366,7 @@ export default function CompanyWorkspace() {
                   <label><span>Prénoms</span><input name="prenoms" maxLength={150} /></label>
                 </div>
                 <label><span>Téléphone</span><input name="telephone" type="tel" maxLength={30} /></label>
-                <label><span>Mot de passe temporaire</span><input name="temporary_password" type="password" required minLength={8} autoComplete="new-password" /></label>
+                <label><span>Mot de passe temporaire</span><PasswordInput name="temporary_password" required minLength={8} autoComplete="new-password" /></label>
                 <fieldset className="company-permissions"><legend>Autorisations</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" name={`permission-${code}`} value={code} /><span>{label}</span></label>)}</fieldset>
                 <button type="submit" className="company-button" disabled={saving}>{saving ? "Création…" : "Créer le compte agent"}</button>
               </form>

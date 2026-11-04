@@ -1,4 +1,9 @@
+from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import default_token_generator
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.encoding import force_str
+from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
 
 from compagnies.models import AgentCompagnie, Compagnie
@@ -146,3 +151,41 @@ class PasswordChangeRequestSerializer(serializers.Serializer):
     )
     new_password = serializers.CharField()
     password_confirmation = serializers.CharField()
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    uid = serializers.CharField(max_length=128)
+    token = serializers.CharField(max_length=256)
+    new_password = serializers.CharField()
+    password_confirmation = serializers.CharField()
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["password_confirmation"]:
+            raise serializers.ValidationError(
+                {"password_confirmation": "Les mots de passe ne correspondent pas."}
+            )
+
+        try:
+            user_id = force_str(urlsafe_base64_decode(attrs["uid"]))
+            user = get_user_model()._default_manager.get(pk=user_id, is_active=True)
+        except (ValueError, TypeError, OverflowError, get_user_model().DoesNotExist):
+            raise serializers.ValidationError(
+                {"token": "Ce lien de réinitialisation est invalide ou expiré."}
+            )
+
+        if not default_token_generator.check_token(user, attrs["token"]):
+            raise serializers.ValidationError(
+                {"token": "Ce lien de réinitialisation est invalide ou expiré."}
+            )
+
+        try:
+            validate_password(attrs["new_password"], user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({"new_password": error.messages})
+
+        attrs["user"] = user
+        return attrs

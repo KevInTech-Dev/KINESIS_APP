@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   Clock3,
   CreditCard,
+  Download,
   FileText,
   LayoutDashboard,
   Luggage,
@@ -710,6 +711,113 @@ export default function TravelerDashboard() {
     }
   }
 
+  function downloadTicket(ticket: Ticket) {
+    const ticketCard = document.querySelector<HTMLElement>(
+      `[data-print-ticket-card="${ticket.id_billet}"]`,
+    );
+    if (!ticketCard) {
+      setError("Impossible de préparer ce billet à l’impression.");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      setError("Autorisez les fenêtres contextuelles pour télécharger le billet.");
+      return;
+    }
+
+    const qrCode = ticketCard.querySelector("svg")?.cloneNode(true);
+    if (!(qrCode instanceof SVGElement)) {
+      printWindow.close();
+      setError("Le code QR de ce billet est indisponible.");
+      return;
+    }
+
+    const printableTicket = printWindow.document.createElement("main");
+    printableTicket.className = "print-ticket";
+    const printableQrCode = printWindow.document.importNode(qrCode, true);
+    printableTicket.append(printableQrCode);
+
+    const ticketInfo = printWindow.document.createElement("section");
+    ticketInfo.className = "print-ticket__info";
+    const route = printWindow.document.createElement("h1");
+    route.textContent = `${ticket.voyage.ville_depart_nom} → ${ticket.voyage.ville_arrivee_nom}`;
+    ticketInfo.append(route);
+
+    const departure = printWindow.document.createElement("p");
+    departure.textContent = `Départ : ${formatDate(ticket.voyage.date_depart, {
+      day: "numeric",
+      month: "long",
+      year: "numeric",
+    })} à ${ticket.voyage.heure_depart.slice(0, 5)}`;
+    ticketInfo.append(departure);
+
+    const passenger = printWindow.document.createElement("p");
+    passenger.textContent = `${ticket.nom_passager} · Siège ${ticket.numero_siege}`;
+    ticketInfo.append(passenger);
+
+    const ticketReference = printWindow.document.createElement("p");
+    ticketReference.textContent = `Billet ${ticket.code_billet} · Réservation ${ticket.reservation_reference}`;
+    ticketInfo.append(ticketReference);
+    printableTicket.append(ticketInfo);
+
+    const style = printWindow.document.createElement("style");
+    style.textContent = `
+      @page { size: A5 portrait; margin: 14mm; }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        color: #173b2b;
+        font-family: Arial, Helvetica, sans-serif;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .print-ticket {
+        width: 100%;
+        max-width: 130mm;
+        margin: 12mm auto 0;
+        padding: 0 7mm;
+        text-align: center;
+      }
+      .print-ticket > svg {
+        display: block;
+        width: 48mm;
+        height: 48mm;
+        margin: 0 auto 10mm;
+      }
+      .print-ticket__info {
+        width: 100%;
+        margin: 0 auto;
+      }
+      .print-ticket h1 {
+        margin: 0 0 8mm;
+        font-size: 17pt;
+        line-height: 1.3;
+      }
+      .print-ticket__info p {
+        margin: 0;
+        padding: 4mm 0;
+        border-top: 1px solid #e3ebe2;
+        color: #405348;
+        font-size: 11pt;
+        line-height: 1.5;
+      }
+      @media print { body { break-inside: avoid; } }
+    `;
+    printWindow.document.head.append(style);
+    printWindow.opener = null;
+    printWindow.document.documentElement.lang = "fr";
+    printWindow.document.title = `Billet ${ticket.code_billet}`;
+    printWindow.document.body.replaceChildren(printableTicket);
+    printWindow.addEventListener(
+      "afterprint",
+      () => printWindow.close(),
+      { once: true },
+    );
+    printWindow.focus();
+    printWindow.print();
+  }
+
   async function markNotificationRead(notification: Notification) {
     if (notification.lue) return;
     try {
@@ -1373,7 +1481,11 @@ export default function TravelerDashboard() {
             {data?.tickets.length ? (
               <div className="traveler-ticket-list">
                 {pageTickets.map((ticket) => (
-                  <article className="traveler-ticket-card" key={ticket.id_billet}>
+                  <article
+                    className="traveler-ticket-card"
+                    data-print-ticket-card={ticket.id_billet}
+                    key={ticket.id_billet}
+                  >
                     <QRCodeSVG
                       className="traveler-ticket-qr"
                       value={ticket.code_qr}
@@ -1383,6 +1495,7 @@ export default function TravelerDashboard() {
                       title={`Billet de ${ticket.nom_passager}`}
                     />
                     <div>
+                      <p className="traveler-ticket-brand">KINESIS · BILLET DE VOYAGE</p>
                       <h3>
                         {ticket.voyage.ville_depart_nom}
                         <span aria-hidden="true"> → </span>
@@ -1396,7 +1509,24 @@ export default function TravelerDashboard() {
                         <FileText aria-hidden="true" />
                         Billet {ticket.code_billet} · Réservation {ticket.reservation_reference}
                       </p>
+                      <p className="traveler-ticket-departure">
+                        Départ le{" "}
+                        {formatDate(ticket.voyage.date_depart, {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}{" "}
+                        à {ticket.voyage.heure_depart.slice(0, 5)}
+                      </p>
                       <div className="traveler-booking-actions">
+                        <button
+                          type="button"
+                          title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression."
+                          onClick={() => downloadTicket(ticket)}
+                        >
+                          <Download aria-hidden="true" size={14} />
+                          Télécharger le billet
+                        </button>
                         <button
                           type="button"
                           onClick={() =>

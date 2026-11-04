@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import PasswordInput from "@/components/password-input";
 import { isUserProfile } from "@/lib/user-profile";
 
 type AuthMode = "login" | "register";
@@ -270,8 +271,7 @@ export default function AuthPage() {
               </label>
               <label>
                 <span>Mot de passe</span>
-                <input
-                  type="password"
+                <PasswordInput
                   autoComplete={
                     mode === "login" ? "current-password" : "new-password"
                   }
@@ -281,11 +281,15 @@ export default function AuthPage() {
                   minLength={mode === "register" ? 8 : undefined}
                 />
               </label>
+              {mode === "login" ? (
+                <Link className="auth-password-reset" href="/mot-de-passe-oublie">
+                  Mot de passe oublié ?
+                </Link>
+              ) : null}
               {mode === "register" ? (
                 <label>
                   <span>Confirmer le mot de passe</span>
-                  <input
-                    type="password"
+                  <PasswordInput
                     autoComplete="new-password"
                     value={passwordConfirmation}
                     onChange={(event) =>

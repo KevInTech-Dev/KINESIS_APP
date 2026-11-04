@@ -1,10 +1,15 @@
 from io import BytesIO
 from tempfile import TemporaryDirectory
+from urllib.parse import parse_qs, urlparse
 
-from django.core.files.uploadedfile import SimpleUploadedFile
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -196,6 +201,137 @@ class UserAuthenticationTests(APITestCase):
 			format="json",
 		)
 		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+		FRONTEND_BASE_URL="https://kinesis.example",
+	)
+	def test_password_reset_request_sends_one_hour_frontend_link(self):
+		user = User.objects.create_user(
+			email="reset@example.com",
+			password="Qx7!mR4#vN8p",
+			nom="Doe",
+			prenoms="Jane",
+		)
+
+		response = self.client.post(
+			reverse("password-reset-request"),
+			{"email": user.email},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(len(mail.outbox), 1)
+		self.assertIn("réinitialisation", response.data["detail"].lower())
+		reset_link = next(
+			line.strip()
+			for line in mail.outbox[0].body.splitlines()
+			if "/reinitialiser-mot-de-passe?" in line
+		)
+		query = parse_qs(urlparse(reset_link).query)
+		uid = query["uid"][0]
+		token = query["token"][0]
+		self.assertTrue(reset_link.startswith("https://kinesis.example/"))
+		self.assertEqual(uid, urlsafe_base64_encode(force_bytes(user.pk)))
+		self.assertTrue(default_token_generator.check_token(user, token))
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_password_reset_request_does_not_disclose_unknown_email(self):
+		User.objects.create_user(
+			email="known@example.com",
+			password="Qx7!mR4#vN8p",
+			nom="Doe",
+		)
+		existing_response = self.client.post(
+			reverse("password-reset-request"),
+			{"email": "known@example.com"},
+			format="json",
+		)
+		unknown_response = self.client.post(
+			reverse("password-reset-request"),
+			{"email": "unknown@example.com"},
+			format="json",
+		)
+
+		self.assertEqual(existing_response.status_code, status.HTTP_200_OK)
+		self.assertEqual(unknown_response.status_code, status.HTTP_200_OK)
+		self.assertEqual(existing_response.data, unknown_response.data)
+		self.assertEqual(len(mail.outbox), 1)
+
+	def test_password_reset_changes_password_and_invalidates_link(self):
+		user = User.objects.create_user(
+			email="reset-confirm@example.com",
+			password="Qx7!mR4#vN8p",
+			nom="Doe",
+		)
+		uid = urlsafe_base64_encode(force_bytes(user.pk))
+		token = default_token_generator.make_token(user)
+		payload = {
+			"uid": uid,
+			"token": token,
+			"new_password": "New-Strong-Pass#29",
+			"password_confirmation": "New-Strong-Pass#29",
+		}
+
+		response = self.client.post(
+			reverse("password-reset-confirm"),
+			payload,
+			format="json",
+		)
+		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+		user.refresh_from_db()
+		self.assertTrue(user.check_password(payload["new_password"]))
+
+		replay_response = self.client.post(
+			reverse("password-reset-confirm"),
+			payload,
+			format="json",
+		)
+		self.assertEqual(replay_response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertEqual(
+			self.client.post(
+				reverse("token-obtain-pair"),
+				{"email": user.email, "password": self.password},
+				format="json",
+			).status_code,
+			status.HTTP_401_UNAUTHORIZED,
+		)
+
+	def test_password_reset_rejects_mismatched_and_weak_passwords(self):
+		user = User.objects.create_user(
+			email="reset-invalid@example.com",
+			password="Qx7!mR4#vN8p",
+			nom="Doe",
+		)
+		payload = {
+			"uid": urlsafe_base64_encode(force_bytes(user.pk)),
+			"token": default_token_generator.make_token(user),
+			"new_password": "short",
+			"password_confirmation": "different",
+		}
+
+		response = self.client.post(
+			reverse("password-reset-confirm"),
+			payload,
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		payload["password_confirmation"] = "short"
+		weak_password_response = self.client.post(
+			reverse("password-reset-confirm"),
+			payload,
+			format="json",
+		)
+		self.assertEqual(
+			weak_password_response.status_code,
+			status.HTTP_400_BAD_REQUEST,
+		)
+		self.assertIn("new_password", weak_password_response.data)
+		user.refresh_from_db()
+		self.assertTrue(user.check_password(self.password))
 
 	def test_agent_must_change_password_can_read_identity_but_not_edit_profile(self):
 		company_user = User.objects.create_user(
