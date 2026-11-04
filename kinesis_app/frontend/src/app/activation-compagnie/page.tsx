@@ -1,21 +1,9 @@
 import { Suspense } from "react";
+import KinesisLoader from "@/components/kinesis-loader";
 import ActivationStatus from "./activation-status";
 
 function ActivationFallback() {
-  return (
-    <main className="activation-page">
-      <section className="activation-card" aria-live="polite">
-        <span className="activation-mark" aria-hidden="true">
-          <span className="activation-spinner" />
-        </span>
-        <p className="activation-eyebrow">COMPTE COMPAGNIE</p>
-        <h1>Activation en cours</h1>
-        <p className="activation-message">
-          Nous vérifions votre lien sécurisé. Cette opération ne prend qu’un instant.
-        </p>
-      </section>
-    </main>
-  );
+  return <KinesisLoader message="Vérification de votre lien d’activation…" />;
 }
 
 export default function CompanyActivationPage() {

@@ -25,6 +25,7 @@ import {
   type FormEvent,
 } from "react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import RoleWorkspaceShell, {
@@ -687,11 +688,7 @@ export default function TravelerDashboard() {
   }
 
   if (loading) {
-    return (
-      <main className="traveler-workspace-state" role="status">
-        Chargement de votre espace…
-      </main>
-    );
+    return <KinesisLoader message="Chargement de votre espace voyageur…" />;
   }
 
   if (error) {
@@ -1268,18 +1265,22 @@ export default function TravelerDashboard() {
               <div className="traveler-notification-list">
                 {pageNotifications.map((notification) => (
                   <article className={`traveler-notification-card ${notification.lue ? "" : "traveler-notification-card--unread"}`} key={notification.id_notification}>
-                    <div>
-                      <span className="traveler-notification-type">{notification.type}</span>
+                    <span className="traveler-notification-dot" aria-hidden="true" />
+                    <div className="traveler-notification-copy">
                       <h3>{notification.titre}</h3>
                       <p>{notification.message}</p>
                       <time dateTime={notification.date_creation}>
-                        <Clock3 aria-hidden="true" />
                         {formatDate(notification.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
                       </time>
                     </div>
                     {!notification.lue ? (
-                      <button type="button" onClick={() => void markNotificationRead(notification)}>Marquer comme lu</button>
-                    ) : <span className="traveler-status traveler-status--payee">Lue</span>}
+                      <button
+                        type="button"
+                        onClick={() => void markNotificationRead(notification)}
+                      >
+                        Marquer comme lue
+                      </button>
+                    ) : null}
                   </article>
                 ))}
               </div>

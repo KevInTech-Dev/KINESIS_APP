@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import KinesisLoader from "@/components/kinesis-loader";
 import BookingPage from "./booking-page";
 
 type BookingRouteProps = {
@@ -20,13 +21,7 @@ async function BookingRoute({ params, searchParams }: BookingRouteProps) {
 export default function NewReservationPage(props: BookingRouteProps) {
   return (
     <Suspense
-      fallback={
-        <main className="booking-page">
-          <div className="booking-content" role="status">
-            Préparation de votre voyage…
-          </div>
-        </main>
-      }
+      fallback={<KinesisLoader message="Préparation de votre voyage…" />}
     >
       <BookingRoute {...props} />
     </Suspense>

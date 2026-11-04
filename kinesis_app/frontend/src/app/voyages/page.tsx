@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import VoyagesPageHeader from "@/components/voyages-page-header";
 
@@ -390,7 +391,7 @@ function VoyagesCatalog() {
               </span>
             ) : null}
           </div>
-          {loading ? <p className="catalog-message">Chargement des voyages…</p> : null}
+          {loading ? <KinesisLoader message="Chargement des voyages…" variant="inline" /> : null}
           {error ? <p className="catalog-message catalog-message--error" role="alert">{error}</p> : null}
           {!loading && !error && trips.length === 0 ? (
             <p className="catalog-message">Aucun voyage ne correspond à ces critères. Modifiez vos filtres et réessayez.</p>
@@ -430,7 +431,7 @@ function VoyagesCatalog() {
 
 export default function VoyagesPage() {
   return (
-    <Suspense fallback={<p className="catalog-message">Chargement des voyages…</p>}>
+    <Suspense fallback={<KinesisLoader message="Chargement des voyages…" />}>
       <VoyagesCatalog />
     </Suspense>
   );

@@ -22,6 +22,7 @@ import {
 import ConfirmationDialog, {
   type ConfirmationTone,
 } from "@/components/confirmation-dialog";
+import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import TicketQrScanner from "@/components/ticket-qr-scanner";
@@ -782,12 +783,7 @@ export default function AgentWorkspace() {
   ];
 
   if (loading || redirecting) {
-    return (
-      <main className="agent-loading">
-        <span className="agent-loading-mark" aria-hidden="true" />
-        <p>Chargement de votre espace agent…</p>
-      </main>
-    );
+    return <KinesisLoader message="Chargement de votre espace agent…" />;
   }
 
   if (!profile) {
@@ -1116,7 +1112,7 @@ export default function AgentWorkspace() {
                   <button type="button" className={`agent-notification ${notification.lue ? "is-read" : ""}`} key={notification.id_notification} onClick={() => void markNotificationRead(notification)} disabled={saving || notification.lue}>
                     <span className="agent-notification-dot" />
                     <span className="agent-notification-copy"><strong>{notification.titre}</strong><span>{notification.message}</span><small>{formatDateTime(notification.date_creation)}</small></span>
-                    {!notification.lue ? <span className="agent-unread-label">Non lue</span> : null}
+                    {!notification.lue ? <span className="agent-unread-label">Marquer comme lue</span> : null}
                   </button>
                 ))}</div>
               ) : <p className="agent-empty">Vous n’avez aucune notification pour le moment.</p>}

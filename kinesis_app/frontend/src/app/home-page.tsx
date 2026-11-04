@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import KinesisLoader from "@/components/kinesis-loader";
 import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
@@ -626,7 +627,7 @@ export default function HomePage() {
                   required
                 >
                   {cities.length === 0 ? (
-                    <option value="">Chargement des villes…</option>
+                    <option value="">Chargement…</option>
                   ) : null}
                   {cities.map((city) => (
                     <option key={city.id_ville} value={city.id_ville}>
@@ -662,7 +663,7 @@ export default function HomePage() {
                   required
                 >
                   {cities.length === 0 ? (
-                    <option value="">Chargement des villes…</option>
+                    <option value="">Chargement…</option>
                   ) : null}
                   {cities.map((city) => (
                     <option key={city.id_ville} value={city.id_ville}>
@@ -820,7 +821,7 @@ export default function HomePage() {
               </p>
             )
           ) : loading ? (
-            <p className="empty-state">Chargement des prochains départs…</p>
+            <KinesisLoader message="Chargement des prochains départs…" variant="inline" />
           ) : tripError ? (
             <p className="empty-state">
               Les départs ne peuvent pas être chargés pour le moment.

@@ -10,6 +10,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import KinesisLoader from "@/components/kinesis-loader";
 import {
   ListPagination,
   type ListPageSize,
@@ -641,12 +642,7 @@ export default function AdministrationWorkspace() {
   }
 
   if (loading || redirecting) {
-    return (
-      <main className="admin-loading">
-        <span className="admin-loading-mark" aria-hidden="true" />
-        <p>Chargement de l’administration…</p>
-      </main>
-    );
+    return <KinesisLoader message="Chargement de l’administration…" />;
   }
 
   if (!profile) {

@@ -21,6 +21,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
@@ -1037,12 +1038,7 @@ export default function CompanyWorkspace() {
   }
 
   if (loading || redirecting) {
-    return (
-      <main className="company-loading">
-        <span className="company-loading-mark" aria-hidden="true" />
-        <p>Chargement de votre espace compagnie…</p>
-      </main>
-    );
+    return <KinesisLoader message="Chargement de votre espace compagnie…" />;
   }
 
   if (!company || !profile) {

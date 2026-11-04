@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import type { Voyage } from "@/lib/types";
+import KinesisLoader from "@/components/kinesis-loader";
 import VoyagesPageHeader from "@/components/voyages-page-header";
 
 function isVoyage(value: unknown): value is Voyage {
@@ -95,11 +96,14 @@ function VoyageDetailContent() {
     ? `/reservation/${encodeURIComponent(trip.id_voyage)}?passagers=${passengers}`
     : "#";
 
+  if (loading) {
+    return <KinesisLoader message="Chargement du voyage…" />;
+  }
+
   return (
     <main className="voyage-detail-page">
       <VoyagesPageHeader currentPage="detail" />
 
-      {loading ? <p className="catalog-message">Chargement du voyage…</p> : null}
       {!loading && error ? (
         <section className="detail-state" role="alert">
           <h1>Voyage indisponible</h1>
@@ -196,7 +200,7 @@ function VoyageDetailContent() {
 
 export default function VoyageDetailPage() {
   return (
-    <Suspense fallback={<p className="catalog-message">Chargement du voyage…</p>}>
+    <Suspense fallback={<KinesisLoader message="Chargement du voyage…" />}>
       <VoyageDetailContent />
     </Suspense>
   );

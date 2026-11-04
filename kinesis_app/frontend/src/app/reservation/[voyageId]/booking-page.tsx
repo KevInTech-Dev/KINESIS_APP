@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import KinesisLoader from "@/components/kinesis-loader";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Trip = {
@@ -252,8 +253,8 @@ export default function BookingPage({
         <p className="traveler-eyebrow">RÉSERVER VOTRE VOYAGE</p>
         <h1>Votre trajet, en quelques étapes.</h1>
         {loading ? (
-          <div className="booking-card" role="status">
-            Chargement du voyage…
+          <div className="booking-card">
+            <KinesisLoader message="Chargement du voyage…" variant="inline" />
           </div>
         ) : error && !trip ? (
           <div className="traveler-state traveler-state--error" role="alert">
