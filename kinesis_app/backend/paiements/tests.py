@@ -926,6 +926,29 @@ class BilletBoardingApiTests(APITestCase):
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.date_embarquement)
 
+    def test_cancelled_trip_tickets_cannot_be_scanned_or_boarded(self):
+        voyage = self.ticket.place.voyage
+        voyage.statut = Voyage.Statut.ANNULEE
+        voyage.save(update_fields=("statut",))
+
+        scan_response = self.client.post(
+            reverse("billet-scan"),
+            {"code_qr": self.ticket.code_qr},
+            format="json",
+        )
+        boarding_response = self.client.post(
+            reverse("billet-embarquement"),
+            {"code_qr": self.ticket.code_qr},
+            format="json",
+        )
+
+        self.assertEqual(scan_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("voyage associé", str(scan_response.data["code_qr"]))
+        self.assertEqual(boarding_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.ticket.refresh_from_db()
+        self.assertIsNone(self.ticket.date_embarquement)
+        self.assertEqual(self.ticket.statut, BilletElectronique.Statut.VALIDE)
+
     def test_agent_with_boarding_permission_lists_company_tickets_without_qr(self):
         self.agent.permissions.filter(
             permission=PermissionAgent.Code.SCANNER_BILLET

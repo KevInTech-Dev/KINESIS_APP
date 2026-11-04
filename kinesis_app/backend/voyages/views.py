@@ -2,6 +2,7 @@ from django.db import transaction
 from django.db.models import Count, F, Q
 from django.utils import timezone
 from rest_framework import generics
+from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 
@@ -11,6 +12,7 @@ from config.pagination import StandardResultsSetPagination
 from notifications.models import Notification
 from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
+from reservations.services import filter_active_reservations
 
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
@@ -171,13 +173,51 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
 
     @transaction.atomic
     def perform_update(self, serializer):
-        voyage = serializer.instance
-        changed = any(
-            getattr(voyage, field) != value
+        voyage = Voyage.objects.select_for_update().get(pk=serializer.instance.pk)
+        serializer.instance = voyage
+        changed_fields = {
+            field
             for field, value in serializer.validated_data.items()
-        )
+            if getattr(voyage, field) != value
+        }
+        if not changed_fields:
+            return
+
+        if voyage.date_depart_effective is not None:
+            changed_itinerary = changed_fields - {"statut"}
+            next_status = serializer.validated_data.get("statut", voyage.statut)
+            if changed_itinerary or next_status != Voyage.Statut.ARCHIVE:
+                raise ValidationError(
+                    {
+                        "voyage": (
+                            "Après le départ réel, le trajet ne peut plus être "
+                            "modifié ni annulé. Seul son archivage est autorisé."
+                        )
+                    }
+                )
+        else:
+            now = timezone.now()
+            active_reservations = filter_active_reservations(
+                Reservation.objects.filter(voyage=voyage),
+                now=now,
+            )
+            if active_reservations.exists():
+                raise ValidationError(
+                    {
+                        "voyage": (
+                            "Ce trajet a des réservations actives ou payées. "
+                            "Il ne peut pas être modifié, annulé ou archivé. "
+                            "Contactez l’administration pour leur prise en charge."
+                        )
+                    }
+                )
+
         voyage = serializer.save()
-        if not changed:
+        if (
+            voyage.date_depart_effective is not None
+            and changed_fields == {"statut"}
+            and voyage.statut == Voyage.Statut.ARCHIVE
+        ):
             return
 
         reservation_statuses = Q(statut=Reservation.Statut.PAYEE) | Q(

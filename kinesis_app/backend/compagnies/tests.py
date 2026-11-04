@@ -1,3 +1,4 @@
+from datetime import time, timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -9,10 +10,14 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from PIL import Image
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
+
+from reservations.models import Reservation
+from voyages.models import Ville, Voyage
 
 from .models import AgentCompagnie, Compagnie, PermissionAgent
 from .serializers import CompanyRegistrationSerializer
@@ -788,3 +793,50 @@ class AdminCompanyApiTests(APITestCase):
         self.assertEqual(deactivated.data["statut"], Compagnie.Statut.DESACTIVE)
         active_user.refresh_from_db()
         self.assertFalse(active_user.is_active)
+
+    def test_admin_cannot_deactivate_company_with_active_upcoming_reservations(self):
+        company_user = User.objects.create_user(
+            email="company-with-bookings@example.com",
+            password=self.password,
+            nom="Transport actif",
+            role=User.Role.COMPAGNIE,
+        )
+        company = Compagnie.objects.create(
+            utilisateur=company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        departure = Ville.objects.create(nom="Lome")
+        arrival = Ville.objects.create(nom="Kara")
+        trip = Voyage.objects.create(
+            compagnie=company,
+            ville_depart=departure,
+            ville_arrivee=arrival,
+            date_depart=timezone.localdate() + timedelta(days=2),
+            heure_depart=time(10, 0),
+            place_totale=30,
+            prix="5000",
+        )
+        traveler = User.objects.create_user(
+            email="traveler-with-bookings@example.com",
+            password=self.password,
+            nom="Voyageur",
+            role=User.Role.VOYAGEUR,
+        )
+        Reservation.objects.create(
+            reference="RES-COMPANY-DEACTIVATION",
+            voyageur=traveler,
+            voyage=trip,
+            montant_total=5000,
+            statut=Reservation.Statut.PAYEE,
+        )
+
+        response = self.client.post(
+            reverse("admin-company-deactivate", kwargs={"pk": company.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("réservations actives ou payées", str(response.data["compagnie"]))
+        company.refresh_from_db()
+        company_user.refresh_from_db()
+        self.assertEqual(company.statut, Compagnie.Statut.ACTIVE)
+        self.assertTrue(company_user.is_active)

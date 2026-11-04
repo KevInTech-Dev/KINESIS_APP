@@ -9,6 +9,14 @@ import { isUserProfile } from "@/lib/user-profile";
 type RouteContext = { params: Promise<{ path: string[] }> };
 
 function backendResource(path: string[], method: string): string | null {
+  if (
+    path.length === 2 &&
+    path[0] === "comptes" &&
+    path[1] === "summary" &&
+    method === "GET"
+  ) {
+    return "auth/users/summary/";
+  }
   if (path.length === 1 && path[0] === "comptes" && method === "GET") {
     return "auth/users/";
   }

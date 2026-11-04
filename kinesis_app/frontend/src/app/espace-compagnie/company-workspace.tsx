@@ -68,6 +68,7 @@ type Trip = {
   ville_arrivee_nom: string;
   date_depart: string;
   heure_depart: string;
+  date_depart_effective: string | null;
   place_totale: number;
   places_disponibles: number;
   prix: string | number;
@@ -202,6 +203,8 @@ function isTrip(value: unknown): value is Trip {
     typeof value.ville_arrivee_nom === "string" &&
     typeof value.date_depart === "string" &&
     typeof value.heure_depart === "string" &&
+    (typeof value.date_depart_effective === "string" ||
+      value.date_depart_effective === null) &&
     typeof value.place_totale === "number" &&
     typeof value.places_disponibles === "number" &&
     (typeof value.prix === "number" || typeof value.prix === "string") &&
@@ -795,13 +798,13 @@ export default function CompanyWorkspace() {
     const form = event.currentTarget;
     const formData = new FormData(form);
     const payload = {
-      ville_depart: String(formData.get("ville_depart") ?? ""),
-      ville_arrivee: String(formData.get("ville_arrivee") ?? ""),
-      date_depart: String(formData.get("date_depart") ?? ""),
-      heure_depart: String(formData.get("heure_depart") ?? ""),
-      place_totale: Number(formData.get("place_totale")),
-      prix: Number(formData.get("prix")),
-      statut: String(formData.get("statut") ?? "PUBLIE"),
+      ville_depart: String(formData.get("ville_depart") ?? editingTrip?.ville_depart ?? ""),
+      ville_arrivee: String(formData.get("ville_arrivee") ?? editingTrip?.ville_arrivee ?? ""),
+      date_depart: String(formData.get("date_depart") ?? editingTrip?.date_depart ?? ""),
+      heure_depart: String(formData.get("heure_depart") ?? editingTrip?.heure_depart ?? ""),
+      place_totale: Number(formData.get("place_totale") ?? editingTrip?.place_totale),
+      prix: Number(formData.get("prix") ?? editingTrip?.prix),
+      statut: String(formData.get("statut") ?? editingTrip?.statut ?? "PUBLIE"),
     };
     setSaving(true);
     setError(null);
@@ -1060,6 +1063,12 @@ export default function CompanyWorkspace() {
   const confirmedPaymentAmount = payments
     .filter((payment) => payment.statut === "CONFIRME")
     .reduce((total, payment) => total + Number(payment.montant), 0);
+  const editingTripHasActiveReservations = Boolean(
+    editingTrip && editingTrip.places_disponibles < editingTrip.place_totale,
+  );
+  const editingTripHasDeparted = Boolean(editingTrip?.date_depart_effective);
+  const editingTripFieldsLocked =
+    editingTripHasActiveReservations || editingTripHasDeparted;
 
   return (
     <TooltipProvider>
@@ -1278,20 +1287,35 @@ export default function CompanyWorkspace() {
           <div className="company-content company-content--split">
             <section className="company-panel">
               <div className="company-panel-heading">
-                <div><h2>{editingTrip ? "Modifier le trajet" : "Publier un trajet"}</h2><p>Les places disponibles sont calculées par l’API.</p></div>
+                <div>
+                  <h2>
+                    {editingTripHasDeparted
+                      ? "Archiver le trajet"
+                      : editingTrip
+                        ? "Modifier le trajet"
+                        : "Publier un trajet"}
+                  </h2>
+                  <p>
+                    {editingTripHasActiveReservations && !editingTripHasDeparted
+                      ? "Les modifications sont bloquées tant que des réservations actives sont liées à ce trajet."
+                      : editingTripHasDeparted
+                        ? "Le départ a été enregistré. Seul l’archivage du trajet est possible."
+                        : "Les places disponibles sont calculées par l’API."}
+                  </p>
+                </div>
               </div>
               <form className="company-form" onSubmit={submitTrip} key={editingTrip?.id_voyage ?? "new-trip"}>
-                <label><span>Ville de départ</span><select name="ville_depart" required defaultValue={editingTrip?.ville_depart ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
-                <label><span>Ville d’arrivée</span><select name="ville_arrivee" required defaultValue={editingTrip?.ville_arrivee ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
+                <label><span>Ville de départ</span><select name="ville_depart" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.ville_depart ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
+                <label><span>Ville d’arrivée</span><select name="ville_arrivee" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.ville_arrivee ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
                 <div className="company-form-grid">
-                  <label><span>Date de départ</span><input name="date_depart" type="date" required min={new Date().toISOString().slice(0, 10)} defaultValue={editingTrip?.date_depart ?? ""} /></label>
-                  <label><span>Heure de départ</span><input name="heure_depart" type="time" step="60" required defaultValue={editingTrip?.heure_depart ?? ""} /></label>
-                  <label><span>Nombre de places</span><input name="place_totale" type="number" min="1" required defaultValue={editingTrip?.place_totale ?? "30"} /></label>
-                  <label><span>Prix par place (FCFA)</span><input name="prix" type="number" min="0" step="1" required defaultValue={editingTrip?.prix ?? ""} /></label>
+                  <label><span>Date de départ</span><input name="date_depart" type="date" required disabled={editingTripFieldsLocked} min={new Date().toISOString().slice(0, 10)} defaultValue={editingTrip?.date_depart ?? ""} /></label>
+                  <label><span>Heure de départ</span><input name="heure_depart" type="time" step="60" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.heure_depart ?? ""} /></label>
+                  <label><span>Nombre de places</span><input name="place_totale" type="number" min="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.place_totale ?? "30"} /></label>
+                  <label><span>Prix par place (FCFA)</span><input name="prix" type="number" min="0" step="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.prix ?? ""} /></label>
                 </div>
-                {editingTrip ? <label><span>Statut</span><select name="statut" defaultValue={editingTrip.statut}><option value="PUBLIE">Publié</option><option value="ANNULEE">Annulé</option><option value="ARCHIVE">Archivé</option></select></label> : null}
+                {editingTrip ? <label><span>Statut</span><select name="statut" disabled={editingTripHasActiveReservations && !editingTripHasDeparted} defaultValue={editingTripHasDeparted ? "ARCHIVE" : editingTrip.statut}>{editingTripHasDeparted ? <option value="ARCHIVE">Archivé</option> : <><option value="PUBLIE">Publié</option><option value="ANNULEE">Annulé</option><option value="ARCHIVE">Archivé</option></>}</select></label> : null}
                 <div className="company-form-actions">
-                  <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : editingTrip ? "Enregistrer" : "Publier le trajet"}</button>
+                  <button type="submit" className="company-button" disabled={saving || (editingTripHasActiveReservations && !editingTripHasDeparted)}>{saving ? "Enregistrement…" : editingTripHasDeparted ? "Archiver le trajet" : editingTrip ? "Enregistrer" : "Publier le trajet"}</button>
                   {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => setEditingTrip(null)}>Annuler</button> : null}
                 </div>
               </form>
@@ -1303,8 +1327,28 @@ export default function CompanyWorkspace() {
                   <article className="company-trip-row" key={trip.id_voyage}>
                     <TripRow trip={trip} />
                     <div className="company-row-actions">
-                      <button type="button" onClick={() => setEditingTrip(trip)}>Modifier</button>
-                      {trip.statut === "PUBLIE" && isFuture(trip) ? <button type="button" className="is-danger" disabled={saving} onClick={() => void updateTripStatus(trip, "ANNULEE")}>Annuler</button> : null}
+                      <button
+                        type="button"
+                        disabled={saving || (trip.places_disponibles < trip.place_totale && !trip.date_depart_effective)}
+                        onClick={() => setEditingTrip(trip)}
+                      >
+                        {trip.date_depart_effective ? "Archiver" : "Modifier"}
+                      </button>
+                      {trip.statut === "PUBLIE" && isFuture(trip) ? (
+                        <button
+                          type="button"
+                          className="is-danger"
+                          disabled={saving || trip.places_disponibles < trip.place_totale}
+                          onClick={() => void updateTripStatus(trip, "ANNULEE")}
+                        >
+                          Annuler
+                        </button>
+                      ) : null}
+                      {trip.places_disponibles < trip.place_totale && !trip.date_depart_effective ? (
+                        <p className="company-trip-lock-note">
+                          Réservation active : modification, annulation et archivage bloqués.
+                        </p>
+                      ) : null}
                     </div>
                   </article>
                 ))}</div>

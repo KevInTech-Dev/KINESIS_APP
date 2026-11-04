@@ -3,6 +3,7 @@ import uuid
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -52,6 +53,12 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     prenoms = models.CharField(max_length=150, blank=True)
     email = models.EmailField(unique=True)
     telephone = models.CharField(max_length=30, blank=True)
+    date_creation = models.DateTimeField(
+        blank=True,
+        default=timezone.now,
+        editable=False,
+        null=True,
+    )
     photo_profil = models.ImageField(
         upload_to="profils/",
         blank=True,

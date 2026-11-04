@@ -333,6 +333,36 @@ class AdminUserListTests(APITestCase):
 		self.assertEqual(all_users_response.data["count"], 4)
 		self.assertIsNotNone(all_users_response.data["next"])
 
+	def test_admin_can_read_user_counts_by_role(self):
+		response = self.client.get(
+			reverse("admin-user-summary"),
+			{"days": 7},
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_200_OK)
+		self.assertEqual(response.data["total"], 4)
+		self.assertEqual(
+			response.data["roles"],
+			{
+				User.Role.VOYAGEUR: 1,
+				User.Role.COMPAGNIE: 1,
+				User.Role.AGENT_COMPAGNIE: 1,
+				User.Role.ADMINISTRATEUR: 1,
+			},
+		)
+		self.assertTrue(response.data["registrations"])
+		self.assertTrue(
+			all(
+				set(item) == {"date", "count"}
+				for item in response.data["registrations"]
+			)
+		)
+		invalid_range = self.client.get(
+			reverse("admin-user-summary"),
+			{"days": 14},
+		)
+		self.assertEqual(invalid_range.status_code, status.HTTP_400_BAD_REQUEST)
+
 	def test_admin_can_search_users_by_identity_or_company_name(self):
 		response = self.client.get(
 			reverse("admin-user-list"),
@@ -381,3 +411,5 @@ class AdminUserListTests(APITestCase):
 		)
 		response = self.client.get(reverse("admin-user-list"))
 		self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+		summary_response = self.client.get(reverse("admin-user-summary"))
+		self.assertEqual(summary_response.status_code, status.HTTP_403_FORBIDDEN)

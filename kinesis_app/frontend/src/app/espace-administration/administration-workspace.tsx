@@ -3,7 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { Building2, ExternalLink, UsersRound } from "lucide-react";
+import {
+  ChartNoAxesCombined,
+  Building2,
+  ExternalLink,
+  UsersRound,
+} from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import {
   ListPagination,
@@ -83,8 +88,20 @@ type UserPage = {
   previous: string | null;
   results: ManagedUser[];
 };
+type UserRange = "7" | "30" | "90";
+type UserSummary = {
+  total: number;
+  roles: Record<UserRole, number>;
+  registrations: { date: string; count: number }[];
+};
 type Feedback = { kind: "success" | "error"; message: string };
 type Section = "companies" | "accounts";
+
+const USER_RANGES: { id: UserRange; label: string; days: number }[] = [
+  { id: "7", label: "7 jours", days: 7 },
+  { id: "30", label: "30 jours", days: 30 },
+  { id: "90", label: "3 mois", days: 90 },
+];
 
 const FILTERS: { id: StatusFilter; label: string }[] = [
   { id: "EN_ATTENTE_VALIDATION", label: "À examiner" },
@@ -101,6 +118,12 @@ const USER_FILTERS: { id: UserFilter; label: string }[] = [
   { id: "VOYAGEUR", label: "Voyageurs" },
   { id: "ADMINISTRATEUR", label: "Administrateurs" },
 ];
+const USER_ROLE_COLORS: Record<UserRole, string> = {
+  VOYAGEUR: "#0b6b4b",
+  COMPAGNIE: "#4b8f67",
+  AGENT_COMPAGNIE: "#8caf76",
+  ADMINISTRATEUR: "#c5a75d",
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -206,6 +229,89 @@ function parseUserPage(value: unknown): UserPage {
   };
 }
 
+function parseUserSummary(value: unknown): UserSummary {
+  if (!isRecord(value) || typeof value.total !== "number") {
+    throw new Error("La répartition des comptes reçue du serveur est invalide.");
+  }
+  const roleData = value.roles;
+  if (!isRecord(roleData)) {
+    throw new Error("La répartition des comptes reçue du serveur est invalide.");
+  }
+  const countFor = (role: UserRole) => {
+    const count = roleData[role];
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) {
+      throw new Error("La répartition des comptes reçue du serveur est invalide.");
+    }
+    return count;
+  };
+  const roles: Record<UserRole, number> = {
+    VOYAGEUR: countFor("VOYAGEUR"),
+    COMPAGNIE: countFor("COMPAGNIE"),
+    AGENT_COMPAGNIE: countFor("AGENT_COMPAGNIE"),
+    ADMINISTRATEUR: countFor("ADMINISTRATEUR"),
+  };
+  if (!Number.isInteger(value.total) || value.total < 0) {
+    throw new Error("La répartition des comptes reçue du serveur est invalide.");
+  }
+  if (USER_ROLES.reduce((total, role) => total + roles[role], 0) !== value.total) {
+    throw new Error("La répartition des comptes reçue du serveur est invalide.");
+  }
+  if (
+    !Array.isArray(value.registrations) ||
+    !value.registrations.every(
+      (row) =>
+        isRecord(row) &&
+        typeof row.date === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(row.date) &&
+        typeof row.count === "number" &&
+        Number.isInteger(row.count) &&
+        row.count >= 0,
+    )
+  ) {
+    throw new Error("La série des inscriptions reçue du serveur est invalide.");
+  }
+  return {
+    total: value.total,
+    roles,
+    registrations: value.registrations,
+  };
+}
+
+function getUserRegistrationBuckets(
+  registrations: UserSummary["registrations"],
+  range: UserRange,
+) {
+  const days = USER_RANGES.find((item) => item.id === range)?.days ?? 30;
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(start.getDate() - days + 1);
+  start.setHours(0, 0, 0, 0);
+  const bucketDuration = (end.getTime() - start.getTime() + 1) / 7;
+  const buckets = Array.from({ length: 7 }, (_, index) => {
+    const bucketStart = new Date(start.getTime() + bucketDuration * index);
+    return {
+      label: new Intl.DateTimeFormat("fr-FR", {
+        day: "numeric",
+        month: "short",
+      }).format(bucketStart),
+      count: 0,
+    };
+  });
+  registrations.forEach((registration) => {
+    const registeredAt = new Date(`${registration.date}T12:00:00`);
+    if (Number.isNaN(registeredAt.getTime()) || registeredAt < start || registeredAt > end) {
+      return;
+    }
+    const index = Math.min(
+      Math.floor((registeredAt.getTime() - start.getTime()) / bucketDuration),
+      buckets.length - 1,
+    );
+    buckets[index].count += registration.count;
+  });
+  return buckets;
+}
+
 function apiMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) {
@@ -280,7 +386,7 @@ function safeDocumentUrl(value: string | null): string | null {
 export default function AdministrationWorkspace() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [section, setSection] = useState<Section>("companies");
+  const [section, setSection] = useState<Section>("accounts");
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("EN_ATTENTE_VALIDATION");
   const [page, setPage] = useState(1);
@@ -290,6 +396,10 @@ export default function AdministrationWorkspace() {
   const [userPage, setUserPage] = useState(1);
   const [userPageSize, setUserPageSize] = useState<ListPageSize>(10);
   const [users, setUsers] = useState<UserPage | null>(null);
+  const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
+  const [userSummaryLoading, setUserSummaryLoading] = useState(false);
+  const [userSummaryError, setUserSummaryError] = useState<string | null>(null);
+  const [userRange, setUserRange] = useState<UserRange>("30");
   const [userSearchInput, setUserSearchInput] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -369,7 +479,25 @@ export default function AdministrationWorkspace() {
     },
     [],
   );
-
+  const loadUserSummary = useCallback(async (range: UserRange) => {
+    setUserSummaryLoading(true);
+    setUserSummaryError(null);
+    try {
+      const result = await requestAdministrationApi(
+        `comptes/summary?days=${range}`,
+      );
+      setUserSummary(parseUserSummary(result));
+    } catch (loadError) {
+      console.error("Administration user summary loading failed", loadError);
+      setUserSummaryError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Impossible de charger la répartition des comptes.",
+      );
+    } finally {
+      setUserSummaryLoading(false);
+    }
+  }, []);
   useEffect(() => {
     let active = true;
     void Promise.resolve().then(async () => {
@@ -436,19 +564,24 @@ export default function AdministrationWorkspace() {
     }
     let active = true;
     void Promise.resolve().then(() => {
-      if (active) return loadUsers(userFilter, userSearch, userPage, userPageSize);
+      if (active) {
+        void loadUsers(userFilter, userSearch, userPage, userPageSize);
+        void loadUserSummary(userRange);
+      }
     });
     return () => {
       active = false;
     };
   }, [
     loadUsers,
+    loadUserSummary,
     profile,
     reloadKey,
     section,
     userFilter,
     userPage,
     userPageSize,
+    userRange,
     userSearch,
   ]);
 
@@ -530,9 +663,32 @@ export default function AdministrationWorkspace() {
     );
   }
 
+  const userRegistrationBuckets = userSummary
+    ? getUserRegistrationBuckets(userSummary.registrations, userRange)
+    : [];
+  const userRegistrationTotal = userRegistrationBuckets.reduce(
+    (total, bucket) => total + bucket.count,
+    0,
+  );
+  const userChartMaximum = Math.max(
+    1,
+    ...userRegistrationBuckets.map((bucket) => bucket.count),
+  );
+  const userChartPoints = userRegistrationBuckets.map((bucket, index) => {
+    const x = 70 + (index * 710) / Math.max(userRegistrationBuckets.length - 1, 1);
+    const y = 198 - (bucket.count / userChartMaximum) * 166;
+    return { ...bucket, x, y };
+  });
+  const userChartLinePath = userChartPoints
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+  const userChartAreaPath = userChartPoints.length
+    ? `${userChartLinePath} L ${userChartPoints[userChartPoints.length - 1].x} 198 L ${userChartPoints[0].x} 198 Z`
+    : "";
+
   const workspaceItems: RoleWorkspaceItem[] = [
+    { id: "accounts", label: "Utilisateurs", icon: UsersRound, group: "operations" },
     { id: "companies", label: "Dossiers compagnies", icon: Building2, group: "operations" },
-    { id: "accounts", label: "Comptes utilisateurs", icon: UsersRound, group: "operations" },
     { id: "website", label: "Voir le site", icon: ExternalLink, href: "/", group: "account" },
   ];
   function selectSection(nextSection: string) {
@@ -541,14 +697,11 @@ export default function AdministrationWorkspace() {
     setError(null);
     setFeedback(null);
   }
-
   return (
     <RoleWorkspaceShell
       eyebrow="ESPACE ADMINISTRATION"
       title={
-        section === "companies"
-          ? "Dossiers compagnies"
-          : "Comptes utilisateurs"
+        section === "companies" ? "Dossiers compagnies" : "Utilisateurs"
       }
       profile={profile}
       activeId={section}
@@ -572,8 +725,8 @@ export default function AdministrationWorkspace() {
                 </>
               ) : (
                 <>
-                  <p className="admin-eyebrow">COMPTES UTILISATEURS</p>
-                  <h2>Retrouvez les comptes de la plateforme.</h2>
+                  <p className="admin-eyebrow">UTILISATEURS</p>
+                  <h2>Suivez les inscriptions sur la plateforme.</h2>
                   <p>
                     Recherchez les voyageurs, compagnies et agents. Les accès et
                     les rôles restent contrôlés par les règles KINESIS.
@@ -681,7 +834,7 @@ export default function AdministrationWorkspace() {
                   <h2>Comptes enregistrés</h2>
                   <p>
                     {users
-                      ? `${users.count} compte(s) correspondent aux filtres.`
+                      ? `${users.count} utilisateur(s) correspondent aux filtres.`
                       : "Filtrez par rôle ou recherchez un utilisateur."}
                   </p>
                 </div>
@@ -689,11 +842,102 @@ export default function AdministrationWorkspace() {
                   className="admin-refresh"
                   type="button"
                   onClick={() => setReloadKey((current) => current + 1)}
-                  disabled={usersLoading}
+                  disabled={usersLoading || userSummaryLoading}
                 >
-                  {usersLoading ? "Actualisation…" : "Actualiser"}
+                  {usersLoading || userSummaryLoading ? "Actualisation…" : "Actualiser"}
                 </button>
               </div>
+
+              <section className="admin-user-chart" aria-labelledby="admin-user-chart-title">
+                <div className="admin-user-chart-heading">
+                  <div>
+                    <h3 id="admin-user-chart-title">
+                      <ChartNoAxesCombined aria-hidden="true" />
+                      Évolution des utilisateurs
+                    </h3>
+                    <p>
+                      {userSummary
+                        ? `${userRegistrationTotal} nouvelle(s) inscription(s) sur ${USER_RANGES.find((range) => range.id === userRange)?.label}`
+                        : "Inscriptions enregistrées sur la plateforme"}
+                    </p>
+                  </div>
+                  <div className="company-payment-range-switch" aria-label="Période du graphique">
+                    {USER_RANGES.map((range) => (
+                      <button
+                        type="button"
+                        key={range.id}
+                        aria-pressed={userRange === range.id}
+                        onClick={() => setUserRange(range.id)}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                {userSummaryLoading && !userSummary ? (
+                  <p className="admin-user-chart-message">Chargement du graphique…</p>
+                ) : userSummaryError ? (
+                  <p className="admin-user-chart-message is-error" role="alert">
+                    {userSummaryError}
+                  </p>
+                ) : userSummary ? (
+                  <>
+                    {userRegistrationTotal > 0 ? (
+                      <svg
+                        className="admin-user-chart-svg"
+                        viewBox="0 0 820 250"
+                        role="img"
+                        aria-label={`Nouvelles inscriptions sur ${USER_RANGES.find((range) => range.id === userRange)?.label}`}
+                      >
+                        <defs>
+                          <linearGradient id="admin-user-chart-area" x1="0" x2="0" y1="0" y2="1">
+                            <stop offset="0%" stopColor="#27835f" stopOpacity="0.2" />
+                            <stop offset="100%" stopColor="#27835f" stopOpacity="0.01" />
+                          </linearGradient>
+                        </defs>
+                        {[32, 115, 198].map((y, index) => (
+                          <g key={y}>
+                            <line className="admin-user-chart__grid" x1="70" x2="790" y1={y} y2={y} />
+                            <text className="admin-user-chart__axis-label" x="58" y={y + 4} textAnchor="end">
+                              {Math.round((userChartMaximum * (2 - index)) / 2).toLocaleString("fr-FR")}
+                            </text>
+                          </g>
+                        ))}
+                        {userChartAreaPath ? <path className="admin-user-chart__area" d={userChartAreaPath} /> : null}
+                        {userChartLinePath ? <path className="admin-user-chart__line" d={userChartLinePath} /> : null}
+                        {userChartPoints.map((point) => (
+                          <g key={point.label}>
+                            <circle className="admin-user-chart__point-halo" cx={point.x} cy={point.y} r="7" />
+                            <circle className="admin-user-chart__point" cx={point.x} cy={point.y} r="3.5">
+                              <title>{`${point.label} : ${point.count} inscription(s)`}</title>
+                            </circle>
+                            <text className="admin-user-chart__date" x={point.x} y="229" textAnchor="middle">
+                              {point.label}
+                            </text>
+                          </g>
+                        ))}
+                      </svg>
+                    ) : (
+                      <p className="admin-user-chart-message">
+                        Aucune nouvelle inscription sur cette période.
+                      </p>
+                    )}
+                    <div className="admin-user-role-summary" aria-label="Total des utilisateurs par rôle">
+                      {USER_ROLES.map((role) => (
+                        <span key={role}>
+                          <i style={{ backgroundColor: USER_ROLE_COLORS[role] }} aria-hidden="true" />
+                          {roleLabel(role)}
+                          <strong>{userSummary.roles[role].toLocaleString("fr-FR")}</strong>
+                        </span>
+                      ))}
+                      <span className="admin-user-role-summary__total">
+                        Total
+                        <strong>{userSummary.total.toLocaleString("fr-FR")}</strong>
+                      </span>
+                    </div>
+                  </>
+                ) : null}
+              </section>
 
               <form
                 className="admin-user-search"

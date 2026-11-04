@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
@@ -13,6 +14,17 @@ from voyages.models import Voyage
 from .models import PlaceReservee, Reservation
 
 RESERVATION_HOLD_DURATION = timedelta(minutes=10)
+
+
+def filter_active_reservations(queryset, *, now=None):
+    now = now or timezone.now()
+    return queryset.filter(
+        Q(statut=Reservation.Statut.PAYEE)
+        | Q(
+            statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+            date_expiration__gt=now,
+        )
+    )
 
 
 def _expire_for_voyage(voyage, now):

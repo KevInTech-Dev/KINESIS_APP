@@ -424,6 +424,8 @@ def _get_ticket_for_company(*, code_qr, company, lock=False):
 
 def _validate_boarding_ticket(ticket):
     reservation = ticket.place.reservation
+    if reservation.voyage.statut == Voyage.Statut.ANNULEE:
+        raise ValidationError({"code_qr": "Le voyage associé à ce billet est annulé."})
     if reservation.statut != Reservation.Statut.PAYEE:
         raise ValidationError({"code_qr": "Le billet n’est pas payé."})
     if ticket.statut == BilletElectronique.Statut.EMBARQUE:

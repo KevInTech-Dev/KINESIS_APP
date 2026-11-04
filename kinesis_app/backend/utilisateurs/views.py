@@ -1,6 +1,10 @@
+from datetime import timedelta
+
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import Q
+from django.db.models import Count, Q
+from django.db.models.functions import TruncDate
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
@@ -88,6 +92,41 @@ class AdminUserListView(generics.ListAPIView):
 				| Q(profil_agent__compagnie__nom_commercial__icontains=search)
 			)
 		return queryset
+
+
+class AdminUserSummaryView(APIView):
+	permission_classes = [IsKinesisAdministrator]
+
+	def get(self, request):
+		days_value = request.query_params.get("days", "30")
+		if days_value not in ("7", "30", "90"):
+			raise ValidationError({"days": "La période doit être 7, 30 ou 90 jours."})
+		days = int(days_value)
+		now = timezone.localtime()
+		start_date = now.date() - timedelta(days=days - 1)
+		role_counts = {role: 0 for role, _ in Utilisateur.Role.choices}
+		for row in Utilisateur.objects.values("role").annotate(total=Count("pk")):
+			role_counts[row["role"]] = row["total"]
+		registrations = (
+			Utilisateur.objects.filter(
+				date_creation__date__gte=start_date,
+				date_creation__date__lte=now.date(),
+			)
+			.annotate(date=TruncDate("date_creation"))
+			.values("date")
+			.annotate(count=Count("pk"))
+			.order_by("date")
+		)
+		return Response(
+			{
+				"total": sum(role_counts.values()),
+				"roles": role_counts,
+				"registrations": [
+					{"date": row["date"].isoformat(), "count": row["count"]}
+					for row in registrations
+				],
+			}
+		)
 
 
 class CurrentUserView(generics.RetrieveUpdateAPIView):

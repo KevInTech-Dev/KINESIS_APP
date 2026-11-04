@@ -342,7 +342,7 @@ class VoyageApiTests(APITestCase):
         self.voyage.refresh_from_db()
         self.assertEqual(str(self.voyage.prix), "5000")
 
-    def test_company_trip_update_notifies_active_reservation_owners(self):
+    def test_company_cannot_modify_or_close_trip_with_active_reservations(self):
         traveler = User.objects.create_user(
             email="trip-update-traveler@example.com",
             password=self.password,
@@ -360,16 +360,57 @@ class VoyageApiTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
         )
 
-        response = self.client.patch(
+        for changes in ({"prix": "6000"}, {"statut": "ANNULEE"}, {"statut": "ARCHIVE"}):
+            with self.subTest(changes=changes):
+                response = self.client.patch(
+                    reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+                    changes,
+                    format="json",
+                )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("réservations actives", str(response.data["voyage"]))
+                self.voyage.refresh_from_db()
+                self.assertEqual(self.voyage.statut, Voyage.Statut.PUBLIE)
+                self.assertEqual(str(self.voyage.prix), "5000")
+
+        self.assertFalse(Notification.objects.filter(utilisateur=traveler).exists())
+
+    def test_completed_trip_with_reservations_can_only_be_archived(self):
+        traveler = User.objects.create_user(
+            email="completed-trip-traveler@example.com",
+            password=self.password,
+            nom="Voyageur",
+            prenoms="Test",
+        )
+        Reservation.objects.create(
+            reference="RES-COMPLETED-TRIP",
+            voyageur=traveler,
+            voyage=self.voyage,
+            montant_total=5000,
+            statut=Reservation.Statut.PAYEE,
+        )
+        self.voyage.date_depart_effective = timezone.now()
+        self.voyage.save(update_fields=("date_depart_effective",))
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+
+        edit_response = self.client.patch(
             reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
             {"prix": "6000"},
             format="json",
         )
+        archive_response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"statut": "ARCHIVE"},
+            format="json",
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        notification = Notification.objects.get(utilisateur=traveler)
-        self.assertEqual(notification.type, Notification.Type.VOYAGE)
-        self.assertEqual(notification.titre, "Voyage modifié")
+        self.assertEqual(edit_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(archive_response.status_code, status.HTTP_200_OK)
+        self.voyage.refresh_from_db()
+        self.assertEqual(self.voyage.statut, Voyage.Statut.ARCHIVE)
 
     def test_company_cannot_reduce_capacity_below_active_reservations(self):
         from reservations.models import PlaceReservee, Reservation

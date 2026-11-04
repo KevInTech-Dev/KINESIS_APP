@@ -6,7 +6,12 @@ from django.core import signing
 from django.core.mail import send_mail
 from django.db import transaction
 from django.template.loader import render_to_string
+from django.utils import timezone
 from rest_framework.exceptions import ValidationError
+
+from reservations.models import Reservation
+from reservations.services import filter_active_reservations
+from voyages.models import Voyage
 
 from .models import Compagnie
 
@@ -128,6 +133,28 @@ def deactivate_company(*, company_id):
         raise ValidationError({"compagnie": "Compagnie introuvable."})
     if company.statut != Compagnie.Statut.ACTIVE:
         raise ValidationError({"compagnie": "Cette compagnie n’est pas active."})
+
+    now = timezone.now()
+    local_now = timezone.localtime(now)
+    upcoming_trips = Voyage.objects.filter(
+        compagnie=company,
+        date_depart_effective__isnull=True,
+        date_depart__gte=local_now.date(),
+    )
+    active_reservations = filter_active_reservations(
+        Reservation.objects.filter(voyage__in=upcoming_trips),
+        now=now,
+    )
+    if active_reservations.exists():
+        raise ValidationError(
+            {
+                "compagnie": (
+                    "Cette compagnie a des réservations actives ou payées sur "
+                    "des trajets à venir. Leur prise en charge est nécessaire "
+                    "avant la désactivation."
+                )
+            }
+        )
 
     company.statut = Compagnie.Statut.DESACTIVE
     company.save(update_fields=("statut",))
