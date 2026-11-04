@@ -1,9 +1,22 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import {
+  ArrowRight,
+  Bell,
+  BusFront,
+  CalendarDays,
+  CheckCircle2,
+  Clock3,
+  CreditCard,
+  FileText,
+  LayoutDashboard,
+  Search,
+  Ticket,
+  UserRound,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -14,6 +27,9 @@ import {
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import RoleWorkspaceShell, {
+  type RoleWorkspaceItem,
+} from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type Reservation = {
@@ -70,6 +86,25 @@ type DashboardData = {
   tickets: Ticket[];
   notifications: Notification[];
 };
+
+type TravelerTab =
+  | "overview"
+  | "reservations"
+  | "tickets"
+  | "notifications"
+  | "profile";
+
+const travelerTabs: {
+  id: TravelerTab;
+  label: string;
+  icon: RoleWorkspaceItem["icon"];
+}[] = [
+  { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
+  { id: "reservations", label: "Réservations", icon: CalendarDays },
+  { id: "tickets", label: "Mes billets", icon: Ticket },
+  { id: "notifications", label: "Notifications", icon: Bell },
+  { id: "profile", label: "Mon profil", icon: UserRound },
+];
 
 const statusLabels: Record<string, string> = {
   EN_ATTENTE_PAIEMENT: "En attente de paiement",
@@ -235,18 +270,17 @@ export default function TravelerDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [signingOut, setSigningOut] = useState(false);
   const [busyReservation, setBusyReservation] = useState<string | null>(null);
   const [reservationToCancel, setReservationToCancel] =
     useState<Reservation | null>(null);
   const [reservationDetail, setReservationDetail] = useState<Reservation | null>(null);
   const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TravelerTab>("overview");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileMessage, setProfileMessage] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [nom, setNom] = useState("");
@@ -397,7 +431,6 @@ export default function TravelerDashboard() {
   }, [loadDashboard]);
 
   async function signOut() {
-    setSigningOut(true);
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) {
@@ -411,8 +444,6 @@ export default function TravelerDashboard() {
           ? signOutError.message
           : "La déconnexion n’a pas pu être confirmée.",
       );
-    } finally {
-      setSigningOut(false);
     }
   }
 
@@ -631,225 +662,337 @@ export default function TravelerDashboard() {
   const displayName = [profile?.prenoms, profile?.nom]
     .filter(Boolean)
     .join(" ");
+  const pendingReservations =
+    data?.reservations.filter(
+      (reservation) => reservation.statut === "EN_ATTENTE_PAIEMENT",
+    ).length ?? 0;
+  const unreadNotifications =
+    data?.notifications.filter((notification) => !notification.lue).length ?? 0;
+  const workspaceItems: RoleWorkspaceItem[] = travelerTabs.map((tab) => ({
+    ...tab,
+    group: tab.id === "profile" ? "account" : "operations",
+    badge:
+      tab.id === "notifications"
+        ? unreadNotifications
+        : tab.id === "reservations"
+          ? pendingReservations
+          : undefined,
+  }));
+  const activeTitle =
+    travelerTabs.find((tab) => tab.id === activeTab)?.label ?? "Vue d’ensemble";
+
+  function selectTab(id: string) {
+    const tab = travelerTabs.find((item) => item.id === id);
+    if (tab) setActiveTab(tab.id);
+  }
+
+  if (loading) {
+    return (
+      <main className="traveler-workspace-state" role="status">
+        Chargement de votre espace…
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className="traveler-workspace-state traveler-workspace-state--error" role="alert">
+        <p>{error}</p>
+        <button type="button" onClick={() => void loadDashboard()}>
+          Réessayer
+        </button>
+      </main>
+    );
+  }
+
+  if (!profile || profile.role !== "VOYAGEUR") {
+    return (
+      <main className="traveler-workspace-state">
+        <h1>Votre espace arrive bientôt</h1>
+        <p>
+          La consultation des réservations est disponible pour les comptes
+          voyageurs. Votre compte est bien connecté.
+        </p>
+      </main>
+    );
+  }
 
   return (
-    <main className="traveler-page">
-      <header className="site-header traveler-site-header">
-        <div className="header-inner">
-          <Link className="brand" href="/" aria-label="Kinesis, accueil">
-            <Image
-              src="/kinesis-mark.png"
-              width={48}
-              height={48}
-              alt=""
-              priority
-              className="brand__mark"
-            />
-            <span>KINESIS</span>
-          </Link>
-          <nav className="main-nav" aria-label="Navigation principale">
-            <Link href="/#accueil">Accueil</Link>
-            <Link href="/voyages">Voyages</Link>
-            <Link href="/#avantages">Pourquoi Kinesis ?</Link>
-          </nav>
-          <Link
-            className="account-button account-button--profile account-button--active"
-            href="/espace-voyageur"
-            aria-current="page"
-          >
-            <ProfileAvatar
-              className="account-avatar"
-              fallbackClassName="account-avatar--fallback"
-              src={profile?.photo_profil}
-              name={displayName}
-              size={32}
-            />
-            Profil
-          </Link>
-          <button
-            className="menu-button"
-            type="button"
-            onClick={() => setMenuOpen((open) => !open)}
-            aria-label={menuOpen ? "Fermer le menu" : "Ouvrir le menu"}
-            aria-expanded={menuOpen}
-          >
-            {menuOpen ? "×" : "☰"}
-          </button>
-        </div>
-        {menuOpen ? (
-          <nav className="mobile-nav" aria-label="Navigation mobile">
-            <Link href="/#accueil" onClick={() => setMenuOpen(false)}>
-              Accueil
-            </Link>
-            <Link href="/#destinations" onClick={() => setMenuOpen(false)}>
-              Trajets
-            </Link>
-            <Link href="/#avantages" onClick={() => setMenuOpen(false)}>
-              Pourquoi Kinesis ?
-            </Link>
-            <Link
-              className="mobile-profile-link"
-              href="/espace-voyageur"
-              aria-current="page"
-              onClick={() => setMenuOpen(false)}
-            >
-              <ProfileAvatar
-                className="account-avatar"
-                fallbackClassName="account-avatar--fallback"
-                src={profile?.photo_profil}
-                name={displayName}
-                size={32}
-              />
-              Profil
-            </Link>
-            <button type="button" onClick={() => void signOut()} disabled={signingOut}>
-              {signingOut ? "Déconnexion…" : "Se déconnecter"}
-            </button>
-          </nav>
-        ) : null}
-      </header>
-
-      <section className="traveler-content">
-        <div className="traveler-welcome traveler-welcome--row">
+    <RoleWorkspaceShell
+      eyebrow="ESPACE VOYAGEUR"
+      title={activeTitle}
+      profile={profile}
+      activeId={activeTab}
+      items={workspaceItems}
+      notificationCount={unreadNotifications}
+      onSelect={selectTab}
+      onNotificationsClick={() => setActiveTab("notifications")}
+      onProfileUpdated={(updatedProfile) =>
+        setData((current) =>
+          current ? { ...current, profile: updatedProfile } : current,
+        )
+      }
+      onLogout={() => void signOut()}
+    >
+      <div className="traveler-workspace-content">
+        <div className="traveler-page-heading">
           <div>
             <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
-            <h1>
-              Bienvenu(e){displayName ? `, ${displayName}` : ""}
-              <span>.</span>
-            </h1>
-            <p>Retrouvez ici vos réservations et les détails de vos voyages.</p>
+            <h2>
+              {activeTab === "overview"
+                ? `Bonjour ${profile.prenoms || profile.nom}`
+                : activeTitle}
+            </h2>
+            <p>
+              {activeTab === "overview"
+                ? "Voici le résumé de vos réservations et de vos prochains départs."
+                : activeTab === "reservations"
+                  ? "Consultez et gérez vos réservations de voyage."
+                  : activeTab === "tickets"
+                    ? "Retrouvez vos billets et leurs codes de vérification."
+                    : activeTab === "notifications"
+                      ? "Suivez les informations concernant vos réservations et vos voyages."
+                      : "Consultez et mettez à jour les informations de votre compte."}
+            </p>
           </div>
-          <button
-            className="traveler-logout"
-            type="button"
-            onClick={signOut}
-            disabled={signingOut}
-          >
-            {signingOut ? "Déconnexion…" : "Se déconnecter"}
-          </button>
+          {activeTab !== "profile" ? (
+            <Link className="traveler-primary-link" href="/voyages">
+              <Search aria-hidden="true" />
+              Rechercher un voyage
+            </Link>
+          ) : null}
         </div>
 
-        {loading ? (
-          <div className="traveler-state" role="status">
-            Chargement de votre espace…
-          </div>
-        ) : error ? (
-          <div className="traveler-state traveler-state--error" role="alert">
-            <p>{error}</p>
-            <button type="button" onClick={() => void loadDashboard()}>
-              Réessayer
-            </button>
-          </div>
-        ) : profile?.role !== "VOYAGEUR" ? (
-          <div className="traveler-state">
-            <h2>Votre espace arrive bientôt</h2>
-            <p>
-              La consultation des réservations est disponible pour les comptes
-              voyageurs. Votre compte est bien connecté.
-            </p>
-          </div>
-        ) : (
-          <>
-            <section className="traveler-profile-card" aria-labelledby="profile-title">
-              <div className="traveler-profile-summary">
-                <ProfileAvatar
-                  className="traveler-profile-photo"
-                  fallbackClassName="traveler-profile-photo--fallback"
-                  src={profile?.photo_profil}
-                  name={displayName}
-                  size={76}
-                  alt={`Photo de ${displayName}`}
-                />
-                <div>
-                  <p className="traveler-eyebrow">VOTRE COMPTE</p>
-                  <h2 id="profile-title">{displayName || "Mon profil"}</h2>
-                  <p>{profile?.email}</p>
-                  {profile?.telephone ? <p>{profile.telephone}</p> : null}
-                </div>
-                <button
-                  className="traveler-secondary-button"
-                  type="button"
-                  onClick={() => {
-                    setProfileMessage(null);
-                    setProfileError(null);
-                    setEditingProfile((value) => !value);
-                  }}
-                  aria-expanded={editingProfile}
-                >
-                  {editingProfile ? "Fermer" : "Modifier mon profil"}
+        <nav className="traveler-view-tabs" aria-label="Sections de l’espace voyageur">
+          {travelerTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                type="button"
+                key={tab.id}
+                className={activeTab === tab.id ? "is-active" : ""}
+                aria-current={activeTab === tab.id ? "page" : undefined}
+                onClick={() => setActiveTab(tab.id)}
+              >
+                <Icon aria-hidden="true" />
+                {tab.label}
+                {tab.id === "notifications" && unreadNotifications > 0 ? (
+                  <span>{unreadNotifications}</span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
+
+        {paymentMessage && activeTab !== "overview" ? (
+          <p className="traveler-payment-message" role="status">
+            {paymentMessage}
+          </p>
+        ) : null}
+
+        {activeTab === "overview" ? (
+          <div className="traveler-overview-layout">
+            <aside className="traveler-github-profile">
+              <ProfileAvatar
+                className="traveler-github-avatar"
+                fallbackClassName="traveler-profile-photo--fallback"
+                src={profile.photo_profil}
+                name={displayName}
+                size={112}
+                alt={`Photo de ${displayName}`}
+              />
+              <h3>{displayName || "Voyageur KINESIS"}</h3>
+              <p className="traveler-github-handle">{profile.email}</p>
+              {profile.telephone ? (
+                <p className="traveler-profile-phone">{profile.telephone}</p>
+              ) : null}
+              <button
+                type="button"
+                className="traveler-profile-action"
+                onClick={() => setActiveTab("profile")}
+              >
+                Modifier le profil
+              </button>
+              <p className="traveler-profile-note">
+                <BusFront aria-hidden="true" />
+                Voyageur KINESIS
+              </p>
+            </aside>
+
+            <div className="traveler-overview-main">
+              <section className="traveler-repository-grid" aria-label="Résumé du compte">
+                <button type="button" onClick={() => setActiveTab("reservations")}>
+                  <span><CalendarDays aria-hidden="true" /> Réservations</span>
+                  <strong>{data?.reservations.length ?? 0}</strong>
+                  <small>Voyages réservés sur votre compte</small>
                 </button>
-              </div>
-              {profileMessage ? (
-                <p className="traveler-form-success" role="status">{profileMessage}</p>
+                <button type="button" onClick={() => setActiveTab("tickets")}>
+                  <span><Ticket aria-hidden="true" /> Billets</span>
+                  <strong>{data?.tickets.length ?? 0}</strong>
+                  <small>Billets disponibles après paiement</small>
+                </button>
+                <button type="button" onClick={() => setActiveTab("reservations")}>
+                  <span><CreditCard aria-hidden="true" /> À régler</span>
+                  <strong>{pendingReservations}</strong>
+                  <small>Réservations en attente de paiement</small>
+                </button>
+                <button type="button" onClick={() => setActiveTab("notifications")}>
+                  <span><Bell aria-hidden="true" /> Notifications</span>
+                  <strong>{unreadNotifications}</strong>
+                  <small>Informations non lues</small>
+                </button>
+              </section>
+
+              {paymentMessage ? (
+                <p className="traveler-payment-message" role="status">
+                  {paymentMessage}
+                </p>
               ) : null}
-              {editingProfile ? (
-                <form className="traveler-profile-form" onSubmit={saveProfile}>
-                  <label>
-                    <span>Prénoms</span>
-                    <input
-                      autoComplete="given-name"
-                      maxLength={150}
-                      value={prenoms}
-                      onChange={(event) => setPrenoms(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Nom</span>
-                    <input
-                      autoComplete="family-name"
-                      maxLength={100}
-                      required
-                      value={nom}
-                      onChange={(event) => setNom(event.target.value)}
-                    />
-                  </label>
-                  <label>
-                    <span>Téléphone</span>
-                    <input
-                      autoComplete="tel"
-                      maxLength={30}
-                      value={telephone}
-                      onChange={(event) => setTelephone(event.target.value)}
-                    />
-                  </label>
-                  <label className="traveler-photo-field">
-                    <span>Photo de profil</span>
-                    <input
-                      ref={photoInput}
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) =>
-                        setPhoto(event.target.files?.[0] ?? null)
-                      }
-                    />
-                  </label>
-                  {profileError ? (
-                    <p className="traveler-form-error" role="alert">
-                      {profileError}
-                    </p>
-                  ) : null}
-                  <button
-                    className="traveler-save-button"
-                    type="submit"
-                    disabled={profileSaving}
-                  >
-                    {profileSaving ? "Enregistrement…" : "Enregistrer"}
+
+              <section className="traveler-overview-list">
+                <div className="traveler-github-section-heading">
+                  <div>
+                    <h3>Réservations récentes</h3>
+                    <p>Les derniers voyages associés à votre compte</p>
+                  </div>
+                  <button type="button" onClick={() => setActiveTab("reservations")}>
+                    Tout afficher <ArrowRight aria-hidden="true" />
                   </button>
-                </form>
-              ) : null}
-            </section>
+                </div>
+                {data?.reservations.length ? (
+                  <div className="traveler-recent-list">
+                    {data.reservations.slice(0, 4).map((reservation) => (
+                      <article key={reservation.id_reservation}>
+                        <span className="traveler-recent-icon">
+                          <BusFront aria-hidden="true" />
+                        </span>
+                        <div>
+                          <strong>
+                            {reservation.voyage.ville_depart_nom}
+                            <span aria-hidden="true"> → </span>
+                            {reservation.voyage.ville_arrivee_nom}
+                          </strong>
+                          <small>
+                            {reservation.voyage.compagnie_nom} · Départ le{" "}
+                            {formatDate(reservation.voyage.date_depart, {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </small>
+                        </div>
+                        <span className={`traveler-status traveler-status--${reservation.statut.toLowerCase()}`}>
+                          {statusLabels[reservation.statut] ?? reservation.statut}
+                        </span>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="traveler-empty traveler-empty--compact">
+                    <h3>Aucune réservation pour le moment</h3>
+                    <p>Vos prochains voyages apparaîtront ici.</p>
+                    <Link href="/voyages">Découvrir les voyages</Link>
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        ) : null}
 
-          {paymentMessage ? (
-            <p className="traveler-payment-message" role="status">
-              {paymentMessage}
-            </p>
-          ) : null}
+        {activeTab === "profile" ? (
+          <section className="traveler-profile-card traveler-profile-card--workspace" aria-labelledby="profile-title">
+            <div className="traveler-profile-summary">
+              <ProfileAvatar
+                className="traveler-profile-photo"
+                fallbackClassName="traveler-profile-photo--fallback"
+                src={profile.photo_profil}
+                name={displayName}
+                size={76}
+                alt={`Photo de ${displayName}`}
+              />
+              <div>
+                <p className="traveler-eyebrow">VOTRE COMPTE</p>
+                <h2 id="profile-title">{displayName || "Mon profil"}</h2>
+                <p>{profile.email}</p>
+                {profile.telephone ? <p>{profile.telephone}</p> : null}
+              </div>
+              <button
+                className="traveler-secondary-button"
+                type="button"
+                onClick={() => {
+                  setProfileMessage(null);
+                  setProfileError(null);
+                  setEditingProfile((value) => !value);
+                }}
+                aria-expanded={editingProfile}
+              >
+                <UserRound aria-hidden="true" />
+                {editingProfile ? "Fermer" : "Modifier mon profil"}
+              </button>
+            </div>
+            {profileMessage ? (
+              <p className="traveler-form-success" role="status">{profileMessage}</p>
+            ) : null}
+            {editingProfile ? (
+              <form className="traveler-profile-form" onSubmit={saveProfile}>
+                <label>
+                  <span>Prénoms</span>
+                  <input
+                    autoComplete="given-name"
+                    maxLength={150}
+                    value={prenoms}
+                    onChange={(event) => setPrenoms(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Nom</span>
+                  <input
+                    autoComplete="family-name"
+                    maxLength={100}
+                    required
+                    value={nom}
+                    onChange={(event) => setNom(event.target.value)}
+                  />
+                </label>
+                <label>
+                  <span>Téléphone</span>
+                  <input
+                    autoComplete="tel"
+                    maxLength={30}
+                    value={telephone}
+                    onChange={(event) => setTelephone(event.target.value)}
+                  />
+                </label>
+                <label className="traveler-photo-field">
+                  <span>Photo de profil</span>
+                  <input
+                    ref={photoInput}
+                    type="file"
+                    accept="image/*"
+                    onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {profileError ? (
+                  <p className="traveler-form-error" role="alert">{profileError}</p>
+                ) : null}
+                <button className="traveler-save-button" type="submit" disabled={profileSaving}>
+                  {profileSaving ? "Enregistrement…" : "Enregistrer"}
+                </button>
+              </form>
+            ) : null}
+          </section>
+        ) : null}
 
+        {activeTab === "reservations" ? (
+          <>
           <section className="traveler-reservations" id="reservations" aria-labelledby="bookings-title">
             <div className="traveler-section-heading">
               <div>
                 <p className="traveler-eyebrow">VOTRE ACTIVITÉ</p>
-                <h2 id="bookings-title">Mes réservations</h2>
+                <h2 id="bookings-title">
+                  <CalendarDays aria-hidden="true" />
+                  Mes réservations
+                </h2>
               </div>
               <span className="traveler-count">
                 {data?.reservations.length ?? 0} réservation
@@ -873,9 +1016,11 @@ export default function TravelerDashboard() {
                         <span>{reservation.voyage.ville_arrivee_nom}</span>
                       </div>
                       <p className="traveler-company">
+                        <BusFront aria-hidden="true" />
                         {reservation.voyage.compagnie_nom}
                       </p>
                       <p className="traveler-departure">
+                        <Clock3 aria-hidden="true" />
                         Départ le{" "}
                         {formatDate(reservation.voyage.date_depart, {
                           day: "numeric",
@@ -892,6 +1037,7 @@ export default function TravelerDashboard() {
                         {statusLabels[reservation.statut] ?? reservation.statut}
                       </span>
                       <p className="traveler-reference">
+                        <FileText aria-hidden="true" />
                         Réf. {reservation.reference}
                       </p>
                       <p className="traveler-price">
@@ -997,7 +1143,7 @@ export default function TravelerDashboard() {
               </div>
             ) : (
               <div className="traveler-empty">
-                <span aria-hidden="true">⌁</span>
+                <span aria-hidden="true"><CalendarDays /></span>
                 <h3>Aucune réservation pour le moment</h3>
                 <p>
                   Vos prochains voyages réservés apparaîtront dans cet espace.
@@ -1007,12 +1153,18 @@ export default function TravelerDashboard() {
             )}
             {reservationPagination}
           </section>
+          </>
+        ) : null}
 
+        {activeTab === "tickets" ? (
           <section className="traveler-tickets" id="billets" aria-labelledby="tickets-title">
             <div className="traveler-section-heading">
               <div>
                 <p className="traveler-eyebrow">APRÈS PAIEMENT</p>
-                <h2 id="tickets-title">Mes billets</h2>
+                <h2 id="tickets-title">
+                  <Ticket aria-hidden="true" />
+                  Mes billets
+                </h2>
               </div>
               <span className="traveler-count">
                 {data?.tickets.length ?? 0} billet
@@ -1037,10 +1189,12 @@ export default function TravelerDashboard() {
                         <span aria-hidden="true"> → </span>
                         {ticket.voyage.ville_arrivee_nom}
                       </h3>
-                      <p>
+                      <p className="traveler-ticket-passenger">
+                        <UserRound aria-hidden="true" />
                         {ticket.nom_passager} · Siège {ticket.numero_siege}
                       </p>
                       <p className="traveler-reference">
+                        <FileText aria-hidden="true" />
                         Billet {ticket.code_billet} · Réservation {ticket.reservation_reference}
                       </p>
                       <div className="traveler-booking-actions">
@@ -1088,18 +1242,24 @@ export default function TravelerDashboard() {
             )}
             {ticketPagination}
           </section>
+        ) : null}
 
+        {activeTab === "notifications" ? (
           <section className="traveler-notifications" id="notifications" aria-labelledby="notifications-title">
             <div className="traveler-section-heading">
               <div>
                 <p className="traveler-eyebrow">INFORMATIONS IMPORTANTES</p>
-                <h2 id="notifications-title">Mes notifications</h2>
+                <h2 id="notifications-title">
+                  <Bell aria-hidden="true" />
+                  Mes notifications
+                </h2>
               </div>
               <span className="traveler-count">
                 {data?.notifications.filter((notification) => !notification.lue).length ?? 0} non lue(s)
               </span>
               {data?.notifications.some((notification) => !notification.lue) ? (
                 <button className="traveler-secondary-button" type="button" onClick={() => void markAllNotificationsRead()}>
+                  <CheckCircle2 aria-hidden="true" />
                   Tout marquer comme lu
                 </button>
               ) : null}
@@ -1112,7 +1272,10 @@ export default function TravelerDashboard() {
                       <span className="traveler-notification-type">{notification.type}</span>
                       <h3>{notification.titre}</h3>
                       <p>{notification.message}</p>
-                      <time dateTime={notification.date_creation}>{formatDate(notification.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</time>
+                      <time dateTime={notification.date_creation}>
+                        <Clock3 aria-hidden="true" />
+                        {formatDate(notification.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+                      </time>
                     </div>
                     {!notification.lue ? (
                       <button type="button" onClick={() => void markNotificationRead(notification)}>Marquer comme lu</button>
@@ -1128,24 +1291,24 @@ export default function TravelerDashboard() {
             )}
             {notificationPagination}
           </section>
-            {reservationToCancel ? (
-              <ConfirmationDialog
-                open
-                title="Annuler cette réservation ?"
-                description={`La réservation ${reservationToCancel.reference} sera annulée. Cette action est définitive et les places associées seront libérées.`}
-                confirmLabel="Annuler la réservation"
-                tone="danger"
-                pending={busyReservation === reservationToCancel.id_reservation}
-                onCancel={() => setReservationToCancel(null)}
-                onConfirm={async () => {
-                  await cancelReservation(reservationToCancel.id_reservation);
-                  setReservationToCancel(null);
-                }}
-              />
-            ) : null}
-          </>
-        )}
-      </section>
-    </main>
+        ) : null}
+
+        {reservationToCancel ? (
+          <ConfirmationDialog
+            open
+            title="Annuler cette réservation ?"
+            description={`La réservation ${reservationToCancel.reference} sera annulée. Cette action est définitive et les places associées seront libérées.`}
+            confirmLabel="Annuler la réservation"
+            tone="danger"
+            pending={busyReservation === reservationToCancel.id_reservation}
+            onCancel={() => setReservationToCancel(null)}
+            onConfirm={async () => {
+              await cancelReservation(reservationToCancel.id_reservation);
+              setReservationToCancel(null);
+            }}
+          />
+        ) : null}
+      </div>
+    </RoleWorkspaceShell>
   );
 }

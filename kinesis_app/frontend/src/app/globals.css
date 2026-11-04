@@ -5933,6 +5933,1535 @@ select:focus-visible {
   }
 }
 
+.traveler-page {
+  min-height: 100vh;
+  background:
+    radial-gradient(ellipse at 2% 12%, rgb(219 241 220 / 42%), transparent 26%),
+    #f5f8f5;
+}
+
+.traveler-site-header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgb(5 57 42 / 96%);
+  backdrop-filter: blur(14px);
+}
+
+.traveler-site-header .header-inner {
+  width: min(100% - 48px, 1280px);
+  height: 76px;
+}
+
+.traveler-nav {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: rgb(255 255 255 / 78%);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.traveler-nav a {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 14px;
+  border-radius: 12px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.traveler-nav a:hover {
+  background: rgb(255 255 255 / 10%);
+  color: white;
+}
+
+.traveler-nav svg,
+.traveler-mobile-nav svg {
+  width: 17px;
+  height: 17px;
+}
+
+.traveler-nav-badge {
+  display: inline-flex;
+  min-width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #d7f477;
+  color: #173c2b;
+  font-size: 10px;
+  font-weight: 850;
+}
+
+.traveler-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.traveler-header-profile {
+  display: inline-flex;
+  max-width: 205px;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 6px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  color: white;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.traveler-header-profile span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traveler-header-profile .account-avatar {
+  flex: 0 0 34px;
+}
+
+.traveler-header-logout,
+.traveler-menu-button {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 7%);
+  color: white;
+}
+
+.traveler-header-logout:hover:not(:disabled),
+.traveler-menu-button:hover {
+  background: rgb(255 255 255 / 15%);
+}
+
+.traveler-header-logout svg,
+.traveler-menu-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.traveler-header-logout:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.traveler-menu-button,
+.traveler-mobile-nav {
+  display: none;
+}
+
+.traveler-content {
+  width: min(100% - 56px, 1180px);
+  padding: 48px 0 88px;
+}
+
+.traveler-welcome--dashboard {
+  display: flex;
+  min-height: 224px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 36px 42px;
+  overflow: hidden;
+  border: 1px solid rgb(255 255 255 / 12%);
+  border-radius: 26px;
+  background:
+    radial-gradient(ellipse at 80% 0%, rgb(213 245 118 / 18%), transparent 36%),
+    linear-gradient(118deg, #073d2e 0%, #0c5841 58%, #12634a 100%);
+  box-shadow: 0 20px 46px rgb(19 64 43 / 12%);
+  color: white;
+}
+
+.traveler-welcome--dashboard > div {
+  position: relative;
+  z-index: 1;
+}
+
+.traveler-welcome--dashboard .traveler-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #d8f477;
+}
+
+.traveler-welcome--dashboard .traveler-eyebrow svg {
+  width: 17px;
+  height: 17px;
+}
+
+.traveler-welcome--dashboard h1 {
+  margin-top: 16px;
+  color: white;
+  font-size: clamp(30px, 4vw, 42px);
+}
+
+.traveler-welcome--dashboard h1 span {
+  color: #d8f477;
+}
+
+.traveler-welcome--dashboard > div > p:last-child {
+  color: rgb(255 255 255 / 74%);
+}
+
+.traveler-search-link {
+  display: inline-flex;
+  min-height: 48px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 11px;
+  padding: 0 17px;
+  border: 1px solid rgb(255 255 255 / 27%);
+  border-radius: 13px;
+  background: #d8f477;
+  color: #153c2a;
+  font-size: 12px;
+  font-weight: 850;
+  box-shadow: 0 8px 18px rgb(0 0 0 / 12%);
+  transition: transform 160ms ease, background-color 160ms ease;
+}
+
+.traveler-search-link:hover {
+  transform: translateY(-2px);
+  background: #e4ff91;
+}
+
+.traveler-search-link svg {
+  width: 17px;
+  height: 17px;
+}
+
+.traveler-search-link svg:last-child {
+  width: 15px;
+  height: 15px;
+  margin-left: 2px;
+}
+
+.traveler-overview {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 26px;
+}
+
+.traveler-overview-card {
+  display: flex;
+  min-height: 112px;
+  align-items: center;
+  gap: 13px;
+  padding: 19px;
+  border: 1px solid #e5ece5;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(22 52 40 / 4%);
+}
+
+.traveler-overview-icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  background: #eaf5e9;
+  color: #17613f;
+}
+
+.traveler-overview-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.traveler-overview-card--tickets .traveler-overview-icon {
+  background: #eaf1ff;
+  color: #365a9d;
+}
+
+.traveler-overview-card--payments .traveler-overview-icon {
+  background: #fff3dc;
+  color: #91600d;
+}
+
+.traveler-overview-card--notifications .traveler-overview-icon {
+  background: #f2ecff;
+  color: #6b4ca0;
+}
+
+.traveler-overview-card > div {
+  display: grid;
+  min-width: 0;
+  gap: 7px;
+}
+
+.traveler-overview-card > div span {
+  color: #6b776e;
+  font-size: 11px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.traveler-overview-card > div strong {
+  color: #173b2c;
+  font-size: 25px;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.traveler-overview-card > a {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border-radius: 10px;
+  color: #718078;
+}
+
+.traveler-overview-card > a:hover {
+  background: #eff5ef;
+  color: #14583e;
+}
+
+.traveler-overview-card > a svg {
+  width: 17px;
+  height: 17px;
+}
+
+.traveler-profile-card {
+  margin-bottom: 34px;
+  padding: 23px 26px;
+  border: 1px solid #e5ece5;
+  border-radius: 19px;
+  background: white;
+  box-shadow: 0 8px 24px rgb(22 52 40 / 4%);
+}
+
+.traveler-profile-summary {
+  gap: 17px;
+}
+
+.traveler-profile-summary > div {
+  min-width: 0;
+}
+
+.traveler-profile-summary h2 {
+  margin: 6px 0 5px;
+  color: #163d2d;
+  font-size: 17px;
+  font-weight: 800;
+}
+
+.traveler-profile-summary > div > p:not(.traveler-eyebrow) {
+  margin: 3px 0 0;
+  color: #6d7971;
+  font-size: 12px;
+}
+
+.traveler-profile-summary .traveler-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.traveler-profile-summary .traveler-secondary-button svg,
+.traveler-section-heading .traveler-secondary-button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.traveler-profile-card .traveler-eyebrow {
+  color: #64746a;
+}
+
+.traveler-section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #173b2c;
+}
+
+.traveler-section-heading h2 svg {
+  width: 22px;
+  height: 22px;
+  color: #28714d;
+}
+
+.traveler-reservations,
+.traveler-tickets,
+.traveler-notifications {
+  scroll-margin-top: 100px;
+  margin-top: 36px;
+}
+
+.traveler-profile-card {
+  scroll-margin-top: 100px;
+}
+
+.traveler-company,
+.traveler-departure,
+.traveler-reference {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.traveler-company svg,
+.traveler-departure svg,
+.traveler-reference svg,
+.traveler-ticket-passenger svg,
+.traveler-notification-card time svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: #70877a;
+}
+
+.traveler-booking-card,
+.traveler-ticket-card,
+.traveler-notification-card {
+  border-color: #e5ece5;
+  box-shadow: 0 8px 24px rgb(22 52 40 / 4%);
+}
+
+.traveler-booking-card:hover,
+.traveler-ticket-card:hover {
+  border-color: #c9dccd;
+}
+
+.traveler-ticket-passenger {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.traveler-notification-card time {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.traveler-notification-card > div > h3 {
+  color: #193d2d;
+}
+
+.traveler-empty,
+.traveler-state {
+  border-color: #e5ece5;
+  box-shadow: 0 8px 24px rgb(22 52 40 / 3%);
+}
+
+@media (max-width: 980px) {
+  .traveler-overview {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .traveler-nav {
+    gap: 0;
+  }
+
+  .traveler-nav a {
+    gap: 7px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .traveler-header-profile {
+    max-width: 160px;
+  }
+}
+
+@media (max-width: 700px) {
+  .traveler-site-header .header-inner {
+    width: calc(100% - 32px);
+    height: 68px;
+  }
+
+  .traveler-site-header .brand__mark {
+    width: 40px;
+    height: 40px;
+  }
+
+  .traveler-site-header .brand span {
+    font-size: 25px;
+  }
+
+  .traveler-nav,
+  .traveler-header-actions {
+    display: none;
+  }
+
+  .traveler-menu-button {
+    display: inline-flex;
+  }
+
+  .traveler-mobile-nav {
+    display: grid;
+    gap: 4px;
+    padding: 10px 16px 16px;
+    border-top: 1px solid rgb(255 255 255 / 12%);
+    background: #073d2e;
+  }
+
+  .traveler-mobile-nav a,
+  .traveler-mobile-nav button {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    gap: 11px;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    color: white;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: left;
+  }
+
+  .traveler-mobile-nav a:hover,
+  .traveler-mobile-nav button:hover {
+    background: rgb(255 255 255 / 9%);
+  }
+
+  .traveler-content {
+    width: calc(100% - 32px);
+    padding: 24px 0 62px;
+  }
+
+  .traveler-welcome--dashboard {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 20px;
+    padding: 27px 23px;
+    border-radius: 20px;
+  }
+
+  .traveler-welcome--dashboard h1 {
+    font-size: clamp(28px, 8vw, 36px);
+    overflow-wrap: anywhere;
+  }
+
+  .traveler-search-link {
+    min-height: 44px;
+  }
+
+  .traveler-overview {
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .traveler-overview-card {
+    min-height: 98px;
+    gap: 10px;
+    padding: 14px 12px;
+    border-radius: 14px;
+  }
+
+  .traveler-overview-icon {
+    width: 38px;
+    height: 38px;
+    flex-basis: 38px;
+    border-radius: 12px;
+  }
+
+  .traveler-overview-icon svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .traveler-overview-card > div span {
+    font-size: 10px;
+  }
+
+  .traveler-overview-card > div strong {
+    font-size: 22px;
+  }
+
+  .traveler-overview-card > a {
+    width: 24px;
+    height: 24px;
+    flex-basis: 24px;
+  }
+
+  .traveler-profile-card {
+    margin-bottom: 28px;
+    padding: 18px;
+  }
+
+  .traveler-profile-summary .traveler-secondary-button {
+    width: 100%;
+    justify-content: center;
+    margin-left: 0;
+  }
+
+  .traveler-section-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .traveler-section-heading h2 {
+    font-size: 21px;
+  }
+
+  .traveler-section-heading .traveler-secondary-button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .traveler-reservations,
+  .traveler-tickets,
+  .traveler-notifications {
+    margin-top: 29px;
+  }
+}
+
+@media (max-width: 390px) {
+  .traveler-overview-card {
+    gap: 8px;
+    padding: 12px 9px;
+  }
+
+  .traveler-overview-card > a {
+    display: none;
+  }
+}
+
+.traveler-workspace-content {
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 28px clamp(18px, 3vw, 38px) 56px;
+}
+
+.traveler-page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 22px;
+}
+
+.traveler-page-heading .traveler-eyebrow {
+  color: #64746a;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+}
+
+.traveler-page-heading h2 {
+  margin: 5px 0 6px;
+  color: #1d2b22;
+  font-size: 25px;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+.traveler-page-heading > div > p:last-child {
+  max-width: 680px;
+  margin: 0;
+  color: #65736a;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.traveler-primary-link {
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid #d6e0d7;
+  border-radius: 7px;
+  background: #fff;
+  color: #284b37;
+  font-size: 12px;
+  font-weight: 650;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.traveler-primary-link:hover {
+  border-color: #b6cbbb;
+  background: #f7faf7;
+}
+
+.traveler-primary-link svg {
+  width: 15px;
+  height: 15px;
+}
+
+.traveler-view-tabs {
+  display: flex;
+  min-height: 49px;
+  align-items: stretch;
+  gap: 5px;
+  margin-bottom: 22px;
+  overflow-x: auto;
+  border-bottom: 1px solid #dfe5df;
+  scrollbar-width: thin;
+}
+
+.traveler-view-tabs button {
+  position: relative;
+  display: inline-flex;
+  min-height: 49px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #5e6b62;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.traveler-view-tabs button:hover {
+  color: #1f3829;
+}
+
+.traveler-view-tabs button.is-active {
+  color: #1d2b22;
+  font-weight: 750;
+}
+
+.traveler-view-tabs button.is-active::after {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: #34834f;
+  content: "";
+}
+
+.traveler-view-tabs button > svg {
+  width: 16px;
+  height: 16px;
+  color: #758179;
+  stroke-width: 1.8;
+}
+
+.traveler-view-tabs button.is-active > svg {
+  color: #315d3d;
+}
+
+.traveler-view-tabs button > span {
+  display: inline-flex;
+  min-width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+  border: 1px solid #dfe5df;
+  border-radius: 999px;
+  background: #f5f7f5;
+  color: #5b685f;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.traveler-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(210px, 270px) minmax(0, 1fr);
+  align-items: start;
+  gap: clamp(24px, 3vw, 42px);
+}
+
+.traveler-github-profile {
+  display: grid;
+  justify-items: start;
+  padding-top: 2px;
+}
+
+.traveler-github-avatar {
+  width: min(100%, 220px);
+  aspect-ratio: 1;
+  border: 1px solid #dce4dc;
+  border-radius: 50%;
+  background: #eaf4e9;
+  color: #174b35;
+  object-fit: cover;
+}
+
+.traveler-github-profile h3 {
+  max-width: 100%;
+  margin: 17px 0 2px;
+  color: #1c2a21;
+  font-size: 23px;
+  font-weight: 750;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.traveler-github-handle,
+.traveler-profile-phone {
+  max-width: 100%;
+  margin: 0;
+  color: #69756d;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.traveler-profile-phone {
+  margin-top: 9px;
+  font-size: 12px;
+}
+
+.traveler-profile-action {
+  width: 100%;
+  min-height: 36px;
+  margin-top: 15px;
+  border: 1px solid #d6dfd7;
+  border-radius: 7px;
+  background: #f6f8f6;
+  color: #263a2c;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.traveler-profile-action:hover {
+  border-color: #c4d2c5;
+  background: #eef3ee;
+}
+
+.traveler-profile-note {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 15px 0 0;
+  color: #66746a;
+  font-size: 12px;
+}
+
+.traveler-profile-note svg {
+  width: 15px;
+  height: 15px;
+}
+
+.traveler-overview-main {
+  min-width: 0;
+}
+
+.traveler-repository-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.traveler-repository-grid button {
+  display: grid;
+  min-height: 122px;
+  justify-items: start;
+  align-content: start;
+  gap: 8px;
+  padding: 15px 16px;
+  border: 1px solid #dce3dc;
+  border-radius: 7px;
+  background: #fff;
+  color: #57665c;
+  text-align: left;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.traveler-repository-grid button:hover {
+  border-color: #b6c9b8;
+  background: #fbfdfb;
+}
+
+.traveler-repository-grid button > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #286344;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.traveler-repository-grid button > span svg {
+  width: 16px;
+  height: 16px;
+  color: #738078;
+}
+
+.traveler-repository-grid button > strong {
+  color: #202b23;
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.traveler-repository-grid button > small {
+  color: #748077;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.traveler-overview-list {
+  margin-top: 28px;
+}
+
+.traveler-github-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.traveler-github-section-heading h3 {
+  margin: 0;
+  color: #26342a;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.traveler-github-section-heading p {
+  margin: 4px 0 0;
+  color: #78837b;
+  font-size: 11px;
+}
+
+.traveler-github-section-heading button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: transparent;
+  color: #36734c;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.traveler-github-section-heading button:hover {
+  text-decoration: underline;
+}
+
+.traveler-github-section-heading button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.traveler-recent-list {
+  border-top: 1px solid #e0e6e0;
+}
+
+.traveler-recent-list article {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e0e6e0;
+}
+
+.traveler-recent-icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  border: 1px solid #e1e7e1;
+  border-radius: 7px;
+  color: #69796d;
+}
+
+.traveler-recent-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.traveler-recent-list article > div {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.traveler-recent-list article > div strong {
+  overflow: hidden;
+  color: #286344;
+  font-size: 12px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traveler-recent-list article > div small {
+  overflow: hidden;
+  color: #748077;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.traveler-recent-list .traveler-status {
+  flex: 0 0 auto;
+  padding: 5px 8px;
+  border: 1px solid #e1e5e1;
+  background: #f7f8f7;
+  font-size: 9px;
+}
+
+.traveler-profile-card--workspace {
+  max-width: 860px;
+  margin-bottom: 0;
+}
+
+.traveler-workspace-content .traveler-section-heading {
+  align-items: center;
+  padding-bottom: 13px;
+  border-bottom: 1px solid #e0e6e0;
+}
+
+.traveler-workspace-content .traveler-section-heading h2 {
+  margin-top: 0;
+  font-size: 17px;
+}
+
+.traveler-workspace-content .traveler-section-heading .traveler-eyebrow {
+  display: none;
+}
+
+.traveler-workspace-content .traveler-booking-list,
+.traveler-workspace-content .traveler-ticket-list,
+.traveler-workspace-content .traveler-notification-list {
+  gap: 0;
+  border-top: 1px solid #e0e6e0;
+}
+
+.traveler-workspace-content .traveler-booking-card,
+.traveler-workspace-content .traveler-ticket-card,
+.traveler-workspace-content .traveler-notification-card {
+  border: 0;
+  border-bottom: 1px solid #e0e6e0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.traveler-workspace-content .traveler-booking-card:hover,
+.traveler-workspace-content .traveler-ticket-card:hover {
+  background: #fbfcfb;
+}
+
+.traveler-workspace-content .traveler-notification-card--unread {
+  background: #f7faf7;
+}
+
+.traveler-workspace-state {
+  display: grid;
+  min-height: 100vh;
+  align-content: center;
+  justify-items: center;
+  gap: 12px;
+  padding: 24px;
+  background: #f5f7f4;
+  color: #38483d;
+  font-size: 14px;
+  text-align: center;
+}
+
+.traveler-workspace-state h1,
+.traveler-workspace-state p {
+  margin: 0;
+}
+
+.traveler-workspace-state p {
+  max-width: 520px;
+  color: #68756c;
+  line-height: 1.6;
+}
+
+.traveler-workspace-state--error {
+  color: #8b2f27;
+}
+
+.traveler-workspace-state button {
+  min-height: 36px;
+  padding: 0 13px;
+  border: 1px solid #d5e0d6;
+  border-radius: 7px;
+  background: white;
+  color: #284b37;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+@media (max-width: 760px) {
+  .traveler-workspace-content {
+    padding: 20px 14px 36px;
+  }
+
+  .traveler-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 17px;
+  }
+
+  .traveler-page-heading h2 {
+    font-size: 22px;
+  }
+
+  .traveler-view-tabs {
+    margin-right: -14px;
+    margin-left: -14px;
+    padding: 0 8px;
+  }
+
+  .traveler-view-tabs button {
+    padding: 0 10px;
+    font-size: 11px;
+  }
+
+  .traveler-overview-layout {
+    grid-template-columns: 1fr;
+    gap: 23px;
+  }
+
+  .traveler-github-profile {
+    grid-template-columns: 68px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 13px;
+  }
+
+  .traveler-github-avatar {
+    width: 68px;
+    grid-row: span 3;
+  }
+
+  .traveler-github-profile h3 {
+    align-self: end;
+    margin: 0;
+    font-size: 17px;
+  }
+
+  .traveler-github-handle,
+  .traveler-profile-phone {
+    font-size: 11px;
+  }
+
+  .traveler-profile-action {
+    grid-column: 1 / -1;
+  }
+
+  .traveler-profile-note {
+    grid-column: 1 / -1;
+    margin-top: 10px;
+  }
+
+  .traveler-repository-grid {
+    gap: 9px;
+  }
+
+  .traveler-repository-grid button {
+    min-height: 111px;
+    padding: 12px;
+  }
+
+  .traveler-recent-list article {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .traveler-recent-list article > .traveler-status {
+    margin-left: 44px;
+  }
+
+  .traveler-workspace-content .traveler-section-heading {
+    align-items: flex-start;
+  }
+
+  .traveler-profile-summary {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .traveler-profile-summary > div {
+    flex: 1;
+  }
+}
+
+@media (max-width: 420px) {
+  .traveler-repository-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .traveler-repository-grid button {
+    min-height: 94px;
+  }
+
+  .traveler-view-tabs button {
+    gap: 6px;
+    padding: 0 8px;
+  }
+}
+
+.traveler-workspace-content {
+  max-width: 1360px;
+  padding-top: 30px;
+}
+
+.traveler-page-heading {
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.traveler-page-heading h2 {
+  margin-top: 7px;
+  font-size: 27px;
+  font-weight: 720;
+  letter-spacing: -0.045em;
+}
+
+.traveler-page-heading > div > p:last-child {
+  color: #68756c;
+  font-size: 13px;
+}
+
+.traveler-primary-link {
+  min-height: 40px;
+  padding: 0 15px;
+  border-color: #1d5b3e;
+  background: #1d5b3e;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.traveler-primary-link:hover {
+  border-color: #16482f;
+  background: #16482f;
+  color: #fff;
+}
+
+.traveler-view-tabs {
+  gap: 8px;
+  margin-bottom: 25px;
+  border-color: #dce4dc;
+}
+
+.traveler-view-tabs button {
+  gap: 8px;
+  padding: 0 13px;
+  color: #59685e;
+  font-size: 12px;
+}
+
+.traveler-view-tabs button.is-active {
+  color: #245b3a;
+}
+
+.traveler-view-tabs button.is-active::after {
+  right: 10px;
+  left: 10px;
+  height: 3px;
+  background: #2f7546;
+}
+
+.traveler-overview-layout {
+  grid-template-columns: minmax(220px, 310px) minmax(0, 1fr);
+  gap: clamp(24px, 3.2vw, 44px);
+}
+
+.traveler-github-profile {
+  justify-items: start;
+  padding: 2px 0 0;
+}
+
+.traveler-github-avatar {
+  width: min(100%, 250px);
+  justify-self: start;
+  border: 1px solid #e0e7e0;
+  background: #edf4ed;
+}
+
+.traveler-github-avatar.profile-avatar-fallback {
+  font-size: clamp(72px, 9vw, 112px);
+}
+
+.traveler-github-profile h3 {
+  margin-top: 18px;
+  font-size: 23px;
+  letter-spacing: -0.03em;
+}
+
+.traveler-github-handle {
+  color: #758078;
+  font-size: 12px;
+}
+
+.traveler-profile-phone {
+  margin-top: 10px;
+}
+
+.traveler-profile-action {
+  min-height: 38px;
+  margin-top: 17px;
+  border-color: #d5ded6;
+  border-radius: 7px;
+  background: #f6f8f6;
+  color: #34443a;
+  font-size: 12px;
+}
+
+.traveler-profile-note {
+  width: 100%;
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid #e7ece7;
+  color: #68756c;
+  font-size: 11px;
+}
+
+.traveler-repository-grid {
+  gap: 12px;
+}
+
+.traveler-repository-grid button {
+  min-height: 126px;
+  gap: 10px;
+  padding: 16px 18px;
+  border-color: #dce4dc;
+  border-radius: 9px;
+  box-shadow: 0 1px 2px rgb(22 52 40 / 3%);
+}
+
+.traveler-repository-grid button:hover {
+  border-color: #b6cbbb;
+  background: #fff;
+}
+
+.traveler-repository-grid button > span {
+  color: #286344;
+  font-size: 12px;
+}
+
+.traveler-repository-grid button > strong {
+  font-size: 25px;
+  letter-spacing: -0.035em;
+}
+
+.traveler-repository-grid button > small {
+  color: #727d74;
+  font-size: 11px;
+}
+
+.traveler-overview-list {
+  margin-top: 28px;
+  padding: 17px 18px 4px;
+  border: 1px solid #dfe6df;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.traveler-github-section-heading {
+  margin-bottom: 12px;
+}
+
+.traveler-github-section-heading h3 {
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.traveler-github-section-heading p {
+  color: #758078;
+}
+
+.traveler-recent-list {
+  border-top: 1px solid #e5eae5;
+}
+
+.traveler-recent-list article {
+  gap: 11px;
+  padding: 13px 0;
+}
+
+.traveler-recent-icon {
+  border-radius: 8px;
+  background: #f8faf8;
+}
+
+.traveler-recent-list article > div strong {
+  color: #286344;
+  font-size: 12px;
+}
+
+.traveler-recent-list .traveler-status {
+  border-radius: 999px;
+}
+
+.traveler-workspace-content .traveler-reservations,
+.traveler-workspace-content .traveler-tickets,
+.traveler-workspace-content .traveler-notifications {
+  margin-top: 0;
+  overflow: hidden;
+  border: 1px solid #dfe6df;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.traveler-workspace-content .traveler-section-heading {
+  min-height: 70px;
+  margin: 0;
+  padding: 15px 19px;
+  border: 0;
+}
+
+.traveler-workspace-content .traveler-section-heading h2 {
+  color: #26342a;
+  font-size: 15px;
+}
+
+.traveler-workspace-content .traveler-section-heading h2 svg {
+  width: 18px;
+  height: 18px;
+}
+
+.traveler-workspace-content .traveler-count {
+  padding: 5px 9px;
+  border-color: #e0e6e0;
+  background: #f7f9f7;
+  color: #57665c;
+  font-size: 10px;
+}
+
+.traveler-workspace-content .traveler-section-heading .traveler-secondary-button {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border-color: #dce4dc;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.traveler-workspace-content .traveler-booking-list,
+.traveler-workspace-content .traveler-ticket-list,
+.traveler-workspace-content .traveler-notification-list {
+  border-top: 1px solid #e5eae5;
+}
+
+.traveler-workspace-content .traveler-booking-card,
+.traveler-workspace-content .traveler-ticket-card,
+.traveler-workspace-content .traveler-notification-card {
+  padding: 18px 19px;
+  border-bottom-color: #e8ede8;
+}
+
+.traveler-workspace-content .traveler-route {
+  color: #24352a;
+  font-size: 16px;
+}
+
+.traveler-workspace-content .traveler-booking-details {
+  flex-basis: 210px;
+}
+
+.traveler-workspace-content .traveler-status {
+  border: 1px solid #e1e6e1;
+}
+
+.traveler-workspace-content .traveler-status--payee {
+  border-color: #cfe2d1;
+}
+
+.traveler-workspace-content .traveler-status--en_attente_paiement {
+  border-color: #eddfbd;
+}
+
+.traveler-workspace-content .traveler-empty {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.traveler-profile-card--workspace {
+  max-width: 920px;
+  padding: 22px;
+  border-color: #dfe6df;
+  border-radius: 9px;
+  box-shadow: none;
+}
+
+.traveler-profile-card--workspace .traveler-profile-summary h2 {
+  font-size: 18px;
+}
+
+.traveler-profile-card--workspace .traveler-profile-form {
+  border-top-color: #e5eae5;
+}
+
+.traveler-workspace-content .traveler-payment-message {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border: 1px solid #cfe2d1;
+  border-radius: 8px;
+  background: #f1f8f1;
+  color: #245b3a;
+  font-size: 12px;
+}
+
+@media (max-width: 760px) {
+  .traveler-workspace-content {
+    padding: 18px 14px 30px;
+  }
+
+  .traveler-page-heading h2 {
+    font-size: 23px;
+  }
+
+  .traveler-github-profile {
+    grid-template-columns: 74px minmax(0, 1fr);
+    padding: 0;
+  }
+
+  .traveler-github-avatar {
+    width: 74px;
+  }
+
+  .traveler-profile-action {
+    margin-top: 13px;
+  }
+
+  .traveler-workspace-content .traveler-section-heading {
+    min-height: 62px;
+    padding: 12px;
+  }
+
+  .traveler-workspace-content .traveler-booking-card,
+  .traveler-workspace-content .traveler-ticket-card,
+  .traveler-workspace-content .traveler-notification-card {
+    padding: 15px 12px;
+  }
+}
+
 .company-registration-panel .auth-switch a {
   color: var(--deep-green);
   font-weight: 800;
