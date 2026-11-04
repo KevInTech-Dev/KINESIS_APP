@@ -814,11 +814,90 @@ select:focus-visible {
   line-height: 1.8;
 }
 
+.hero-cta {
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 28px;
+  padding: 0 12px 0 22px;
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 999px;
+  background: var(--lime);
+  box-shadow: 0 12px 30px rgb(0 0 0 / 18%);
+  color: #173b2c;
+  font-size: 15px;
+  font-weight: 800;
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.hero-cta:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 34px rgb(0 0 0 / 24%);
+}
+
+.hero-cta > span {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgb(23 59 44 / 10%);
+}
+
+.hero-cta svg {
+  width: 17px;
+  height: 17px;
+}
+
 .booking-section {
-  position: relative;
-  z-index: 2;
-  width: min(100% - 48px, 1060px);
-  margin: -74px auto 0;
+  scroll-margin-top: 24px;
+  padding: 52px 24px 50px;
+  border-top: 1px solid #e6eee8;
+  background:
+    radial-gradient(ellipse at 12% 0%, rgb(222 239 225 / 62%), transparent 34%),
+    #f6f8f5;
+}
+
+.booking-section__inner {
+  width: min(100%, 1160px);
+  margin: 0 auto;
+}
+
+.booking-section__heading {
+  max-width: 760px;
+  margin: 0 auto 24px;
+  text-align: center;
+}
+
+.booking-section__heading .eyebrow--section {
+  justify-content: center;
+}
+
+.booking-section__heading h2 {
+  margin: 12px 0 0;
+  color: var(--ink);
+  font-size: clamp(34px, 4vw, 50px);
+  font-weight: 800;
+  letter-spacing: -0.05em;
+  line-height: 1.15;
+}
+
+.booking-section__heading h2 span {
+  color: var(--green);
+  white-space: nowrap;
+}
+
+.booking-section__heading > p:last-child {
+  max-width: 580px;
+  margin: 8px auto 0;
+  color: var(--muted-foreground);
+  font-size: 16px;
+  line-height: 1.7;
 }
 
 .booking-form {
@@ -828,13 +907,14 @@ select:focus-visible {
     minmax(0, 1fr) auto;
   grid-template-areas: "from swap to date passengers search";
   align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid rgb(255 255 255 / 90%);
-  border-radius: 24px;
-  background: rgb(255 255 255 / 93%);
-  box-shadow: 0 20px 55px rgb(12 72 49 / 14%);
-  backdrop-filter: blur(20px);
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e4ece5;
+  border-radius: 26px;
+  background: #fff;
+  box-shadow:
+    0 24px 60px rgb(21 65 43 / 9%),
+    0 3px 10px rgb(21 65 43 / 4%);
 }
 
 .booking-field--from {
@@ -860,10 +940,11 @@ select:focus-visible {
 .booking-field {
   display: block;
   min-width: 0;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 15px;
-  background: white;
+  min-height: 66px;
+  padding: 10px 12px;
+  border: 1px solid #e5ece7;
+  border-radius: 16px;
+  background: #f9fbf9;
   transition:
     border-color 180ms ease,
     box-shadow 180ms ease;
@@ -871,6 +952,7 @@ select:focus-visible {
 
 .booking-field:focus-within {
   border-color: #70aa87;
+  background: #fff;
   box-shadow: 0 0 0 3px rgb(11 107 75 / 9%);
 }
 
@@ -935,14 +1017,14 @@ select:focus-visible {
 
 .swap-button {
   display: flex;
-  width: 34px;
-  height: 34px;
+  width: 38px;
+  height: 38px;
   align-self: center;
   align-items: center;
   justify-content: center;
-  border: 1px solid #d7e5db;
-  border-radius: 11px;
-  background: #f5faf6;
+  border: 1px solid #dce9df;
+  border-radius: 13px;
+  background: #f1f7f2;
   color: var(--green);
   transition:
     background 180ms ease,
@@ -961,17 +1043,17 @@ select:focus-visible {
 
 .search-button {
   display: flex;
-  min-height: 44px;
+  min-height: 54px;
   grid-area: search;
   align-items: center;
   justify-content: center;
   gap: 8px;
   justify-self: center;
-  min-width: 150px;
+  min-width: 156px;
   margin: 0;
   padding: 0 16px;
   border: 0;
-  border-radius: 12px;
+  border-radius: 15px;
   background: linear-gradient(100deg, #07543d, #0b7653);
   box-shadow: 0 8px 18px rgb(7 84 61 / 22%);
   color: white;
@@ -1057,10 +1139,10 @@ select:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  gap: 16px 34px;
-  margin: 28px 0 0;
+  gap: 12px 28px;
+  margin: 16px 4px 0;
   color: #5f7169;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -1158,7 +1240,7 @@ select:focus-visible {
 .destinations-section {
   width: min(100% - 48px, 1240px);
   margin: 0 auto;
-  padding: 92px 0 96px;
+  padding: 12px 0 96px;
 }
 
 .section-heading {
@@ -1501,10 +1583,6 @@ select:focus-visible {
     line-height: 1.4;
   }
 
-  .booking-section {
-    margin-top: -62px;
-  }
-
   .booking-form {
     grid-template-columns:
       minmax(0, 1.1fr) 30px minmax(0, 1.1fr) minmax(0, 0.8fr)
@@ -1566,7 +1644,6 @@ select:focus-visible {
 @media (max-width: 700px) {
   .header-inner,
   .hero__inner,
-  .booking-section,
   .destinations-section,
   .benefits-inner,
   .footer-main {
@@ -2208,7 +2285,7 @@ select:focus-visible {
   }
 
   .booking-section {
-    margin-top: -76px;
+    padding: 60px 18px;
   }
 
   .booking-form {
@@ -2287,7 +2364,7 @@ select:focus-visible {
   }
 
   .destinations-section {
-    padding: 72px 0;
+    padding: 12px 0 72px;
   }
 
   .section-heading h2 {
@@ -3009,8 +3086,14 @@ select:focus-visible {
   }
 }
 
+@media (min-width: 961px) {
+  .hero {
+    min-height: 100vh;
+    min-height: 100svh;
+  }
+}
+
 @media (max-width: 390px) {
-  .booking-section,
   .header-inner,
   .hero__inner,
   .destinations-section,
@@ -3055,6 +3138,33 @@ select:focus-visible {
 
   .benefit-card {
     min-height: auto;
+  }
+}
+
+@media (max-width: 700px) {
+  .booking-section {
+    padding: 40px 18px 0;
+  }
+
+  .booking-section__heading {
+    margin-bottom: 20px;
+  }
+
+  .booking-section__heading h2 {
+    margin-top: 12px;
+    font-size: clamp(26px, 7vw, 36px);
+  }
+
+  .booking-section__heading > p:last-child {
+    max-width: 440px;
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .trust-row {
+    justify-content: center;
+    gap: 10px 18px;
+    margin-top: 14px;
   }
 }
 

@@ -603,16 +603,41 @@ export default function HomePage() {
                 Avec KINESIS, réservez votre place en quelques clics et voyagez
                 entre les villes du Togo en toute sérénité.
               </p>
+              <a className="hero-cta" href="#recherche">
+                Rechercher un voyage
+                <span>
+                  <Icon name="arrow" />
+                </span>
+              </a>
             </div>
           </div>
         </section>
 
-        <section className="booking-section" aria-label="Rechercher un voyage">
-          <form
-            className="booking-form"
-            id="search-form"
-            onSubmit={searchTrips}
-          >
+        <section
+          className="booking-section"
+          id="recherche"
+          aria-labelledby="booking-heading"
+        >
+          <div className="booking-section__inner">
+            <div className="booking-section__heading">
+              <p className="eyebrow eyebrow--section">
+                <span className="eyebrow__line" />
+                <span className="eyebrow__label">Votre prochain trajet</span>
+                <span className="eyebrow__line" />
+              </p>
+              <h2 id="booking-heading">
+                Où souhaitez-vous <span>aller ?</span>
+              </h2>
+              <p>
+                Choisissez votre itinéraire et votre date pour découvrir les
+                prochains départs.
+              </p>
+            </div>
+            <form
+              className="booking-form"
+              id="search-form"
+              onSubmit={searchTrips}
+            >
             <label className="booking-field booking-field--from">
               <span className="booking-field__label">Départ</span>
               <span className="booking-field__control">
@@ -740,48 +765,49 @@ export default function HomePage() {
                 <Icon name="arrow" />
               </span>
             </button>
-          </form>
+            </form>
 
-          {cityError || tripError ? (
-            <div className="api-notice" role="status">
-              <strong>Informations de voyage indisponibles.</strong>
-              {cityError ? <span>Villes : {cityError}</span> : null}
-              {tripError ? <span>Départs : {tripError}</span> : null}
-            </div>
-          ) : null}
+            {cityError || tripError ? (
+              <div className="api-notice" role="status">
+                <strong>Informations de voyage indisponibles.</strong>
+                {cityError ? <span>Villes : {cityError}</span> : null}
+                {tripError ? <span>Départs : {tripError}</span> : null}
+              </div>
+            ) : null}
 
-          <div className="trust-row">
-            <span>
-              <Icon name="shield" /> Paiement sécurisé
-            </span>
-            <span>
-              <Icon name="ticket" /> Billet instantané
-            </span>
-            <span>
-              <Icon name="headphones" /> Assistance à vos côtés
-            </span>
-          </div>
-
-          {searchMessage ? (
-            <div className="search-feedback" role="status" aria-live="polite">
-              <span className="search-feedback__icon">
-                <Icon
-                  name={searchResults?.length ? "check" : "ticket"}
-                />
+            <div className="trust-row">
+              <span>
+                <Icon name="shield" /> Paiement sécurisé
               </span>
-              <p>{searchMessage}</p>
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchMessage("");
-                  setSearchResults(null);
-                }}
-                aria-label="Fermer le résultat"
-              >
-                <Icon name="x" />
-              </button>
+              <span>
+                <Icon name="ticket" /> Billet instantané
+              </span>
+              <span>
+                <Icon name="headphones" /> Assistance à vos côtés
+              </span>
             </div>
-          ) : null}
+
+            {searchMessage ? (
+              <div className="search-feedback" role="status" aria-live="polite">
+                <span className="search-feedback__icon">
+                  <Icon
+                    name={searchResults?.length ? "check" : "ticket"}
+                  />
+                </span>
+                <p>{searchMessage}</p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchMessage("");
+                    setSearchResults(null);
+                  }}
+                  aria-label="Fermer le résultat"
+                >
+                  <Icon name="x" />
+                </button>
+              </div>
+            ) : null}
+          </div>
         </section>
 
         <section className="destinations-section" id="destinations">
