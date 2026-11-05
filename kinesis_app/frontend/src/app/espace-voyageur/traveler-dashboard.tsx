@@ -385,7 +385,7 @@ export default function TravelerDashboard() {
   const { pageItems: pageTickets, pagination: ticketPagination } =
     useListPagination(data?.tickets ?? []);
   const { pageItems: pageBaggages, pagination: baggagePagination } =
-    useListPagination(data?.baggages ?? []);
+    useListPagination(data?.baggages ?? [], 5);
   const { pageItems: pageNotifications, pagination: notificationPagination } =
     useListPagination(data?.notifications ?? []);
 

@@ -96,9 +96,12 @@ export function ListPagination({
   );
 }
 
-export function useListPagination<T>(items: T[]) {
+export function useListPagination<T>(
+  items: T[],
+  initialPageSize: ListPageSize = 10,
+) {
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<ListPageSize>(10);
+  const [pageSize, setPageSize] = useState<ListPageSize>(initialPageSize);
   const pageCount = Math.max(1, Math.ceil(items.length / pageSize));
   const currentPage = Math.min(page, pageCount);
 

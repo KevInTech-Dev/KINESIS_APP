@@ -386,7 +386,7 @@ export default function AgentWorkspace() {
   const { pageItems: pageTickets, pagination: ticketPagination } =
     useListPagination(tickets);
   const { pageItems: pageBaggages, pagination: baggagePagination } =
-    useListPagination(baggages);
+    useListPagination(baggages, 5);
   const { pageItems: pageNotifications, pagination: notificationPagination } =
     useListPagination(notifications);
 
