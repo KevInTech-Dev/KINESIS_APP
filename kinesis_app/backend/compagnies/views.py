@@ -9,16 +9,20 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.status import HTTP_200_OK, HTTP_400_BAD_REQUEST
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from config.pagination import StandardResultsSetPagination
 from utilisateurs.permissions import IsKinesisAdministrator
 
+from .agent_invitations import activate_agent_account, resend_agent_invitation
 from .models import AgentCompagnie, Compagnie
 from .permissions import IsActiveCompany
 from .serializers import (
     AdminCompanyReviewSerializer,
+    AgentActivationSerializer,
     AgentCreateSerializer,
+    AgentInvitationLookupSerializer,
     AgentSerializer,
     AgentUpdateSerializer,
     CompanyProfileSerializer,
@@ -101,6 +105,51 @@ class CompanyActivationView(APIView):
 
         return Response(
             {"detail": "Votre compte compagnie est activé."},
+            status=HTTP_200_OK,
+        )
+
+
+class AgentInvitationActivationView(APIView):
+    permission_classes = (AllowAny,)
+    authentication_classes = ()
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "agent_activation"
+
+    @extend_schema(
+        parameters=[
+            OpenApiParameter(
+                name="token",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=True,
+            )
+        ],
+        responses={HTTP_200_OK: serializers.DictField()},
+    )
+    def get(self, request):
+        serializer = AgentInvitationLookupSerializer(
+            data={"token": request.query_params.get("token", "")}
+        )
+        serializer.is_valid(raise_exception=True)
+        agent = serializer.validated_data["agent"]
+        return Response({"email": agent.utilisateur.email})
+
+    @extend_schema(
+        request=AgentActivationSerializer,
+        responses={HTTP_200_OK: serializers.DictField()},
+    )
+    def post(self, request):
+        serializer = AgentActivationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        tokens = activate_agent_account(
+            token=serializer.validated_data["token"],
+            password=serializer.validated_data["new_password"],
+        )
+        return Response(
+            {
+                **tokens,
+                "detail": "Compte activé. Votre espace agent est prêt.",
+            },
             status=HTTP_200_OK,
         )
 
@@ -212,3 +261,27 @@ class AgentDetailView(generics.RetrieveUpdateDestroyAPIView):
         user.is_active = False
         user.save(update_fields=("is_active",))
         instance.delete()
+
+
+class AgentInvitationResendView(APIView):
+    permission_classes = (IsActiveCompany,)
+    throttle_classes = (ScopedRateThrottle,)
+    throttle_scope = "agent_invitation_resend"
+
+    @extend_schema(responses={HTTP_200_OK: serializers.DictField()})
+    def post(self, request, pk):
+        agent = get_object_or_404(
+            AgentCompagnie.objects.select_related("utilisateur", "compagnie"),
+            pk=pk,
+            compagnie=request.user.profil_compagnie,
+        )
+        resend_agent_invitation(agent)
+        return Response(
+            {
+                "detail": (
+                    "Une nouvelle invitation a été envoyée à "
+                    f"{agent.utilisateur.email}."
+                )
+            },
+            status=HTTP_200_OK,
+        )

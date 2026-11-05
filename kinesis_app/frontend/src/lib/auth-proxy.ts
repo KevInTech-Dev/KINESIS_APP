@@ -119,8 +119,9 @@ export function postAuthToBackend(
   resource: string,
   payload: Record<string, string>,
   accessToken?: string,
+  apiPrefix = "auth/",
 ) {
-  return requestAuthBackend(resource, "POST", payload, accessToken);
+  return requestAuthBackend(resource, "POST", payload, accessToken, apiPrefix);
 }
 
 export function isTokenPair(

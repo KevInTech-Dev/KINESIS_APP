@@ -19,7 +19,7 @@ from reservations.models import Reservation
 from reservations.services import create_reservation
 from voyages.models import Ville, Voyage
 
-from .models import Bagage, PhotoBagage, TarifBagage
+from .models import Bagage, TarifBagage
 from .services import (
     create_tariff,
     record_manual_fee_payment,
@@ -370,6 +370,18 @@ class BagageApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id_bagage"], str(baggage.pk))
+        self.assertEqual(response.data[0]["enregistre_par_nom"], "Kinesis Transport")
+        self.assertIsNone(response.data[0]["paiement_enregistre_par_nom"])
+
+        record_manual_fee_payment(
+            actor=self.company_user,
+            baggage_id=baggage.pk,
+        )
+        response = self.client.get(reverse("bagage-list"))
+        self.assertEqual(
+            response.data[0]["paiement_enregistre_par_nom"],
+            "Kinesis Transport",
+        )
 
         other = User.objects.create_user(
             email="autre@example.com",
@@ -415,6 +427,9 @@ class BagageApiTests(APITestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id_bagage"], str(baggage.pk))
+        self.assertEqual(response.data[0]["enregistre_par_nom"], "Kinesis Transport")
+        self.assertIsNone(response.data[0]["paiement_enregistre_par_nom"])
+        self.assertIsNone(response.data[0]["restitue_par_nom"])
 
         record_manual_fee_payment(
             actor=self.company_user,
@@ -426,6 +441,11 @@ class BagageApiTests(APITestCase):
 
         self.assertEqual(return_response.status_code, 200)
         self.assertEqual(return_response.data["statut"], Bagage.Statut.RESTITUE)
+        self.assertEqual(
+            return_response.data["paiement_enregistre_par_nom"],
+            "Kinesis Transport",
+        )
+        self.assertEqual(return_response.data["restitue_par_nom"], "Test Agent")
 
     def test_agent_without_baggage_read_or_return_permission_cannot_list(self):
         agent_user = User.objects.create_user(

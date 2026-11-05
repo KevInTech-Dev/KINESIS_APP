@@ -49,6 +49,25 @@ class BagageSerializer(serializers.ModelSerializer):
         source="restitue_par.email",
         read_only=True,
     )
+    enregistre_par_nom = serializers.SerializerMethodField()
+    paiement_enregistre_par_nom = serializers.SerializerMethodField()
+    restitue_par_nom = serializers.SerializerMethodField()
+
+    @staticmethod
+    def _actor_name(actor) -> str | None:
+        if actor is None:
+            return None
+        name = " ".join(part for part in (actor.prenoms, actor.nom) if part).strip()
+        return name or actor.email
+
+    def get_enregistre_par_nom(self, obj) -> str | None:
+        return self._actor_name(obj.enregistre_par)
+
+    def get_paiement_enregistre_par_nom(self, obj) -> str | None:
+        return self._actor_name(obj.paiement_enregistre_par)
+
+    def get_restitue_par_nom(self, obj) -> str | None:
+        return self._actor_name(obj.restitue_par)
 
     class Meta:
         model = Bagage
@@ -68,6 +87,9 @@ class BagageSerializer(serializers.ModelSerializer):
             "date_paiement_frais",
             "statut",
             "date_restitution",
+            "enregistre_par_nom",
+            "paiement_enregistre_par_nom",
+            "restitue_par_nom",
             "enregistre_par_email",
             "restitue_par_email",
             "date_creation",

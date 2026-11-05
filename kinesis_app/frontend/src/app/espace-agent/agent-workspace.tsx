@@ -80,6 +80,9 @@ type Baggage = {
   frais_payes: boolean;
   statut: string;
   date_creation: string;
+  enregistre_par_nom: string | null;
+  paiement_enregistre_par_nom: string | null;
+  restitue_par_nom: string | null;
   photos: { id_photobagage: string; url: string; created_at: string }[];
 };
 type Notification = {
@@ -212,6 +215,12 @@ function isBaggage(value: unknown): value is Baggage {
     typeof value.frais_payes === "boolean" &&
     typeof value.statut === "string" &&
     typeof value.date_creation === "string" &&
+    (typeof value.enregistre_par_nom === "string" ||
+      value.enregistre_par_nom === null) &&
+    (typeof value.paiement_enregistre_par_nom === "string" ||
+      value.paiement_enregistre_par_nom === null) &&
+    (typeof value.restitue_par_nom === "string" ||
+      value.restitue_par_nom === null) &&
     Array.isArray(value.photos) &&
     value.photos.every(
       (photo) =>
@@ -1173,6 +1182,20 @@ export default function AgentWorkspace() {
                         <span className={`agent-status ${baggage.statut === "RESTITUE" ? "agent-status--done" : ""}`}>{statusLabel(baggage.statut)}</span>
                       </div>
                       {baggage.description ? <p>{baggage.description}</p> : null}
+                      <div className="agent-baggage-actors" aria-label="Historique de gestion">
+                        <div className="agent-baggage-actor">
+                          <span>Enregistré par</span>
+                          <strong>{baggage.enregistre_par_nom ?? "Non renseigné"}</strong>
+                        </div>
+                        <div className="agent-baggage-actor">
+                          <span>Paiement confirmé par</span>
+                          <strong>{baggage.paiement_enregistre_par_nom ?? "En attente"}</strong>
+                        </div>
+                        <div className="agent-baggage-actor">
+                          <span>Restitué par</span>
+                          <strong>{baggage.restitue_par_nom ?? "Non restitué"}</strong>
+                        </div>
+                      </div>
                       <div className="agent-baggage-photos">{baggage.photos.map((photo) => <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id_photobagage}>Voir la photo</a>)}</div>
                       {!baggage.frais_payes && canRegisterBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer le paiement en espèces ?", description: `Confirmez avoir reçu ${formatPrice(baggage.frais_total)} pour les frais du bagage de la réservation ${baggage.reservation_reference}.`, confirmLabel: "Confirmer le paiement", tone: "primary", action: () => markFeePaid(baggage) })}>Confirmer le paiement des frais</button> : null}
                       {baggage.statut !== "RESTITUE" && baggage.frais_payes && canReturnBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer la restitution ?", description: `Confirmez la remise du bagage associé à la réservation ${baggage.reservation_reference} à son propriétaire.`, confirmLabel: "Confirmer la restitution", tone: "primary", action: () => returnBaggage(baggage) })}>Confirmer la restitution</button> : null}

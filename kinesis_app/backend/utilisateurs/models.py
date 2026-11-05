@@ -74,6 +74,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
+    agent_invitation_id = models.UUIDField(blank=True, null=True, editable=False)
 
     objects = UserManager()
 

@@ -168,7 +168,7 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="auth-page">
+    <main className={`auth-page ${mode === "login" ? "auth-page--login" : ""}`}>
       <Link className="auth-brand" href="/" aria-label="Kinesis, accueil">
         <Image src="/kinesis-mark.png" width={48} height={48} alt="" priority />
         <span>KINESIS</span>

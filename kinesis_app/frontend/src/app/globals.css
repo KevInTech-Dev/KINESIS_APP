@@ -3158,6 +3158,62 @@ select:focus-visible {
   }
 }
 
+.agent-baggage-card .agent-baggage-actors,
+.traveler-baggage-card .baggage-actors {
+  display: grid;
+  width: 100%;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid #e1eae2;
+  border-radius: 12px;
+  background: #f7faf7;
+}
+
+.agent-baggage-card .agent-baggage-actor,
+.traveler-baggage-card .baggage-actor {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+}
+
+.agent-baggage-card .agent-baggage-actor + .agent-baggage-actor,
+.traveler-baggage-card .baggage-actor + .baggage-actor {
+  border-top: 1px solid #e5ece5;
+}
+
+.agent-baggage-card .agent-baggage-actor > span,
+.traveler-baggage-card .baggage-actor > span {
+  color: #64746a;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.agent-baggage-card .agent-baggage-actor > strong,
+.traveler-baggage-card .baggage-actor > strong {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+  color: #175c43;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: right;
+}
+
+@media (max-width: 480px) {
+  .agent-baggage-card .agent-baggage-actor,
+  .traveler-baggage-card .baggage-actor {
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .agent-baggage-card .agent-baggage-actor > strong,
+  .traveler-baggage-card .baggage-actor > strong {
+    max-width: 58%;
+  }
+}
+
 @media (max-width: 700px) {
   .booking-section {
     padding: 40px 18px 0;
@@ -3567,6 +3623,54 @@ select:focus-visible {
   font-size: 11px;
 }
 
+.auth-page--login {
+  min-height: 100svh;
+  padding: 14px 20px;
+}
+
+.auth-page--login .auth-brand {
+  margin-bottom: 10px;
+}
+
+.auth-page--login .auth-panel {
+  padding: 20px 24px;
+}
+
+.auth-page--login .auth-heading {
+  margin-top: 14px;
+}
+
+.auth-page--login .auth-heading h1 {
+  margin-top: 7px;
+  font-size: 25px;
+}
+
+.auth-page--login .auth-heading > p:last-child {
+  margin-top: 6px;
+}
+
+.auth-page--login .auth-tabs {
+  margin-top: 15px;
+}
+
+.auth-page--login .auth-form {
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.auth-page--login .auth-form input {
+  min-height: 40px;
+}
+
+.auth-page--login .auth-submit {
+  min-height: 42px;
+}
+
+.auth-page--login .auth-switch,
+.auth-page--login .auth-footer {
+  margin-top: 12px;
+}
+
 .auth-success-panel {
   display: grid;
   justify-items: center;
@@ -3643,6 +3747,19 @@ select:focus-visible {
   .auth-heading h1,
   .auth-success-panel h1 {
     font-size: 25px;
+  }
+
+  .auth-page.auth-page--login {
+    justify-content: center;
+    padding: 12px 14px;
+  }
+
+  .auth-page--login .auth-panel {
+    padding: 18px 16px;
+  }
+
+  .auth-page--login .auth-brand {
+    margin-bottom: 10px;
   }
 }
 

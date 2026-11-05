@@ -86,6 +86,9 @@ type Baggage = {
   date_creation: string;
   date_paiement_frais: string | null;
   date_restitution: string | null;
+  enregistre_par_nom: string | null;
+  paiement_enregistre_par_nom: string | null;
+  restitue_par_nom: string | null;
   photos: Array<{
     id_photobagage: string;
     url: string;
@@ -176,6 +179,15 @@ function isBaggageList(value: unknown): value is Baggage[] {
         "date_restitution" in baggage &&
         (typeof baggage.date_restitution === "string" ||
           baggage.date_restitution === null) &&
+        "enregistre_par_nom" in baggage &&
+        (typeof baggage.enregistre_par_nom === "string" ||
+          baggage.enregistre_par_nom === null) &&
+        "paiement_enregistre_par_nom" in baggage &&
+        (typeof baggage.paiement_enregistre_par_nom === "string" ||
+          baggage.paiement_enregistre_par_nom === null) &&
+        "restitue_par_nom" in baggage &&
+        (typeof baggage.restitue_par_nom === "string" ||
+          baggage.restitue_par_nom === null) &&
         "photos" in baggage &&
         Array.isArray(baggage.photos) &&
         baggage.photos.every(
@@ -953,7 +965,7 @@ export default function TravelerDashboard() {
             <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
             <h2>
               {activeTab === "overview"
-                ? `Bonjour ${profile.prenoms || profile.nom}`
+                ? `Salut ${profile.prenoms || profile.nom}`
                 : activeTitle}
             </h2>
             <p>
@@ -1409,6 +1421,20 @@ export default function TravelerDashboard() {
                           minute: "2-digit",
                         })}
                       </small>
+                      <div className="baggage-actors" aria-label="Historique de gestion">
+                        <div className="baggage-actor">
+                          <span>Enregistré par</span>
+                          <strong>{baggage.enregistre_par_nom ?? "Non renseigné"}</strong>
+                        </div>
+                        <div className="baggage-actor">
+                          <span>Paiement confirmé par</span>
+                          <strong>{baggage.paiement_enregistre_par_nom ?? "En attente"}</strong>
+                        </div>
+                        <div className="baggage-actor">
+                          <span>Restitué par</span>
+                          <strong>{baggage.restitue_par_nom ?? "Non restitué"}</strong>
+                        </div>
+                      </div>
                     </div>
                     <div className="traveler-baggage-status">
                       <span

@@ -392,7 +392,10 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(company.statut, Compagnie.Statut.REFUSEE)
         self.assertFalse(company_user.is_active)
 
-    def test_company_can_create_agents_only_with_its_own_permissions(self):
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_company_creates_agent_with_invitation_and_activation_connects_agent(self):
+        from django.core import mail
+
         company_user, company = self.create_active_company("compagnie@example.com")
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
@@ -404,7 +407,6 @@ class CompanyApiTests(APITestCase):
                 "email": "agent@example.com",
                 "nom": "Agent",
                 "prenoms": "Kinesis",
-                "temporary_password": "Temporary!Password-729",
                 "permissions": [
                     PermissionAgent.Code.SCANNER_BILLET,
                     PermissionAgent.Code.VALIDER_EMBARQUEMENT,
@@ -417,21 +419,85 @@ class CompanyApiTests(APITestCase):
         agent = AgentCompagnie.objects.get(utilisateur__email="agent@example.com")
         self.assertEqual(agent.compagnie, company)
         self.assertEqual(agent.permissions.count(), 2)
-        self.assertTrue(agent.utilisateur.must_change_password)
-        self.assertTrue(agent.utilisateur.check_password("Temporary!Password-729"))
+        self.assertFalse(agent.utilisateur.is_active)
+        self.assertFalse(agent.utilisateur.has_usable_password())
+        self.assertFalse(agent.utilisateur.must_change_password)
+        self.assertTrue(response.data["invitation_en_attente"])
         self.assertEqual(response.data["id"], str(agent.utilisateur_id))
         self.assertIn("photo_profil", response.data)
         self.assertIsNone(response.data["photo_profil"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("activation-agent?token=", mail.outbox[0].body)
 
         agent_login_response = self.client.post(
             reverse("token-obtain-pair"),
             {
                 "email": agent.utilisateur.email,
-                "password": "Temporary!Password-729",
+                "password": "NotARealPassword-123!",
             },
             format="json",
         )
+        self.assertEqual(agent_login_response.status_code, status.HTTP_401_UNAUTHORIZED)
+        invitation_url = next(
+            line for line in mail.outbox[0].body.splitlines() if "activation-agent?" in line
+        )
+        activation_token = parse_qs(urlparse(invitation_url).query)["token"][0]
+        activation_endpoint = reverse("agent-invitation-activation")
+        lookup_response = self.client.get(
+            activation_endpoint,
+            {"token": activation_token},
+        )
+        self.assertEqual(lookup_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(lookup_response.data["email"], agent.utilisateur.email)
+
+        mismatched_password_response = self.client.post(
+            activation_endpoint,
+            {
+                "token": activation_token,
+                "new_password": "Permanent!Password-835",
+                "password_confirmation": "Different!Password-835",
+            },
+            format="json",
+        )
+        self.assertEqual(
+            mismatched_password_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
+        activation_response = self.client.post(
+            activation_endpoint,
+            {
+                "token": activation_token,
+                "new_password": "Permanent!Password-835",
+                "password_confirmation": "Permanent!Password-835",
+            },
+            format="json",
+        )
+        self.assertEqual(activation_response.status_code, status.HTTP_200_OK)
+        self.assertIn("access", activation_response.data)
+        self.assertIn("refresh", activation_response.data)
+        agent.utilisateur.refresh_from_db()
+        self.assertTrue(agent.utilisateur.is_active)
+        self.assertTrue(agent.utilisateur.check_password("Permanent!Password-835"))
+        self.assertIsNone(agent.utilisateur.agent_invitation_id)
+        self.assertFalse(agent.utilisateur.must_change_password)
+
+        agent_login_response = self.client.post(
+            reverse("token-obtain-pair"),
+            {"email": company_user.email, "password": self.password},
+            format="json",
+        )
         self.assertEqual(agent_login_response.status_code, status.HTTP_200_OK)
+        replay_response = self.client.post(
+            activation_endpoint,
+            {
+                "token": activation_token,
+                "new_password": "Permanent!Password-835",
+                "password_confirmation": "Permanent!Password-835",
+            },
+            format="json",
+        )
+        self.assertEqual(replay_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
         )
@@ -453,9 +519,11 @@ class CompanyApiTests(APITestCase):
         )
 
         agent_user = agent.utilisateur
+        agent_login_response = activation_response
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
         )
+        self.client.force_authenticate(user=agent_user)
         company_agents_response = self.client.get(reverse("company-agents"))
         self.assertEqual(
             company_agents_response.status_code,
@@ -465,17 +533,18 @@ class CompanyApiTests(APITestCase):
         profile_response = self.client.get(reverse("current-user"))
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
         self.assertEqual(profile_response.data["role"], User.Role.AGENT_COMPAGNIE)
-        self.assertTrue(profile_response.data["must_change_password"])
+        self.assertFalse(profile_response.data["must_change_password"])
 
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {agent_login_response.data['access']}"
         )
+        self.client.force_authenticate(user=agent_user)
         change_password_response = self.client.post(
             reverse("user-change-password"),
             {
-                "old_password": "Temporary!Password-729",
-                "new_password": "Permanent!Password-835",
-                "password_confirmation": "Permanent!Password-835",
+                "old_password": "Permanent!Password-835",
+                "new_password": "Updated!Password-950",
+                "password_confirmation": "Updated!Password-950",
             },
             format="json",
         )
@@ -485,18 +554,92 @@ class CompanyApiTests(APITestCase):
         )
         agent_user.refresh_from_db()
         self.assertFalse(agent_user.must_change_password)
-        self.assertTrue(agent_user.check_password("Permanent!Password-835"))
+        self.assertTrue(agent_user.check_password("Updated!Password-950"))
         changed_password_login = self.client.post(
             reverse("token-obtain-pair"),
             {
                 "email": agent_user.email,
-                "password": "Permanent!Password-835",
+                "password": "Updated!Password-950",
             },
             format="json",
         )
         self.assertEqual(changed_password_login.status_code, status.HTTP_200_OK)
         profile_response = self.client.get(reverse("current-user"))
         self.assertEqual(profile_response.status_code, status.HTTP_200_OK)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_company_can_resend_pending_agent_invitation(self):
+        from django.core import mail
+
+        company_user, _ = self.create_active_company("resend-company@example.com")
+        self.client.force_authenticate(user=company_user)
+        create_response = self.client.post(
+            reverse("company-agents"),
+            {
+                "email": "resend-agent@example.com",
+                "nom": "Agent",
+                "permissions": [],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        agent = AgentCompagnie.objects.get(utilisateur__email="resend-agent@example.com")
+        original_url = next(
+            line for line in mail.outbox[0].body.splitlines() if "activation-agent?" in line
+        )
+        original_token = parse_qs(urlparse(original_url).query)["token"][0]
+
+        resend_response = self.client.post(
+            reverse("company-agent-resend-invitation", kwargs={"pk": agent.pk}),
+            format="json",
+        )
+        self.assertEqual(resend_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 2)
+
+        activation_endpoint = reverse("agent-invitation-activation")
+        stale_link_response = self.client.get(
+            activation_endpoint,
+            {"token": original_token},
+        )
+        self.assertEqual(stale_link_response.status_code, status.HTTP_400_BAD_REQUEST)
+        replacement_url = next(
+            line for line in mail.outbox[1].body.splitlines() if "activation-agent?" in line
+        )
+        replacement_token = parse_qs(urlparse(replacement_url).query)["token"][0]
+        valid_link_response = self.client.get(
+            activation_endpoint,
+            {"token": replacement_token},
+        )
+        self.assertEqual(valid_link_response.status_code, status.HTTP_200_OK)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_expired_agent_invitation_cannot_be_looked_up(self):
+        from django.core import mail
+
+        company_user, _ = self.create_active_company("expired-company@example.com")
+        self.client.force_authenticate(user=company_user)
+        create_response = self.client.post(
+            reverse("company-agents"),
+            {
+                "email": "expired-agent@example.com",
+                "nom": "Agent",
+                "permissions": [],
+            },
+            format="json",
+        )
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        invitation_url = next(
+            line for line in mail.outbox[0].body.splitlines() if "activation-agent?" in line
+        )
+        invitation_token = parse_qs(urlparse(invitation_url).query)["token"][0]
+
+        with override_settings(AGENT_INVITATION_MAX_AGE=-1):
+            response = self.client.get(
+                reverse("agent-invitation-activation"),
+                {"token": invitation_token},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_company_can_remove_agent_without_leaving_an_active_orphan_account(self):
         company_user, company = self.create_active_company("remove-agent@example.com")

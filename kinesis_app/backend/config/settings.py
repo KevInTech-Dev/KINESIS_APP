@@ -35,6 +35,8 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_THROTTLE_RATES": {
+        "agent_activation": "10/hour",
+        "agent_invitation_resend": "10/hour",
         "password_reset_request": "5/hour",
         "password_reset_confirm": "10/hour",
     },
@@ -174,6 +176,10 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 COMPANY_ACTIVATION_TOKEN_MAX_AGE = 60 * 60 * 24
+AGENT_INVITATION_MAX_AGE = env.int(
+    "AGENT_INVITATION_MAX_AGE",
+    default=60 * 60 * 48,
+)
 PASSWORD_RESET_TIMEOUT = 60 * 60
 FRONTEND_BASE_URL = env("FRONTEND_BASE_URL", default="http://localhost:3000")
 DEFAULT_FROM_NAME = env("DEFAULT_FROM_NAME", default="KINESIS")

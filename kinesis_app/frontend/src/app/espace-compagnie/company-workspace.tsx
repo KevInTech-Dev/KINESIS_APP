@@ -24,7 +24,6 @@ import ConfirmationDialog from "@/components/confirmation-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
-import PasswordInput from "@/components/password-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -85,6 +84,7 @@ type Agent = {
   telephone: string;
   photo_profil: string | null;
   is_active: boolean;
+  invitation_en_attente: boolean;
   permissions: string[];
 };
 type Payment = {
@@ -225,6 +225,7 @@ function isAgent(value: unknown): value is Agent {
     typeof value.telephone === "string" &&
     (typeof value.photo_profil === "string" || value.photo_profil === null) &&
     typeof value.is_active === "boolean" &&
+    typeof value.invitation_en_attente === "boolean" &&
     Array.isArray(value.permissions) &&
     value.permissions.every((permission) => typeof permission === "string")
   );
@@ -856,7 +857,6 @@ export default function CompanyWorkspace() {
       nom: String(formData.get("nom") ?? ""),
       prenoms: String(formData.get("prenoms") ?? ""),
       telephone: String(formData.get("telephone") ?? ""),
-      temporary_password: String(formData.get("temporary_password") ?? ""),
       permissions: PERMISSIONS.map(([code]) => code).filter((code) =>
         formData.has(`permission-${code}`),
       ),
@@ -868,10 +868,28 @@ export default function CompanyWorkspace() {
       await requestApi("agents", "POST", payload);
       form.reset();
       await loadWorkspace();
-      setNotice("Le compte agent a été créé. Communiquez-lui son mot de passe temporaire.");
+      setNotice("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
     } catch (saveError) {
       setError(
         saveError instanceof Error ? saveError.message : "Impossible de créer l’agent.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function resendAgentInvitation(agent: Agent) {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi(`agents/${agent.id}/resend-invitation`, "POST");
+      setNotice(`Une nouvelle invitation a été envoyée à ${agent.email}.`);
+    } catch (sendError) {
+      setError(
+        sendError instanceof Error
+          ? sendError.message
+          : "Impossible de renvoyer l’invitation.",
       );
     } finally {
       setSaving(false);
@@ -1358,7 +1376,7 @@ export default function CompanyWorkspace() {
         {tab === "agents" ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
-              <div className="company-panel-heading"><div><h2>Ajouter un agent</h2><p>Son mot de passe devra être changé à la première connexion.</p></div></div>
+              <div className="company-panel-heading"><div><h2>Ajouter un agent</h2><p>Un e-mail lui permettra de choisir son mot de passe et d’activer son compte.</p></div></div>
               <form className="company-form" onSubmit={submitAgent}>
                 <label><span>Adresse e-mail</span><input name="email" type="email" required /></label>
                 <div className="company-form-grid">
@@ -1366,21 +1384,20 @@ export default function CompanyWorkspace() {
                   <label><span>Prénoms</span><input name="prenoms" maxLength={150} /></label>
                 </div>
                 <label><span>Téléphone</span><input name="telephone" type="tel" maxLength={30} /></label>
-                <label><span>Mot de passe temporaire</span><PasswordInput name="temporary_password" required minLength={8} autoComplete="new-password" /></label>
                 <fieldset className="company-permissions"><legend>Autorisations</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" name={`permission-${code}`} value={code} /><span>{label}</span></label>)}</fieldset>
-                <button type="submit" className="company-button" disabled={saving}>{saving ? "Création…" : "Créer le compte agent"}</button>
+                <button type="submit" className="company-button" disabled={saving}>{saving ? "Création…" : "Créer et envoyer l’invitation"}</button>
               </form>
             </section>
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>{agents.length} agent(s) rattaché(s)</p></div></div>
               {agents.length ? <div className="company-agent-list">{pageAgents.map((agent) => (
                 <article className="company-agent-card" key={agent.id}>
-                  <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.is_active ? "Actif" : "Désactivé"}</span></div>
+                  <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.invitation_en_attente ? "Invitation en attente" : agent.is_active ? "Actif" : "Désactivé"}</span></div>
                   {agent.telephone ? <p className="company-agent-phone">{agent.telephone}</p> : null}
                   <fieldset className="company-permissions company-permissions--compact"><legend>Permissions</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" checked={(agentPermissions[agent.id] ?? []).includes(code)} onChange={(event) => setAgentPermissions((current) => ({...current, [agent.id]: event.target.checked ? [...(current[agent.id] ?? []), code] : (current[agent.id] ?? []).filter((item) => item !== code)}))} /><span>{label}</span></label>)}</fieldset>
                   <div className="company-row-actions">
                     <button type="button" disabled={saving} onClick={() => void saveAgent(agent, { permissions: agentPermissions[agent.id] ?? [] })}>Enregistrer les permissions</button>
-                    <button type="button" className={agent.is_active ? "is-danger" : ""} disabled={saving} onClick={() => agent.is_active ? setAgentToDeactivate(agent) : void saveAgent(agent, { is_active: true })}>{agent.is_active ? "Désactiver" : "Réactiver"}</button>
+                    {agent.invitation_en_attente ? <button type="button" disabled={saving} onClick={() => void resendAgentInvitation(agent)}>Renvoyer l’invitation</button> : <button type="button" className={agent.is_active ? "is-danger" : ""} disabled={saving} onClick={() => agent.is_active ? setAgentToDeactivate(agent) : void saveAgent(agent, { is_active: true })}>{agent.is_active ? "Désactiver" : "Réactiver"}</button>}
                     <button type="button" className="is-danger" disabled={saving} onClick={() => setAgentToDelete(agent)}>Retirer de l’équipe</button>
                   </div>
                 </article>

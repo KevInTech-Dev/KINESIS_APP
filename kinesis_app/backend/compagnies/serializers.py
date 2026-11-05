@@ -1,12 +1,15 @@
 import re
+import secrets
 
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
 from utilisateurs.models import Utilisateur
 
+from .agent_invitations import get_agent_from_invitation
 from .models import AgentCompagnie, Compagnie, PermissionAgent
 
 
@@ -175,6 +178,7 @@ class AgentSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     is_active = serializers.BooleanField(source="utilisateur.is_active", read_only=True)
+    invitation_en_attente = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
 
     class Meta:
@@ -187,7 +191,16 @@ class AgentSerializer(serializers.ModelSerializer):
             "telephone",
             "photo_profil",
             "is_active",
+            "invitation_en_attente",
             "permissions",
+        )
+
+    def get_invitation_en_attente(self, obj) -> bool:
+        user = obj.utilisateur
+        return (
+            not user.is_active
+            and not user.has_usable_password()
+            and user.agent_invitation_id is not None
         )
 
     def get_permissions(self, obj) -> list[str]:
@@ -203,7 +216,6 @@ class AgentCreateSerializer(serializers.Serializer):
         allow_blank=True,
     )
     telephone = serializers.CharField(max_length=30, required=False, allow_blank=True)
-    temporary_password = serializers.CharField(write_only=True)
     permissions = serializers.ListField(
         child=serializers.ChoiceField(choices=PermissionAgent.Code.choices),
         allow_empty=True,
@@ -212,11 +224,7 @@ class AgentCreateSerializer(serializers.Serializer):
     def validate_email(self, value):
         if Utilisateur.objects.filter(email__iexact=value).exists():
             raise serializers.ValidationError("Cette adresse email est déjà utilisée.")
-        return value
-
-    def validate_temporary_password(self, value):
-        validate_password(value)
-        return value
+        return value.lower()
 
     def validate_permissions(self, value):
         if len(value) != len(set(value)):
@@ -226,12 +234,17 @@ class AgentCreateSerializer(serializers.Serializer):
     def create(self, validated_data):
         compagnie = validated_data.pop("compagnie")
         permissions = validated_data.pop("permissions")
-        password = validated_data.pop("temporary_password")
+        password = secrets.token_urlsafe(48)
         utilisateur = Utilisateur.objects.create_user(
             password=password,
             role=Utilisateur.Role.AGENT_COMPAGNIE,
-            must_change_password=True,
+            must_change_password=False,
+            is_active=False,
             **validated_data,
+        )
+        utilisateur.set_unusable_password()
+        utilisateur.save(
+            update_fields=("password", "is_active", "must_change_password")
         )
         agent = AgentCompagnie.objects.create(
             utilisateur=utilisateur,
@@ -240,10 +253,40 @@ class AgentCreateSerializer(serializers.Serializer):
         PermissionAgent.objects.bulk_create(
             [PermissionAgent(agent=agent, permission=value) for value in permissions]
         )
+        from .agent_invitations import send_agent_invitation
+
+        send_agent_invitation(agent)
         return agent
 
     def to_representation(self, instance):
         return AgentSerializer(instance, context=self.context).data
+
+
+class AgentInvitationLookupSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=2048)
+
+    def validate(self, attrs):
+        attrs["agent"] = get_agent_from_invitation(attrs["token"])
+        return attrs
+
+
+class AgentActivationSerializer(serializers.Serializer):
+    token = serializers.CharField(max_length=2048)
+    new_password = serializers.CharField(write_only=True)
+    password_confirmation = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["password_confirmation"]:
+            raise serializers.ValidationError(
+                {"password_confirmation": "Les mots de passe ne correspondent pas."}
+            )
+        agent = get_agent_from_invitation(attrs["token"])
+        try:
+            validate_password(attrs["new_password"], agent.utilisateur)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({"new_password": error.messages})
+        attrs["agent"] = agent
+        return attrs
 
 
 class AgentUpdateSerializer(serializers.Serializer):
@@ -279,6 +322,18 @@ class AgentUpdateSerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         user_updates = validated_data.pop("utilisateur", {})
         permissions = validated_data.pop("permissions", None)
+        if (
+            user_updates.get("is_active") is True
+            and instance.utilisateur.agent_invitation_id is not None
+        ):
+            raise serializers.ValidationError(
+                {
+                    "is_active": (
+                        "L’agent doit d’abord activer son compte depuis "
+                        "l’invitation envoyée par e-mail."
+                    )
+                }
+            )
 
         for field, value in user_updates.items():
             setattr(instance.utilisateur, field, value)

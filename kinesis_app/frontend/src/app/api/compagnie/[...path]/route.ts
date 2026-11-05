@@ -15,6 +15,9 @@ function isAllowedResource(path: string[], method: string) {
   if (/^agents\/[0-9a-f-]{36}$/i.test(resource)) {
     return ["GET", "PATCH", "PUT", "DELETE"].includes(method);
   }
+  if (/^agents\/[0-9a-f-]{36}\/resend-invitation$/i.test(resource)) {
+    return method === "POST";
+  }
   if (resource === "voyages") return ["GET", "POST"].includes(method);
   if (/^voyages\/[0-9a-f-]{36}$/i.test(resource)) {
     return ["GET", "PATCH", "PUT"].includes(method);

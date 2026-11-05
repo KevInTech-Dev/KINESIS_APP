@@ -7,8 +7,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from compagnies.permissions import IsActiveCompany
 from compagnies.models import Compagnie
+from compagnies.permissions import IsActiveCompany
 from voyages.models import Voyage
 
 from .models import Bagage, TarifBagage
@@ -83,6 +83,7 @@ class BagageListCreateView(generics.ListCreateAPIView):
                 .select_related(
                     "reservation__voyage",
                     "enregistre_par",
+                    "paiement_enregistre_par",
                     "restitue_par",
                 )
                 .prefetch_related("photos")
@@ -114,6 +115,7 @@ class BagageDetailView(generics.RetrieveAPIView):
             return baggage_queryset_for_user(self.request.user).select_related(
                 "reservation__voyage",
                 "enregistre_par",
+                "paiement_enregistre_par",
                 "restitue_par",
             ).prefetch_related("photos")
         except PermissionDenied:
