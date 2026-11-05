@@ -12398,16 +12398,16 @@ select:focus-visible {
 }
 
 .agent-workspace-content .agent-notification-copy strong {
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .agent-workspace-content .agent-notification-copy > span {
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
 .agent-workspace-content .agent-notification-copy small {
-  font-size: 11px;
+  font-size: 9px;
 }
 
 .agent-workspace-content .agent-unread-label {
