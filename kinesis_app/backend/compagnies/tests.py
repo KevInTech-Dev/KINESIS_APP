@@ -783,11 +783,14 @@ class CompanyApiTests(APITestCase):
 
     def test_company_agent_list_includes_ids_and_uses_pagination(self):
         company_user, company = self.create_active_company("pagination@example.com")
-        for index in range(2):
+        for email, nom in (
+            ("z-agent@example.com", "Alice"),
+            ("a-agent@example.com", "Bob"),
+        ):
             agent_user = User.objects.create_user(
-                email=f"agent-{index}@example.com",
+                email=email,
                 password="Temporary!Password-729",
-                nom=f"Agent {index}",
+                nom=nom,
                 prenoms="",
                 role=User.Role.AGENT_COMPAGNIE,
             )
@@ -795,6 +798,13 @@ class CompanyApiTests(APITestCase):
                 utilisateur=agent_user,
                 compagnie=company,
             )
+        base_date = timezone.now()
+        User.objects.filter(email="z-agent@example.com").update(
+            date_creation=base_date - timedelta(days=1)
+        )
+        User.objects.filter(email="a-agent@example.com").update(
+            date_creation=base_date
+        )
 
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(company_user)}"
@@ -807,6 +817,7 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(len(response.data["results"]), 1)
         self.assertIn("id", response.data["results"][0])
         self.assertIs(response.data["results"][0]["is_active"], True)
+        self.assertEqual(response.data["results"][0]["nom"], "Bob")
 
         agent_id = response.data["results"][0]["id"]
         deactivate_response = self.client.patch(
@@ -869,6 +880,34 @@ class AdminCompanyApiTests(APITestCase):
         )
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(admin_user)}"
+        )
+
+    def test_admin_company_list_orders_newest_before_name_and_status(self):
+        older_user = User.objects.create_user(
+            email="older-company@example.com",
+            password=self.password,
+            nom="Transport",
+            role=User.Role.COMPAGNIE,
+            is_active=False,
+        )
+        Compagnie.objects.create(
+            utilisateur=older_user,
+            nom_commercial="Aardvark Transport",
+        )
+        base_date = timezone.now()
+        User.objects.filter(pk=self.pending_user.pk).update(
+            date_creation=base_date - timedelta(days=1)
+        )
+        User.objects.filter(pk=older_user.pk).update(
+            date_creation=base_date - timedelta(days=2)
+        )
+
+        response = self.client.get(reverse("admin-company-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["results"][0]["id"],
+            str(self.pending_company.pk),
         )
 
     def test_admin_lists_company_applications_with_signed_private_documents(self):

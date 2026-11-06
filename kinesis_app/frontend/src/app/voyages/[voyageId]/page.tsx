@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { ArrowUpRight, MapPin, UsersRound } from "lucide-react";
 import type { Voyage } from "@/lib/types";
 import KinesisLoader from "@/components/kinesis-loader";
 import VoyagesPageHeader from "@/components/voyages-page-header";
@@ -148,49 +149,63 @@ function VoyageDetailContent() {
           <div className="voyage-detail__lower">
             <section className="voyage-detail__information">
               <p className="voyage-detail__section-label">LES INFORMATIONS DU TRAJET</p>
-              <h2>Tout est prêt pour votre départ.</h2>
+              <h2>Les étapes de votre voyage</h2>
               <div className="voyage-detail__facts">
-                <div>
-                  <span className="voyage-detail__fact-icon" aria-hidden="true">01</span>
-                  <span><small>Ville de départ</small><strong>{trip.ville_depart_nom}</strong></span>
-                </div>
-                <div>
-                  <span className="voyage-detail__fact-icon" aria-hidden="true">02</span>
-                  <span><small>Ville d’arrivée</small><strong>{trip.ville_arrivee_nom}</strong></span>
-                </div>
-                {trip.gare_depart ? (
-                  <div>
-                    <span className="voyage-detail__fact-icon" aria-hidden="true">03</span>
-                    <span>
-                      <small>Gare de départ</small>
-                      <strong>{trip.gare_depart.nom}</strong>
-                      <span>{trip.gare_depart.adresse}</span>
-                      {trip.gare_depart.maps_url ? (
-                        <a href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">Voir sur Google Maps</a>
-                      ) : null}
-                    </span>
-                  </div>
-                ) : null}
-                {trip.gare_arrivee ? (
-                  <div>
-                    <span className="voyage-detail__fact-icon" aria-hidden="true">04</span>
-                    <span>
-                      <small>Gare d’arrivée</small>
-                      <strong>{trip.gare_arrivee.nom}</strong>
-                      <span>{trip.gare_arrivee.adresse}</span>
-                      {trip.gare_arrivee.maps_url ? (
-                        <a href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">Voir sur Google Maps</a>
-                      ) : null}
-                    </span>
-                  </div>
-                ) : null}
-                <div>
-                  <span className="voyage-detail__fact-icon" aria-hidden="true">05</span>
-                  <span>
-                    <small>Places disponibles</small>
-                    <strong>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""}</strong>
+                <article className="voyage-detail__stop">
+                  <span className="voyage-detail__stop-icon voyage-detail__stop-icon--origin" aria-hidden="true">
+                    <MapPin />
                   </span>
-                </div>
+                  <div className="voyage-detail__stop-copy">
+                    <small>Ville de départ</small>
+                    <h3>{trip.ville_depart_nom}</h3>
+                    {trip.gare_depart ? (
+                      <>
+                        <span className="voyage-detail__station-name">{trip.gare_depart.nom}</span>
+                        <span className="voyage-detail__station-address">{trip.gare_depart.adresse}</span>
+                        {trip.gare_depart.maps_url ? (
+                          <a className="maps-link" href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">
+                            <MapPin aria-hidden="true" />
+                            <span>Ouvrir dans Google Maps</span>
+                            <ArrowUpRight aria-hidden="true" />
+                          </a>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="voyage-detail__station-address">Lieu exact à confirmer auprès de la compagnie</span>
+                    )}
+                  </div>
+                  <span className="voyage-detail__stop-tag">DÉPART</span>
+                </article>
+                <article className="voyage-detail__stop">
+                  <span className="voyage-detail__stop-icon voyage-detail__stop-icon--destination" aria-hidden="true">
+                    <MapPin />
+                  </span>
+                  <div className="voyage-detail__stop-copy">
+                    <small>Ville d’arrivée</small>
+                    <h3>{trip.ville_arrivee_nom}</h3>
+                    {trip.gare_arrivee ? (
+                      <>
+                        <span className="voyage-detail__station-name">{trip.gare_arrivee.nom}</span>
+                        <span className="voyage-detail__station-address">{trip.gare_arrivee.adresse}</span>
+                        {trip.gare_arrivee.maps_url ? (
+                          <a className="maps-link" href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">
+                            <MapPin aria-hidden="true" />
+                            <span>Ouvrir dans Google Maps</span>
+                            <ArrowUpRight aria-hidden="true" />
+                          </a>
+                        ) : null}
+                      </>
+                    ) : (
+                      <span className="voyage-detail__station-address">Lieu exact à confirmer auprès de la compagnie</span>
+                    )}
+                  </div>
+                  <span className="voyage-detail__stop-tag voyage-detail__stop-tag--destination">ARRIVÉE</span>
+                </article>
+              </div>
+              <div className="voyage-detail__availability">
+                <UsersRound aria-hidden="true" />
+                <span>Disponibilité</span>
+                <strong>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""}</strong>
               </div>
             </section>
 

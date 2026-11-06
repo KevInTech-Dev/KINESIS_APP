@@ -1,5 +1,5 @@
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import F, Q
 from django.utils import timezone
 from rest_framework import generics
 from rest_framework.exceptions import ValidationError
@@ -16,22 +16,8 @@ from reservations.services import filter_active_reservations
 
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
+from .querysets import with_availability
 from .serializers import VilleSerializer, VoyageSearchSerializer, VoyageSerializer
-
-
-def _with_availability(queryset, now):
-    active_holds = Q(
-        places_reservees__reservation__statut="PAYEE",
-    ) | Q(
-        places_reservees__reservation__statut="EN_ATTENTE_PAIEMENT",
-        places_reservees__reservation__date_expiration__gt=now,
-    )
-    return queryset.annotate(
-        _places_occupees=Count(
-            "places_reservees",
-            filter=Q(places_reservees__liberee=False) & active_holds,
-        )
-    )
 
 
 class VilleListView(generics.ListAPIView):
@@ -105,7 +91,7 @@ class VoyageListCreateView(generics.ListCreateAPIView):
         if "prix_max" in filters:
             public &= Q(prix__lte=filters["prix_max"])
 
-        queryset = _with_availability(queryset, now).filter(public)
+        queryset = with_availability(queryset, now).filter(public)
         queryset = queryset.filter(_places_occupees__lt=F("place_totale"))
         if "places_min" in filters:
             queryset = queryset.filter(
@@ -119,7 +105,7 @@ class VoyageListCreateView(generics.ListCreateAPIView):
             )
         user = self.request.user
         if user.is_authenticated and user.role == user.Role.COMPAGNIE:
-            own_trips = _with_availability(
+            own_trips = with_availability(
                 Voyage.objects.select_related(
                     "compagnie__utilisateur",
                     "ville_depart",
@@ -164,11 +150,11 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             date_depart=now.date(),
             heure_depart__gte=now.time().replace(tzinfo=None),
         )
-        queryset = _with_availability(queryset, now).filter(public)
+        queryset = with_availability(queryset, now).filter(public)
         queryset = queryset.filter(_places_occupees__lt=F("place_totale"))
         user = self.request.user
         if user.is_authenticated and user.role == user.Role.COMPAGNIE:
-            own_trips = _with_availability(
+            own_trips = with_availability(
                 Voyage.objects.select_related(
                     "compagnie__utilisateur",
                     "ville_depart",

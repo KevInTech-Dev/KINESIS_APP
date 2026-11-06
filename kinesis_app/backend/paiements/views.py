@@ -1,5 +1,7 @@
 import json
 
+from django.db.models import Prefetch
+from django.utils import timezone
 from drf_spectacular.utils import extend_schema
 from rest_framework import generics
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,6 +10,8 @@ from rest_framework.views import APIView
 
 from config.pagination import StandardResultsSetPagination
 from utilisateurs.models import Utilisateur
+from voyages.models import Voyage
+from voyages.querysets import with_availability
 
 from .fedapay import retrieve_transaction, verify_webhook_signature
 from .models import BilletElectronique, Paiement
@@ -179,11 +183,21 @@ class BilletListView(generics.ListAPIView):
 
     def get_queryset(self):
         tickets = BilletElectronique.objects.select_related(
-            "place__reservation__voyage",
-            "place__reservation__voyage__compagnie__utilisateur",
-            "place__reservation__voyage__ville_depart",
-            "place__reservation__voyage__ville_arrivee",
             "place__reservation",
+        ).prefetch_related(
+            Prefetch(
+                "place__voyage",
+                queryset=with_availability(
+                    Voyage.objects.select_related(
+                        "compagnie__utilisateur",
+                        "ville_depart",
+                        "ville_arrivee",
+                        "gare_depart__ville",
+                        "gare_arrivee__ville",
+                    ),
+                    timezone.now(),
+                ),
+            )
         )
         if self.request.user.role == Utilisateur.Role.VOYAGEUR:
             return tickets.filter(place__reservation__voyageur=self.request.user)
@@ -228,11 +242,21 @@ class BilletDetailView(generics.RetrieveAPIView):
         return BilletElectronique.objects.filter(
             place__reservation__voyageur=self.request.user,
         ).select_related(
-            "place__reservation__voyage",
-            "place__reservation__voyage__compagnie__utilisateur",
-            "place__reservation__voyage__ville_depart",
-            "place__reservation__voyage__ville_arrivee",
             "place__reservation",
+        ).prefetch_related(
+            Prefetch(
+                "place__voyage",
+                queryset=with_availability(
+                    Voyage.objects.select_related(
+                        "compagnie__utilisateur",
+                        "ville_depart",
+                        "ville_arrivee",
+                        "gare_depart__ville",
+                        "gare_arrivee__ville",
+                    ),
+                    timezone.now(),
+                ),
+            )
         )
 
 

@@ -717,6 +717,7 @@ export default function AdministrationWorkspace() {
                   <p>
                     Les documents sont privés et réservés aux administrateurs
                     KINESIS. L’approbation envoie un lien d’activation à l’entreprise.
+                    Les dossiers sont triés du plus récent au plus ancien, puis par statut et nom commercial.
                   </p>
                 </>
               ) : (
@@ -725,7 +726,8 @@ export default function AdministrationWorkspace() {
                   <h2>Suivez les inscriptions sur la plateforme.</h2>
                   <p>
                     Recherchez les voyageurs, compagnies et agents. Les accès et
-                    les rôles restent contrôlés par les règles KINESIS.
+                    les rôles restent contrôlés par les règles KINESIS. La liste est triée
+                    du plus récent au plus ancien, puis par nom et prénoms.
                   </p>
                 </>
               )}

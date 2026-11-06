@@ -9,7 +9,9 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
+from django.db import connection
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -779,6 +781,66 @@ class FedaPayWebhookApiTests(APITestCase):
 
 
 class BilletApiTests(APITestCase):
+    def test_traveler_ticket_list_uses_bounded_queries_for_shared_trip(self):
+        company_user = User.objects.create_user(
+            email="tickets-company@example.com",
+            password="Qx7!mR4#vN8p",
+            nom="Transport",
+            prenoms="Admin",
+            role=User.Role.COMPAGNIE,
+        )
+        company = Compagnie.objects.create(
+            utilisateur=company_user,
+            statut=Compagnie.Statut.ACTIVE,
+        )
+        departure = Ville.objects.create(nom="Lome")
+        arrival = Ville.objects.create(nom="Kpalime")
+        voyage = Voyage.objects.create(
+            compagnie=company,
+            ville_depart=departure,
+            ville_arrivee=arrival,
+            date_depart=timezone.localdate() + timedelta(days=2),
+            heure_depart=time(9, 0),
+            place_totale=12,
+            prix="5000",
+        )
+        traveler = User.objects.create_user(
+            email="many-tickets@example.com",
+            password="Qx7!mR4#vN8p",
+            nom="Traveler",
+            prenoms="Test",
+            role=User.Role.VOYAGEUR,
+        )
+        reservation = Reservation.objects.create(
+            reference="RES-MANY-TICKETS",
+            voyageur=traveler,
+            voyage=voyage,
+            montant_total=40000,
+            statut=Reservation.Statut.PAYEE,
+        )
+        for index in range(8):
+            place = PlaceReservee.objects.create(
+                reservation=reservation,
+                voyage=voyage,
+                numero_siege=f"S{index + 1:03}",
+                nom_passager=f"Passenger {index + 1}",
+            )
+            BilletElectronique.objects.create(place=place)
+
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(traveler)}"
+        )
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("billet-list"), {"page_size": 100})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 8)
+        self.assertEqual(
+            response.data["results"][0]["voyage"]["places_disponibles"],
+            4,
+        )
+        self.assertLessEqual(len(queries), 5)
+
     def test_traveler_only_sees_owned_tickets(self):
         password = "Qx7!mR4#vN8p"
         company_user = User.objects.create_user(

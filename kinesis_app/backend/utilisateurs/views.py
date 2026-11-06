@@ -6,7 +6,7 @@ from django.contrib.auth.forms import PasswordResetForm
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
-from django.db.models.functions import TruncDate
+from django.db.models.functions import Lower, TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import generics, status
@@ -74,7 +74,7 @@ class AdminUserListView(generics.ListAPIView):
 		queryset = Utilisateur.objects.select_related(
 			"profil_compagnie",
 			"profil_agent__compagnie",
-		).order_by("email", "id")
+		).order_by("-date_creation", Lower("nom"), Lower("prenoms"), Lower("email"), "id")
 		role = self.request.query_params.get("role")
 		if role:
 			if role not in Utilisateur.Role.values:

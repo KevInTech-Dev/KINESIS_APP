@@ -1,3 +1,4 @@
+from datetime import timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
@@ -8,6 +9,7 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from PIL import Image
@@ -507,6 +509,24 @@ class AdminUserListTests(APITestCase):
 		)
 		self.assertEqual(all_users_response.data["count"], 4)
 		self.assertIsNotNone(all_users_response.data["next"])
+		base_date = timezone.now()
+		for email, days_ago in (
+			("api-admin@example.com", 3),
+			("company-list@example.com", 2),
+			("agent-list@example.com", 1),
+			("traveler-list@example.com", 0),
+		):
+			User.objects.filter(email=email).update(
+				date_creation=base_date - timedelta(days=days_ago)
+			)
+		sorted_users_response = self.client.get(
+			reverse("admin-user-list"),
+			{"page_size": 4},
+		)
+		self.assertEqual(
+			[user["nom"] for user in sorted_users_response.data["results"]],
+			["Voyageur", "Agent", "Transport", "Admin"],
+		)
 
 	def test_admin_can_read_user_counts_by_role(self):
 		response = self.client.get(

@@ -765,7 +765,7 @@ export default function CompanyWorkspace() {
   const { pageItems: pageTrips, pagination: tripPagination } =
     useListPagination(trips);
   const { pageItems: pageAgents, pagination: agentPagination } =
-    useListPagination(agents);
+    useListPagination(agents, 5, false);
   const { pageItems: pageReservations, pagination: reservationPagination } =
     useListPagination(reservations);
   const { pageItems: pageTariffs, pagination: tariffPagination } =
@@ -1474,7 +1474,11 @@ export default function CompanyWorkspace() {
                       </div>
                       <div className="company-row-actions">
                         {station.maps_url ? (
-                          <a href={station.maps_url} target="_blank" rel="noreferrer">Google Maps</a>
+                          <a className="maps-link maps-link--compact" href={station.maps_url} target="_blank" rel="noreferrer">
+                            <MapPin aria-hidden="true" />
+                            <span>Google Maps</span>
+                            <ExternalLink aria-hidden="true" />
+                          </a>
                         ) : null}
                         <button
                           type="button"
@@ -1611,7 +1615,7 @@ export default function CompanyWorkspace() {
               </form>
             </section>
             <section className="company-panel company-panel--list">
-              <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>{agents.length} agent(s) rattaché(s)</p></div></div>
+              <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>Du plus récent au plus ancien, puis par nom et prénoms · {agents.length} agent(s)</p></div></div>
               {agents.length ? <div className="company-agent-list">{pageAgents.map((agent) => (
                 <article className="company-agent-card" key={agent.id}>
                   <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.invitation_en_attente ? "Invitation en attente" : agent.is_active ? "Actif" : "Désactivé"}</span></div>

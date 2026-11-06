@@ -13,6 +13,7 @@ type ListPaginationProps = {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: ListPageSize) => void;
   loading?: boolean;
+  showPageNumbers?: boolean;
 };
 
 export function ListPagination({
@@ -22,6 +23,7 @@ export function ListPagination({
   onPageChange,
   onPageSizeChange,
   loading = false,
+  showPageNumbers = true,
 }: ListPaginationProps) {
   if (totalItems <= 5) return null;
 
@@ -69,7 +71,7 @@ export function ListPagination({
         >
           <ChevronLeft aria-hidden="true" />
         </button>
-        {visiblePages.map((visiblePage) => (
+        {showPageNumbers ? visiblePages.map((visiblePage) => (
           <button
             type="button"
             key={visiblePage}
@@ -81,7 +83,7 @@ export function ListPagination({
           >
             {visiblePage}
           </button>
-        ))}
+        )) : null}
         <button
           type="button"
           className="list-pagination__arrow"
@@ -99,6 +101,7 @@ export function ListPagination({
 export function useListPagination<T>(
   items: T[],
   initialPageSize: ListPageSize = 10,
+  showPageNumbers = true,
 ) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<ListPageSize>(initialPageSize);
@@ -114,6 +117,7 @@ export function useListPagination<T>(
         page={currentPage}
         pageSize={pageSize}
         onPageChange={setPage}
+        showPageNumbers={showPageNumbers}
         onPageSizeChange={(nextSize) => {
           setPageSize(nextSize);
           setPage(1);

@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from django.db import transaction
+from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
 from rest_framework import generics, parsers, serializers
@@ -162,8 +163,9 @@ class AdminCompanyListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = Compagnie.objects.select_related("utilisateur").order_by(
+            "-utilisateur__date_creation",
             "statut",
-            "nom_commercial",
+            Lower("nom_commercial"),
             "utilisateur_id",
         )
         status_filter = self.request.query_params.get("status")
@@ -252,7 +254,13 @@ class AgentListCreateView(generics.ListCreateAPIView):
             AgentCompagnie.objects.filter(compagnie=self.request.user.profil_compagnie)
             .select_related("utilisateur")
             .prefetch_related("permissions")
-            .order_by("utilisateur__email", "utilisateur_id")
+            .order_by(
+                "-utilisateur__date_creation",
+                Lower("utilisateur__nom"),
+                Lower("utilisateur__prenoms"),
+                Lower("utilisateur__email"),
+                "utilisateur_id",
+            )
         )
 
     def get_serializer_class(self):

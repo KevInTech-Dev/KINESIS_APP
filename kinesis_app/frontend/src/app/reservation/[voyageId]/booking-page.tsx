@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { ArrowUpRight, MapPin } from "lucide-react";
 import KinesisLoader from "@/components/kinesis-loader";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
@@ -384,7 +385,11 @@ export default function BookingPage({
                   <p>
                     Départ : {trip.gare_depart.nom} — {trip.gare_depart.adresse}
                     {trip.gare_depart.maps_url ? (
-                      <> · <a href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">Google Maps</a></>
+                      <a className="maps-link maps-link--compact" href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">
+                        <MapPin aria-hidden="true" />
+                        <span>Ouvrir dans Google Maps</span>
+                        <ArrowUpRight aria-hidden="true" />
+                      </a>
                     ) : null}
                   </p>
                 ) : null}
@@ -392,7 +397,11 @@ export default function BookingPage({
                   <p>
                     Arrivée : {trip.gare_arrivee.nom} — {trip.gare_arrivee.adresse}
                     {trip.gare_arrivee.maps_url ? (
-                      <> · <a href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">Google Maps</a></>
+                      <a className="maps-link maps-link--compact" href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">
+                        <MapPin aria-hidden="true" />
+                        <span>Ouvrir dans Google Maps</span>
+                        <ArrowUpRight aria-hidden="true" />
+                      </a>
                     ) : null}
                   </p>
                 ) : null}
