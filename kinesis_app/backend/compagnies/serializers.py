@@ -8,9 +8,10 @@ from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
 from utilisateurs.models import Utilisateur
+from voyages.models import Ville
 
 from .agent_invitations import get_agent_from_invitation
-from .models import AgentCompagnie, Compagnie, PermissionAgent
+from .models import AgentCompagnie, Compagnie, Gare, PermissionAgent
 
 
 class OptionalImageField(serializers.ImageField):
@@ -133,6 +134,52 @@ class CompanyProfileSerializer(serializers.ModelSerializer):
             "rccm",
             "statut",
         )
+
+
+class GareSerializer(serializers.ModelSerializer):
+    ville = serializers.PrimaryKeyRelatedField(
+        queryset=Ville.objects.all(),
+    )
+    ville_nom = serializers.CharField(source="ville.nom", read_only=True)
+    compagnie = serializers.UUIDField(source="compagnie_id", read_only=True)
+
+    class Meta:
+        model = Gare
+        fields = (
+            "id_gare",
+            "compagnie",
+            "ville",
+            "ville_nom",
+            "nom",
+            "adresse",
+            "latitude",
+            "longitude",
+            "google_place_id",
+            "maps_url",
+            "active",
+        )
+        read_only_fields = ("id_gare", "compagnie")
+
+    def validate(self, attrs):
+        if self.instance and any(key != "active" for key in attrs):
+            raise serializers.ValidationError(
+                {"gare": "Les informations d’une gare sont conservées après sa création."}
+            )
+        latitude = attrs.get("latitude")
+        longitude = attrs.get("longitude")
+        if (latitude is None) != (longitude is None):
+            raise serializers.ValidationError(
+                {"latitude": "La latitude et la longitude doivent être renseignées ensemble."}
+            )
+        if latitude is not None and not -90 <= latitude <= 90:
+            raise serializers.ValidationError(
+                {"latitude": "La latitude doit être comprise entre -90 et 90."}
+            )
+        if longitude is not None and not -180 <= longitude <= 180:
+            raise serializers.ValidationError(
+                {"longitude": "La longitude doit être comprise entre -180 et 180."}
+            )
+        return attrs
 
 
 class AdminCompanyReviewSerializer(serializers.ModelSerializer):

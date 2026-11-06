@@ -59,6 +59,20 @@ class Voyage(models.Model):
         on_delete=models.PROTECT,
         related_name="voyages_arrivee",
     )
+    gare_depart = models.ForeignKey(
+        "compagnies.Gare",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="voyages_depart",
+    )
+    gare_arrivee = models.ForeignKey(
+        "compagnies.Gare",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="voyages_arrivee",
+    )
     date_depart = models.DateField()
     heure_depart = models.TimeField()
     date_depart_effective = models.DateTimeField(null=True, blank=True)

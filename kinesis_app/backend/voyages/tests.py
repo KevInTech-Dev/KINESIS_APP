@@ -9,7 +9,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
-from compagnies.models import AgentCompagnie, Compagnie, PermissionAgent
+from compagnies.models import AgentCompagnie, Compagnie, Gare, PermissionAgent
 from notifications.models import Notification
 from reservations.models import PlaceReservee, Reservation
 
@@ -43,6 +43,20 @@ class VoyageApiTests(APITestCase):
         )
         self.depart = Ville.objects.create(nom="Lome")
         self.arrivee = Ville.objects.create(nom="Sokode")
+        self.gare_depart = Gare.objects.create(
+            compagnie=self.company,
+            ville=self.depart,
+            nom="Gare de Lome",
+            adresse="Centre de Lome",
+            latitude="6.1319",
+            longitude="1.2228",
+        )
+        self.gare_arrivee = Gare.objects.create(
+            compagnie=self.company,
+            ville=self.arrivee,
+            nom="Gare de Sokode",
+            adresse="Centre de Sokode",
+        )
         self.future_date = timezone.localdate() + timedelta(days=2)
         self.voyage = Voyage.objects.create(
             compagnie=self.company,
@@ -271,6 +285,8 @@ class VoyageApiTests(APITestCase):
             {
                 "ville_depart": str(self.depart.pk),
                 "ville_arrivee": str(self.arrivee.pk),
+                "gare_depart_id": str(self.gare_depart.pk),
+                "gare_arrivee_id": str(self.gare_arrivee.pk),
                 "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
                 "heure_depart": "09:00:45",
                 "place_totale": 32,
@@ -286,6 +302,35 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(created.heure_depart, time(9, 0))
         self.assertEqual(created.compagnie, self.company)
         self.assertEqual(created.statut, Voyage.Statut.PUBLIE)
+        self.assertEqual(response.data["gare_depart"]["nom"], "Gare de Lome")
+        self.assertIn("google.com/maps", response.data["gare_depart"]["maps_url"])
+
+    def test_company_cannot_create_trip_with_station_from_another_city_or_company(self):
+        other_city = Ville.objects.create(nom="Kara")
+        other_station = Gare.objects.create(
+            compagnie=self.company,
+            ville=other_city,
+            nom="Gare de Kara",
+            adresse="Centre de Kara",
+        )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
+        )
+        payload = {
+            "ville_depart": str(self.depart.pk),
+            "ville_arrivee": str(self.arrivee.pk),
+            "gare_depart_id": str(other_station.pk),
+            "gare_arrivee_id": str(self.gare_arrivee.pk),
+            "date_depart": (timezone.localdate() + timedelta(days=3)).isoformat(),
+            "heure_depart": "09:00",
+            "place_totale": 32,
+            "prix": "7500",
+        }
+
+        response = self.client.post(reverse("voyage-list"), payload, format="json")
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Voyage.objects.count(), 1)
 
     def test_same_departure_and_arrival_is_rejected(self):
         self.client.credentials(

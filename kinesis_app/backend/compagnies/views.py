@@ -16,7 +16,7 @@ from config.pagination import StandardResultsSetPagination
 from utilisateurs.permissions import IsKinesisAdministrator
 
 from .agent_invitations import activate_agent_account, resend_agent_invitation
-from .models import AgentCompagnie, Compagnie
+from .models import AgentCompagnie, Compagnie, Gare
 from .permissions import IsActiveCompany
 from .serializers import (
     AdminCompanyReviewSerializer,
@@ -27,6 +27,7 @@ from .serializers import (
     AgentUpdateSerializer,
     CompanyProfileSerializer,
     CompanyRegistrationSerializer,
+    GareSerializer,
 )
 from .services import (
     ACTIVATION_TOKEN_SALT,
@@ -212,6 +213,34 @@ class MyCompanyView(generics.RetrieveUpdateAPIView):
 
     def get_object(self):
         return self.request.user.profil_compagnie
+
+
+class CompanyStationListCreateView(generics.ListCreateAPIView):
+    serializer_class = GareSerializer
+    permission_classes = [IsActiveCompany]
+
+    def get_queryset(self):
+        return Gare.objects.filter(
+            compagnie=self.request.user.profil_compagnie,
+        ).select_related("ville")
+
+    def perform_create(self, serializer):
+        serializer.save(compagnie=self.request.user.profil_compagnie)
+
+
+class CompanyStationDetailView(generics.UpdateAPIView):
+    serializer_class = GareSerializer
+    permission_classes = [IsActiveCompany]
+    http_method_names = ("patch", "options", "head")
+
+    def get_queryset(self):
+        return Gare.objects.filter(
+            compagnie=self.request.user.profil_compagnie,
+        ).select_related("ville")
+
+    def get_serializer(self, *args, **kwargs):
+        kwargs["partial"] = True
+        return super().get_serializer(*args, **kwargs)
 
 
 class AgentListCreateView(generics.ListCreateAPIView):

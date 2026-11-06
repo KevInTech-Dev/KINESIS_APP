@@ -422,6 +422,13 @@ function VoyagesCatalog() {
                 <div className="catalog-card__body">
                   <p>{trip.compagnie_nom || "Compagnie"}</p>
                   <h3>{trip.ville_depart_nom} <span aria-hidden="true">→</span> {trip.ville_arrivee_nom}</h3>
+                  {trip.gare_depart || trip.gare_arrivee ? (
+                    <p className="catalog-card__stations">
+                      {trip.gare_depart ? `Départ : ${trip.gare_depart.nom}` : null}
+                      {trip.gare_depart && trip.gare_arrivee ? " · " : null}
+                      {trip.gare_arrivee ? `Arrivée : ${trip.gare_arrivee.nom}` : null}
+                    </p>
+                  ) : null}
                   <div className="catalog-card__meta">
                     <span>{formatDate(trip.date_depart)}</span>
                     <span>{trip.heure_depart.slice(0, 5)}</span>

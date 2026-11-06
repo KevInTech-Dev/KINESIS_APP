@@ -22,6 +22,10 @@ function isAllowedResource(path: string[], method: string) {
   if (/^voyages\/[0-9a-f-]{36}$/i.test(resource)) {
     return ["GET", "PATCH", "PUT"].includes(method);
   }
+  if (resource === "stations") return ["GET", "POST"].includes(method);
+  if (/^stations\/[0-9a-f-]{36}$/i.test(resource)) {
+    return method === "PATCH";
+  }
   if (resource === "paiements" && method === "GET") return true;
   if (resource === "reservations" && method === "GET") return true;
   if (resource === "notifications" && method === "GET") return true;
@@ -68,7 +72,7 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
 
   const backendUrl = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8000";
   const resource =
-    path[0] === "me" || path[0] === "agents"
+    path[0] === "me" || path[0] === "agents" || path[0] === "stations"
       ? `compagnies/${path.join("/")}`
       : path.join("/");
   let url: URL;

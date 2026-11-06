@@ -9,7 +9,12 @@ Django reste la source des données et des fonctionnalités métier.
 2. Copier `.env.example` vers `.env.local`.
 3. Vérifier que `BACKEND_API_URL` pointe vers le serveur Django, par défaut
    `http://127.0.0.1:8000`.
-4. Lancer `npm run dev`, puis ouvrir <http://localhost:3000>.
+4. Pour activer la suggestion des adresses de gare, renseigner
+   `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` avec une clé autorisant Google Maps
+   JavaScript API et Places API. Restreindre cette clé aux référents HTTP des
+   domaines de l’application et aux API utilisées.
+   Sans clé, les adresses de gare restent saisissables manuellement.
+5. Lancer `npm run dev`, puis ouvrir <http://localhost:3000>.
 
 Sous PowerShell sur Windows, utiliser `npm.cmd` si la politique d’exécution
 bloque le script `npm.ps1` : `npm.cmd install`, puis `npm.cmd run dev`.
@@ -63,6 +68,11 @@ administrer les comptes agents et permissions, de consulter les paiements et de
 modifier la description, l’adresse et le logo. Les routes `/api/compagnie/*`
 servent de proxy serveur authentifié et les droits de propriété restent
 contrôlés par Django.
+
+Dans l’espace compagnie, l’onglet « Mes gares » permet d’associer des lieux à
+une ville gérée par KINESIS. Les gares actives sont ensuite sélectionnables
+pour les nouveaux trajets. Les voyageurs voient leur nom et leur adresse dans
+les résultats, la fiche du voyage et la réservation, avec un lien Google Maps.
 
 Pour les e-mails d’activation en production, configurez `FRONTEND_BASE_URL`
 dans l’environnement Django avec le domaine public du frontend. Configurez

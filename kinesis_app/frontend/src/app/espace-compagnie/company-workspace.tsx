@@ -12,6 +12,7 @@ import {
   ChevronRight,
   CreditCard,
   ExternalLink,
+  MapPin,
   LayoutDashboard,
   LogOut,
   Luggage,
@@ -24,6 +25,7 @@ import ConfirmationDialog from "@/components/confirmation-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import StationLocationInput from "@/components/station-location-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -60,6 +62,18 @@ type Company = {
   statut: string;
 };
 type City = { id_ville: string; nom: string };
+type Station = {
+  id_gare: string;
+  ville: string;
+  ville_nom: string;
+  nom: string;
+  adresse: string;
+  latitude: string | null;
+  longitude: string | null;
+  google_place_id: string;
+  maps_url: string;
+  active: boolean;
+};
 type Trip = {
   id_voyage: string;
   compagnie: string;
@@ -67,6 +81,8 @@ type Trip = {
   ville_depart_nom: string;
   ville_arrivee: string;
   ville_arrivee_nom: string;
+  gare_depart: { id_gare: string; nom: string; adresse: string } | null;
+  gare_arrivee: { id_gare: string; nom: string; adresse: string } | null;
   date_depart: string;
   heure_depart: string;
   date_depart_effective: string | null;
@@ -132,6 +148,7 @@ type Notification = {
 type Tab =
   | "overview"
   | "trips"
+  | "stations"
   | "agents"
   | "reservations"
   | "tariffs"
@@ -151,6 +168,7 @@ const PERMISSIONS = [
 const TABS: { id: Tab; label: string; icon: LucideIcon; group: "operations" | "account" }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard, group: "operations" },
   { id: "trips", label: "Mes trajets", icon: BusFront, group: "operations" },
+  { id: "stations", label: "Mes gares", icon: MapPin, group: "operations" },
   { id: "agents", label: "Équipe", icon: UsersRound, group: "operations" },
   { id: "reservations", label: "Réservations", icon: TicketCheck, group: "operations" },
   { id: "tariffs", label: "Tarifs bagages", icon: Luggage, group: "operations" },
@@ -203,6 +221,16 @@ function isTrip(value: unknown): value is Trip {
     typeof value.ville_depart_nom === "string" &&
     typeof value.ville_arrivee === "string" &&
     typeof value.ville_arrivee_nom === "string" &&
+    (value.gare_depart === null ||
+      (isRecord(value.gare_depart) &&
+        typeof value.gare_depart.id_gare === "string" &&
+        typeof value.gare_depart.nom === "string" &&
+        typeof value.gare_depart.adresse === "string")) &&
+    (value.gare_arrivee === null ||
+      (isRecord(value.gare_arrivee) &&
+        typeof value.gare_arrivee.id_gare === "string" &&
+        typeof value.gare_arrivee.nom === "string" &&
+        typeof value.gare_arrivee.adresse === "string")) &&
     typeof value.date_depart === "string" &&
     typeof value.heure_depart === "string" &&
     (typeof value.date_depart_effective === "string" ||
@@ -212,6 +240,22 @@ function isTrip(value: unknown): value is Trip {
     (typeof value.prix === "number" || typeof value.prix === "string") &&
     (typeof value.image === "string" || value.image === null) &&
     typeof value.statut === "string"
+  );
+}
+
+function isStation(value: unknown): value is Station {
+  return (
+    isRecord(value) &&
+    typeof value.id_gare === "string" &&
+    typeof value.ville === "string" &&
+    typeof value.ville_nom === "string" &&
+    typeof value.nom === "string" &&
+    typeof value.adresse === "string" &&
+    (typeof value.latitude === "string" || value.latitude === null) &&
+    (typeof value.longitude === "string" || value.longitude === null) &&
+    typeof value.google_place_id === "string" &&
+    typeof value.maps_url === "string" &&
+    typeof value.active === "boolean"
   );
 }
 
@@ -607,7 +651,12 @@ export default function CompanyWorkspace() {
   const [company, setCompany] = useState<Company | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [cities, setCities] = useState<City[]>([]);
+  const [stations, setStations] = useState<Station[]>([]);
   const [trips, setTrips] = useState<Trip[]>([]);
+  const [tripDepartCity, setTripDepartCity] = useState("");
+  const [tripArrivalCity, setTripArrivalCity] = useState("");
+  const [tripDepartStation, setTripDepartStation] = useState("");
+  const [tripArrivalStation, setTripArrivalStation] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [reservations, setReservations] = useState<CompanyReservation[]>([]);
   const [tariffs, setTariffs] = useState<BaggageTariff[]>([]);
@@ -619,6 +668,7 @@ export default function CompanyWorkspace() {
   const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [stationToDeactivate, setStationToDeactivate] = useState<Station | null>(null);
   const [editingTariff, setEditingTariff] = useState<BaggageTariff | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
   const [agentToDeactivate, setAgentToDeactivate] = useState<Agent | null>(null);
@@ -637,6 +687,7 @@ export default function CompanyWorkspace() {
         notificationsData,
         paymentsData,
         citiesResponse,
+        stationsData,
       ] =
         await Promise.all([
           fetch("/api/auth/session", { cache: "no-store" }),
@@ -648,6 +699,7 @@ export default function CompanyWorkspace() {
           requestApi("notifications?page_size=100"),
           requestApi("paiements?page_size=100"),
           fetch("/api/villes", { cache: "no-store" }),
+          requestApi("stations"),
         ]);
       const sessionBody: unknown = await sessionResponse.json().catch(() => null);
       if (!sessionResponse.ok || !isUserProfile(sessionBody)) {
@@ -675,6 +727,7 @@ export default function CompanyWorkspace() {
       setCompany(companyData);
       setProfile(sessionBody);
       setTrips(loadedTrips);
+      setStations(listFrom(stationsData, isStation));
       setAgents(loadedAgents);
       setReservations(listFrom(reservationsData, isCompanyReservation));
       setTariffs(listFrom(tariffsData, isBaggageTariff));
@@ -777,6 +830,10 @@ export default function CompanyWorkspace() {
 
   function startTripCreation() {
     setEditingTrip(null);
+    setTripDepartCity("");
+    setTripArrivalCity("");
+    setTripDepartStation("");
+    setTripArrivalStation("");
     selectTab("trips");
   }
 
@@ -803,12 +860,30 @@ export default function CompanyWorkspace() {
     const payload = {
       ville_depart: String(formData.get("ville_depart") ?? editingTrip?.ville_depart ?? ""),
       ville_arrivee: String(formData.get("ville_arrivee") ?? editingTrip?.ville_arrivee ?? ""),
+      ...(String(formData.get("gare_depart_id") ?? "")
+        ? { gare_depart_id: String(formData.get("gare_depart_id")) }
+        : {}),
+      ...(String(formData.get("gare_arrivee_id") ?? "")
+        ? { gare_arrivee_id: String(formData.get("gare_arrivee_id")) }
+        : {}),
       date_depart: String(formData.get("date_depart") ?? editingTrip?.date_depart ?? ""),
       heure_depart: String(formData.get("heure_depart") ?? editingTrip?.heure_depart ?? ""),
       place_totale: Number(formData.get("place_totale") ?? editingTrip?.place_totale),
       prix: Number(formData.get("prix") ?? editingTrip?.prix),
       statut: String(formData.get("statut") ?? editingTrip?.statut ?? "PUBLIE"),
     };
+    const image = formData.get("image");
+    const requestPayload: FormData | typeof payload =
+      image instanceof File && image.size > 0
+        ? (() => {
+            const multipart = new FormData();
+            Object.entries(payload).forEach(([key, value]) => {
+              multipart.append(key, String(value));
+            });
+            multipart.append("image", image);
+            return multipart;
+          })()
+        : payload;
     setSaving(true);
     setError(null);
     setNotice(null);
@@ -816,9 +891,13 @@ export default function CompanyWorkspace() {
       await requestApi(
         editingTrip ? `voyages/${editingTrip.id_voyage}` : "voyages",
         editingTrip ? "PATCH" : "POST",
-        payload,
+        requestPayload,
       );
       setEditingTrip(null);
+      setTripDepartCity("");
+      setTripArrivalCity("");
+      setTripDepartStation("");
+      setTripArrivalStation("");
       form.reset();
       await loadWorkspace();
       setNotice(editingTrip ? "Le trajet a été mis à jour." : "Le trajet a été publié.");
@@ -828,6 +907,57 @@ export default function CompanyWorkspace() {
       );
     } finally {
       setSaving(false);
+    }
+
+  }
+
+  async function submitStation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const numberOrNull = (value: FormDataEntryValue | null) =>
+      typeof value === "string" && value !== "" ? value : null;
+    const payload = {
+      ville: String(formData.get("ville") ?? ""),
+      nom: String(formData.get("nom") ?? "").trim(),
+      adresse: String(formData.get("adresse") ?? "").trim(),
+      latitude: numberOrNull(formData.get("latitude")),
+      longitude: numberOrNull(formData.get("longitude")),
+      google_place_id: String(formData.get("google_place_id") ?? ""),
+      maps_url: String(formData.get("maps_url") ?? ""),
+    };
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi("stations", "POST", payload);
+      form.reset();
+      await loadWorkspace();
+      setNotice("La gare a été ajoutée.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Impossible d’ajouter la gare.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleStation(station: Station, active: boolean) {
+    setSaving(true);
+    setError(null);
+    setNotice(null);
+    try {
+      await requestApi(`stations/${station.id_gare}`, "PATCH", { active });
+      await loadWorkspace();
+      setNotice(active ? "La gare est de nouveau active." : "La gare a été désactivée.");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Impossible de modifier la gare.",
+      );
+    } finally {
+      setSaving(false);
+      setStationToDeactivate(null);
     }
   }
 
@@ -1298,6 +1428,74 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
+        {tab === "stations" ? (
+          <div className="company-content company-content--split">
+            <section className="company-panel">
+              <div className="company-panel-heading">
+                <div>
+                  <h2>Ajouter une gare</h2>
+                  <p>Chaque gare est associée à une ville officielle. Google Maps peut proposer son adresse et sa localisation.</p>
+                </div>
+              </div>
+              <form className="company-form" onSubmit={submitStation}>
+                <label>
+                  <span>Ville</span>
+                  <select name="ville" required defaultValue="">
+                    <option value="" disabled>Choisir une ville</option>
+                    {cities.map((city) => (
+                      <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  <span>Nom de la gare</span>
+                  <input name="nom" maxLength={150} required placeholder="Ex. Gare routière centrale" />
+                </label>
+                <StationLocationInput />
+                <button type="submit" className="company-button" disabled={saving || !cities.length}>
+                  {saving ? "Enregistrement…" : "Ajouter la gare"}
+                </button>
+              </form>
+            </section>
+            <section className="company-panel company-panel--list">
+              <div className="company-panel-heading">
+                <div><h2>Vos gares</h2><p>{stations.length} gare(s), toutes villes confondues</p></div>
+              </div>
+              {stations.length ? (
+                <div className="company-station-list">
+                  {stations.map((station) => (
+                    <article className="company-station-row" key={station.id_gare}>
+                      <div>
+                        <strong>{station.nom}</strong>
+                        <span>{station.ville_nom} · {station.adresse}</span>
+                        <span className={`company-status company-status--${station.active ? "active" : "disabled"}`}>
+                          {station.active ? "Active" : "Désactivée"}
+                        </span>
+                      </div>
+                      <div className="company-row-actions">
+                        {station.maps_url ? (
+                          <a href={station.maps_url} target="_blank" rel="noreferrer">Google Maps</a>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={saving}
+                          onClick={() => station.active
+                            ? setStationToDeactivate(station)
+                            : void toggleStation(station, true)}
+                        >
+                          {station.active ? "Désactiver" : "Réactiver"}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="company-empty">Aucune gare pour le moment. Ajoutez vos lieux de départ et d’arrivée.</p>
+              )}
+            </section>
+          </div>
+        ) : null}
+
         {tab === "trips" ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
@@ -1320,18 +1518,36 @@ export default function CompanyWorkspace() {
                 </div>
               </div>
               <form className="company-form" onSubmit={submitTrip} key={editingTrip?.id_voyage ?? "new-trip"}>
-                <label><span>Ville de départ</span><select name="ville_depart" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.ville_depart ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
-                <label><span>Ville d’arrivée</span><select name="ville_arrivee" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.ville_arrivee ?? ""}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
+                <label><span>Ville de départ</span><select name="ville_depart" required disabled={editingTripFieldsLocked} value={tripDepartCity} onChange={(event) => { setTripDepartCity(event.target.value); setTripDepartStation(""); }}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
+                <label><span>Gare de départ</span><select name="gare_depart_id" required={!editingTrip} disabled={editingTripFieldsLocked || !tripDepartCity} value={tripDepartStation} onChange={(event) => setTripDepartStation(event.target.value)}><option value="" disabled>Choisir une gare</option>{stations.filter((station) => station.ville === tripDepartCity && (station.active || station.id_gare === editingTrip?.gare_depart?.id_gare)).map((station) => <option key={station.id_gare} value={station.id_gare}>{station.nom} — {station.adresse}</option>)}</select></label>
+                <label><span>Ville d’arrivée</span><select name="ville_arrivee" required disabled={editingTripFieldsLocked} value={tripArrivalCity} onChange={(event) => { setTripArrivalCity(event.target.value); setTripArrivalStation(""); }}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
+                <label><span>Gare d’arrivée</span><select name="gare_arrivee_id" required={!editingTrip} disabled={editingTripFieldsLocked || !tripArrivalCity} value={tripArrivalStation} onChange={(event) => setTripArrivalStation(event.target.value)}><option value="" disabled>Choisir une gare</option>{stations.filter((station) => station.ville === tripArrivalCity && (station.active || station.id_gare === editingTrip?.gare_arrivee?.id_gare)).map((station) => <option key={station.id_gare} value={station.id_gare}>{station.nom} — {station.adresse}</option>)}</select></label>
                 <div className="company-form-grid">
                   <label><span>Date de départ</span><input name="date_depart" type="date" required disabled={editingTripFieldsLocked} min={new Date().toISOString().slice(0, 10)} defaultValue={editingTrip?.date_depart ?? ""} /></label>
                   <label><span>Heure de départ</span><input name="heure_depart" type="time" step="60" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.heure_depart ?? ""} /></label>
                   <label><span>Nombre de places</span><input name="place_totale" type="number" min="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.place_totale ?? "30"} /></label>
                   <label><span>Prix par place (FCFA)</span><input name="prix" type="number" min="0" step="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.prix ?? ""} /></label>
                 </div>
+                {editingTrip?.image ? (
+                  <div className="company-trip-image-preview">
+                    <span>Image actuelle</span>
+                    <Image
+                      src={editingTrip.image}
+                      alt={`Image du trajet ${editingTrip.ville_depart_nom} vers ${editingTrip.ville_arrivee_nom}`}
+                      width={320}
+                      height={180}
+                      unoptimized
+                    />
+                  </div>
+                ) : null}
+                <label>
+                  <span>Image du trajet <small>{editingTrip?.image ? "(facultatif, remplace l’image actuelle)" : "(facultatif)"}</small></span>
+                  <input name="image" type="file" accept="image/*" disabled={editingTripFieldsLocked} />
+                </label>
                 {editingTrip ? <label><span>Statut</span><select name="statut" disabled={editingTripHasActiveReservations && !editingTripHasDeparted} defaultValue={editingTripHasDeparted ? "ARCHIVE" : editingTrip.statut}>{editingTripHasDeparted ? <option value="ARCHIVE">Archivé</option> : <><option value="PUBLIE">Publié</option><option value="ANNULEE">Annulé</option><option value="ARCHIVE">Archivé</option></>}</select></label> : null}
                 <div className="company-form-actions">
                   <button type="submit" className="company-button" disabled={saving || (editingTripHasActiveReservations && !editingTripHasDeparted)}>{saving ? "Enregistrement…" : editingTripHasDeparted ? "Archiver le trajet" : editingTrip ? "Enregistrer" : "Publier le trajet"}</button>
-                  {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => setEditingTrip(null)}>Annuler</button> : null}
+                  {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => { setEditingTrip(null); setTripDepartCity(""); setTripArrivalCity(""); setTripDepartStation(""); setTripArrivalStation(""); }}>Annuler</button> : null}
                 </div>
               </form>
             </section>
@@ -1345,7 +1561,13 @@ export default function CompanyWorkspace() {
                       <button
                         type="button"
                         disabled={saving || (trip.places_disponibles < trip.place_totale && !trip.date_depart_effective)}
-                        onClick={() => setEditingTrip(trip)}
+                        onClick={() => {
+                          setEditingTrip(trip);
+                          setTripDepartCity(trip.ville_depart);
+                          setTripArrivalCity(trip.ville_arrivee);
+                          setTripDepartStation(trip.gare_depart?.id_gare ?? "");
+                          setTripArrivalStation(trip.gare_arrivee?.id_gare ?? "");
+                        }}
                       >
                         {trip.date_depart_effective ? "Archiver" : "Modifier"}
                       </button>
@@ -1593,6 +1815,18 @@ export default function CompanyWorkspace() {
                 setAgentToDeactivate(null);
               }
             }}
+          />
+        ) : null}
+        {stationToDeactivate ? (
+          <ConfirmationDialog
+            open
+            title="Désactiver cette gare ?"
+            description={`${stationToDeactivate.nom} ne pourra plus être sélectionnée pour de nouveaux trajets. Les voyages existants conserveront leur lieu de départ ou d’arrivée.`}
+            confirmLabel="Désactiver la gare"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setStationToDeactivate(null)}
+            onConfirm={() => toggleStation(stationToDeactivate, false)}
           />
         ) : null}
         {tariffToDelete ? (

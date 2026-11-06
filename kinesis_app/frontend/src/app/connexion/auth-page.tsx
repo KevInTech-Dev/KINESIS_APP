@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
+import { ArrowRight, Building2 } from "lucide-react";
 import PasswordInput from "@/components/password-input";
 import { isUserProfile } from "@/lib/user-profile";
 
@@ -180,7 +181,12 @@ export default function AuthPage() {
             ← Retour à l’accueil
           </Link>
           <Link className="auth-company-link" href="/inscription-compagnie">
-            Vous représentez une compagnie ? <strong>Créer un compte partenaire</strong>
+            <Building2 aria-hidden="true" />
+            <span>
+              <small>Vous représentez une compagnie ?</small>
+              <strong>Créer un compte partenaire</strong>
+            </span>
+            <ArrowRight aria-hidden="true" />
           </Link>
         </div>
 

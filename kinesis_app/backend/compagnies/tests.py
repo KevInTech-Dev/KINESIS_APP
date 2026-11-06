@@ -19,7 +19,7 @@ from rest_framework_simplejwt.tokens import AccessToken
 from reservations.models import Reservation
 from voyages.models import Ville, Voyage
 
-from .models import AgentCompagnie, Compagnie, PermissionAgent
+from .models import AgentCompagnie, Compagnie, Gare, PermissionAgent
 from .serializers import CompanyRegistrationSerializer
 from .storage import AuthenticatedCompanyDocumentStorage
 
@@ -174,6 +174,83 @@ class CompanyApiTests(APITestCase):
             statut=Compagnie.Statut.ACTIVE,
         )
         return user, company
+
+    def test_company_manages_only_its_stations_and_can_deactivate_them(self):
+        user, company = self.create_active_company("stations@example.com")
+        _, other_company = self.create_active_company("other-stations@example.com")
+        city = Ville.objects.create(nom="Lome")
+        own_station = Gare.objects.create(
+            compagnie=company,
+            ville=city,
+            nom="Gare centrale",
+            adresse="Avenue de la Gare",
+        )
+        other_station = Gare.objects.create(
+            compagnie=other_company,
+            ville=city,
+            nom="Gare partenaire",
+            adresse="Rue du Marché",
+        )
+        self.client.force_authenticate(user=user)
+
+        response = self.client.get(reverse("company-stations"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        station_ids = [item["id_gare"] for item in response.data]
+        self.assertEqual(station_ids, [str(own_station.pk)])
+
+        update_response = self.client.patch(
+            reverse("company-station-detail", kwargs={"pk": other_station.pk}),
+            {"active": False},
+            format="json",
+        )
+        self.assertEqual(update_response.status_code, status.HTTP_404_NOT_FOUND)
+
+        deactivate_response = self.client.patch(
+            reverse("company-station-detail", kwargs={"pk": own_station.pk}),
+            {"active": False},
+            format="json",
+        )
+        self.assertEqual(deactivate_response.status_code, status.HTTP_200_OK)
+        own_station.refresh_from_db()
+        self.assertFalse(own_station.active)
+
+    def test_company_creates_station_with_valid_city_and_coordinates(self):
+        user, _company = self.create_active_company("station-create@example.com")
+        city = Ville.objects.create(nom="Kara")
+        self.client.force_authenticate(user=user)
+
+        response = self.client.post(
+            reverse("company-stations"),
+            {
+                "ville": str(city.pk),
+                "nom": "Gare de Kara",
+                "adresse": "Centre-ville",
+                "latitude": "9.5510",
+                "longitude": "1.1860",
+                "google_place_id": "place-kara",
+                "maps_url": "https://maps.google.com/?q=kara",
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        station = Gare.objects.get(pk=response.data["id_gare"])
+        self.assertEqual(station.ville, city)
+        self.assertEqual(station.compagnie.utilisateur, user)
+        self.assertEqual(str(response.data["ville"]), str(city.pk))
+
+        invalid_response = self.client.post(
+            reverse("company-stations"),
+            {
+                "ville": str(city.pk),
+                "nom": "Coordonnées incomplètes",
+                "adresse": "Centre-ville",
+                "latitude": "9.5510",
+            },
+            format="json",
+        )
+        self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_company_profile_logo_and_editable_fields_persist_after_reload(self):
         with TemporaryDirectory() as media_root, override_settings(

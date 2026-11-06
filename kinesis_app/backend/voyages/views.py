@@ -52,6 +52,8 @@ class AgentVoyageListView(generics.ListAPIView):
             "compagnie__utilisateur",
             "ville_depart",
             "ville_arrivee",
+            "gare_depart__ville",
+            "gare_arrivee__ville",
         )
 
 
@@ -69,6 +71,8 @@ class VoyageListCreateView(generics.ListCreateAPIView):
             "compagnie__utilisateur",
             "ville_depart",
             "ville_arrivee",
+            "gare_depart__ville",
+            "gare_arrivee__ville",
         )
         if self.request.method == "POST":
             return queryset.none()
@@ -120,6 +124,8 @@ class VoyageListCreateView(generics.ListCreateAPIView):
                     "compagnie__utilisateur",
                     "ville_depart",
                     "ville_arrivee",
+                    "gare_depart__ville",
+                    "gare_arrivee__ville",
                 ),
                 now,
             ).filter(compagnie__utilisateur=user)
@@ -144,6 +150,8 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             "compagnie__utilisateur",
             "ville_depart",
             "ville_arrivee",
+            "gare_depart__ville",
+            "gare_arrivee__ville",
         )
         if self.request.method in ("PUT", "PATCH"):
             if not self.request.user.is_authenticated:
@@ -165,6 +173,8 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
                     "compagnie__utilisateur",
                     "ville_depart",
                     "ville_arrivee",
+                    "gare_depart__ville",
+                    "gare_arrivee__ville",
                 ),
                 now,
             ).filter(compagnie__utilisateur=user)

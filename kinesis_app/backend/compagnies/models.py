@@ -1,4 +1,5 @@
 import re
+import uuid
 
 from django.conf import settings
 from django.core.validators import RegexValidator
@@ -71,6 +72,56 @@ class Compagnie(models.Model):
 
     def __str__(self):
         return self.nom_commercial or self.raison_sociale or self.utilisateur.email
+
+
+class Gare(models.Model):
+    id_gare = models.UUIDField(
+        primary_key=True,
+        default=uuid.uuid4,
+        editable=False,
+    )
+    compagnie = models.ForeignKey(
+        Compagnie,
+        on_delete=models.PROTECT,
+        related_name="gares",
+    )
+    ville = models.ForeignKey(
+        "voyages.Ville",
+        on_delete=models.PROTECT,
+        related_name="gares",
+    )
+    nom = models.CharField(max_length=150)
+    adresse = models.CharField(max_length=500)
+    latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
+    google_place_id = models.CharField(max_length=255, blank=True)
+    maps_url = models.URLField(max_length=1000, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ("ville__nom", "nom", "id_gare")
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(latitude__isnull=True, longitude__isnull=True)
+                    | models.Q(latitude__isnull=False, longitude__isnull=False)
+                ),
+                name="gare_coords_pair",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(latitude__gte=-90, latitude__lte=90)
+                | models.Q(latitude__isnull=True),
+                name="gare_latitude_bounds",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(longitude__gte=-180, longitude__lte=180)
+                | models.Q(longitude__isnull=True),
+                name="gare_longitude_bounds",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.nom} ({self.ville})"
 
 
 class AgentCompagnie(models.Model):

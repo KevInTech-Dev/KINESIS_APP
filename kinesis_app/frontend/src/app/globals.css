@@ -3361,11 +3361,47 @@ select:focus-visible {
 }
 
 .auth-company-link {
-  max-width: 220px;
+  min-height: 44px;
+  max-width: 255px;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 11px;
+  border: 1px solid #cfe2d4;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f3faf3, #eaf5ec);
   color: #64746a;
   font-size: 10px;
-  line-height: 1.5;
-  text-align: right;
+  line-height: 1.4;
+  text-align: left;
+  text-decoration: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.auth-company-link > svg:first-child {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  color: var(--green);
+}
+
+.auth-company-link > svg:last-child {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  margin-left: auto;
+  color: var(--green);
+}
+
+.auth-company-link span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.auth-company-link small {
+  font-size: 9px;
+  font-weight: 600;
 }
 
 .auth-company-link strong {
@@ -3375,9 +3411,10 @@ select:focus-visible {
   font-weight: 800;
 }
 
-.auth-company-link:hover strong {
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.auth-company-link:hover {
+  transform: translateY(-1px);
+  border-color: #9dc7a8;
+  box-shadow: 0 6px 16px rgb(22 83 49 / 10%);
 }
 
 .auth-back-link:hover,
@@ -3732,12 +3769,17 @@ select:focus-visible {
   }
 
   .auth-panel-topline {
-    gap: 8px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .auth-company-link {
-    max-width: 175px;
-    font-size: 9px;
+    width: 100%;
+    max-width: none;
+    min-height: 46px;
+    justify-content: flex-start;
+    padding: 8px 11px;
   }
 
   .auth-company-link strong {
@@ -3760,6 +3802,16 @@ select:focus-visible {
 
   .auth-page--login .auth-brand {
     margin-bottom: 10px;
+  }
+
+  .auth-page--login .auth-heading {
+    margin-top: 12px;
+  }
+
+  .auth-page--login .auth-eyebrow,
+  .auth-page--login .auth-heading > p:last-child,
+  .auth-page--login .auth-footer {
+    display: none;
   }
 }
 
@@ -8124,6 +8176,23 @@ select:focus-visible {
   gap: 14px;
 }
 
+.company-trip-image-preview {
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  color: #31483d;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.company-trip-image-preview img {
+  width: min(100%, 320px);
+  height: 180px;
+  border: 1px solid #e2ebe2;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
 .company-registration-panel .auth-submit {
   width: 100%;
 }
@@ -8795,6 +8864,51 @@ select:focus-visible {
   display: grid;
 }
 
+.company-station-list {
+  display: grid;
+}
+
+.company-station-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 15px 0;
+  border-top: 1px solid #edf1ed;
+}
+
+.company-station-row > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.company-station-row strong {
+  color: var(--deep-green);
+  font-size: 12px;
+}
+
+.company-station-row > div:first-child > span:not(.company-status) {
+  color: #87938b;
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.company-station-row .company-row-actions a {
+  align-self: center;
+  color: var(--green);
+  font-size: 9px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.catalog-card__stations {
+  margin: 8px 0 0;
+  color: #68786d;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
 .company-trip-row {
   display: flex;
   align-items: center;
@@ -9398,6 +9512,11 @@ select:focus-visible {
   .company-trip-summary {
     flex-direction: column;
     gap: 9px;
+  }
+
+  .company-station-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .company-trip-details {
@@ -12551,6 +12670,158 @@ select:focus-visible {
 
   .agent-workspace-content .agent-unread-label {
     margin-left: 22px;
+  }
+}
+
+.traveler-workspace-content .traveler-booking-card {
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  box-shadow: 0 2px 8px rgb(22 52 40 / 3%);
+}
+
+.traveler-workspace-content .traveler-route {
+  gap: 7px;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.traveler-workspace-content .traveler-booking-summary {
+  margin-top: 5px;
+}
+
+.traveler-workspace-content .traveler-booking-summary .traveler-price {
+  font-size: 12px;
+}
+
+.traveler-workspace-content .traveler-booking-details {
+  gap: 5px;
+}
+
+.traveler-workspace-content .traveler-booking-details .traveler-departure {
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.traveler-workspace-content .traveler-booking-actions {
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.traveler-workspace-content .traveler-booking-actions button {
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.traveler-workspace-content .traveler-notification-card {
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 9px;
+}
+
+.traveler-workspace-content .traveler-notification-copy {
+  gap: 4px;
+}
+
+.traveler-workspace-content .traveler-notification-copy h3 {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.traveler-workspace-content .traveler-notification-copy p {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.traveler-workspace-content .traveler-notification-copy time {
+  font-size: 10px;
+}
+
+.traveler-workspace-content .traveler-notification-card > button {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 10px;
+}
+
+.traveler-booking-stations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.traveler-map-link {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid #cfe4d4;
+  border-radius: 8px;
+  background: #f0f8f1;
+  color: #155e3f;
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-decoration: none;
+  transition: background 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+.traveler-map-link:hover {
+  transform: translateY(-1px);
+  border-color: #9dc7a8;
+  background: #e5f3e7;
+}
+
+.traveler-map-link svg:first-child {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  color: #08734d;
+}
+
+.traveler-map-link svg:last-child {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  color: #5b8068;
+}
+
+.traveler-map-link span {
+  display: grid;
+  gap: 1px;
+}
+
+.traveler-map-link small {
+  color: #6d8073;
+  font-size: 8px;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .traveler-workspace-content .traveler-booking-card {
+    gap: 8px;
+    padding: 11px;
+  }
+
+  .traveler-workspace-content .traveler-booking-details {
+    justify-items: start;
+  }
+
+  .traveler-workspace-content .traveler-booking-details .traveler-departure {
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .traveler-workspace-content .traveler-notification-card {
+    gap: 7px 9px;
+    padding: 11px;
+  }
+
+  .traveler-workspace-content .traveler-notification-copy {
+    flex-basis: calc(100% - 30px);
   }
 }
 

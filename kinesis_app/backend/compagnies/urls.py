@@ -11,6 +11,8 @@ from .views import (
     AgentListCreateView,
     CompanyActivationView,
     CompanyRegistrationView,
+    CompanyStationDetailView,
+    CompanyStationListCreateView,
     MyCompanyView,
 )
 
@@ -39,6 +41,12 @@ urlpatterns = [
         name="admin-company-deactivate",
     ),
     path("me/", MyCompanyView.as_view(), name="my-company"),
+    path("stations/", CompanyStationListCreateView.as_view(), name="company-stations"),
+    path(
+        "stations/<uuid:pk>/",
+        CompanyStationDetailView.as_view(),
+        name="company-station-detail",
+    ),
     path("agents/", AgentListCreateView.as_view(), name="company-agents"),
     path(
         "agents/<uuid:pk>/resend-invitation/",

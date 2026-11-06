@@ -4,6 +4,8 @@ from django.db.models import Q
 from django.utils import timezone
 from rest_framework import serializers
 
+from compagnies.models import Gare
+
 from .models import Ville, Voyage
 
 
@@ -15,6 +17,46 @@ class VilleSerializer(serializers.ModelSerializer):
 
     def validate_nom(self, value):
         return " ".join(value.split())
+
+
+class GarePublicSerializer(serializers.ModelSerializer):
+    ville_nom = serializers.CharField(source="ville.nom", read_only=True)
+    maps_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Gare
+        fields = (
+            "id_gare",
+            "nom",
+            "ville_nom",
+            "adresse",
+            "latitude",
+            "longitude",
+            "google_place_id",
+            "maps_url",
+        )
+
+    def get_maps_url(self, obj):
+        if obj.maps_url:
+            return obj.maps_url
+        if obj.google_place_id:
+            from urllib.parse import urlencode
+
+            return "https://www.google.com/maps/search/?" + urlencode(
+                {"api": "1", "query_place_id": obj.google_place_id}
+            )
+        if obj.latitude is not None and obj.longitude is not None:
+            return (
+                "https://www.google.com/maps/search/?"
+                f"api=1&query={obj.latitude}%2C{obj.longitude}"
+            )
+        if obj.adresse:
+            from urllib.parse import urlencode
+
+            return "https://www.google.com/maps/search/?" + urlencode(
+                {"api": "1", "query": f"{obj.nom}, {obj.adresse}"}
+            )
+        return None
 
 
 class VoyageSerializer(serializers.ModelSerializer):
@@ -29,6 +71,22 @@ class VoyageSerializer(serializers.ModelSerializer):
         source="ville_arrivee.nom",
         read_only=True,
     )
+    gare_depart = GarePublicSerializer(read_only=True)
+    gare_arrivee = GarePublicSerializer(read_only=True)
+    gare_depart_id = serializers.PrimaryKeyRelatedField(
+        source="gare_depart",
+        queryset=Gare.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
+    gare_arrivee_id = serializers.PrimaryKeyRelatedField(
+        source="gare_arrivee",
+        queryset=Gare.objects.all(),
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
     places_disponibles = serializers.SerializerMethodField()
 
     class Meta:
@@ -41,6 +99,10 @@ class VoyageSerializer(serializers.ModelSerializer):
             "ville_depart_nom",
             "ville_arrivee",
             "ville_arrivee_nom",
+            "gare_depart",
+            "gare_depart_id",
+            "gare_arrivee",
+            "gare_arrivee_id",
             "date_depart",
             "heure_depart",
             "date_depart_effective",
@@ -121,6 +183,46 @@ class VoyageSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"ville_arrivee": "La ville d’arrivée doit différer du départ."}
             )
+
+        gare_depart = attrs.get(
+            "gare_depart", getattr(self.instance, "gare_depart", None)
+        )
+        gare_arrivee = attrs.get(
+            "gare_arrivee", getattr(self.instance, "gare_arrivee", None)
+        )
+        if (gare_depart is None) != (gare_arrivee is None):
+            raise serializers.ValidationError(
+                {"gare_depart_id": "Les gares de départ et d’arrivée sont toutes deux obligatoires."}
+            )
+        if self.instance is None and (gare_depart is None or gare_arrivee is None):
+            raise serializers.ValidationError(
+                {"gare_depart_id": "Choisissez une gare de départ et une gare d’arrivée."}
+            )
+        if gare_depart is not None and gare_arrivee is not None:
+            compagnie = self.context["request"].user.profil_compagnie
+            for field, station, city in (
+                ("gare_depart_id", gare_depart, depart),
+                ("gare_arrivee_id", gare_arrivee, arrivee),
+            ):
+                if station.compagnie_id != compagnie.pk:
+                    raise serializers.ValidationError(
+                        {field: "La gare sélectionnée n’appartient pas à votre compagnie."}
+                    )
+                if station.ville_id != city.pk:
+                    raise serializers.ValidationError(
+                        {field: "La gare choisie doit être située dans la ville sélectionnée."}
+                    )
+                current_station = (
+                    getattr(self.instance, "gare_depart" if field == "gare_depart_id" else "gare_arrivee")
+                    if self.instance is not None
+                    else None
+                )
+                if not station.active and (
+                    current_station is None or current_station.pk != station.pk
+                ):
+                    raise serializers.ValidationError(
+                        {field: "Une gare désactivée ne peut pas être utilisée pour un nouveau trajet."}
+                    )
 
         date_depart = attrs.get(
             "date_depart", getattr(self.instance, "date_depart", None)

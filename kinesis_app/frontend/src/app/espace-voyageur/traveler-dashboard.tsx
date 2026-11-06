@@ -12,8 +12,10 @@ import {
   Clock3,
   CreditCard,
   Download,
+  ExternalLink,
   LayoutDashboard,
   Luggage,
+  MapPin,
   Search,
   Ticket,
   UserRound,
@@ -46,6 +48,18 @@ type Reservation = {
     compagnie_nom: string;
     ville_depart_nom: string;
     ville_arrivee_nom: string;
+    gare_depart: {
+      id_gare: string;
+      nom: string;
+      adresse: string;
+      maps_url: string | null;
+    } | null;
+    gare_arrivee: {
+      id_gare: string;
+      nom: string;
+      adresse: string;
+      maps_url: string | null;
+    } | null;
     date_depart: string;
     heure_depart: string;
     image: string | null;
@@ -279,6 +293,32 @@ function isReservationList(
         typeof reservation.voyage.ville_depart_nom === "string" &&
         "ville_arrivee_nom" in reservation.voyage &&
         typeof reservation.voyage.ville_arrivee_nom === "string" &&
+        "gare_depart" in reservation.voyage &&
+        (reservation.voyage.gare_depart === null ||
+          (typeof reservation.voyage.gare_depart === "object" &&
+            reservation.voyage.gare_depart !== null &&
+            "id_gare" in reservation.voyage.gare_depart &&
+            typeof reservation.voyage.gare_depart.id_gare === "string" &&
+            "nom" in reservation.voyage.gare_depart &&
+            typeof reservation.voyage.gare_depart.nom === "string" &&
+            "adresse" in reservation.voyage.gare_depart &&
+            typeof reservation.voyage.gare_depart.adresse === "string" &&
+            "maps_url" in reservation.voyage.gare_depart &&
+            (typeof reservation.voyage.gare_depart.maps_url === "string" ||
+              reservation.voyage.gare_depart.maps_url === null))) &&
+        "gare_arrivee" in reservation.voyage &&
+        (reservation.voyage.gare_arrivee === null ||
+          (typeof reservation.voyage.gare_arrivee === "object" &&
+            reservation.voyage.gare_arrivee !== null &&
+            "id_gare" in reservation.voyage.gare_arrivee &&
+            typeof reservation.voyage.gare_arrivee.id_gare === "string" &&
+            "nom" in reservation.voyage.gare_arrivee &&
+            typeof reservation.voyage.gare_arrivee.nom === "string" &&
+            "adresse" in reservation.voyage.gare_arrivee &&
+            typeof reservation.voyage.gare_arrivee.adresse === "string" &&
+            "maps_url" in reservation.voyage.gare_arrivee &&
+            (typeof reservation.voyage.gare_arrivee.maps_url === "string" ||
+              reservation.voyage.gare_arrivee.maps_url === null))) &&
         "date_depart" in reservation.voyage &&
         typeof reservation.voyage.date_depart === "string" &&
         "heure_depart" in reservation.voyage &&
@@ -1240,6 +1280,36 @@ export default function TravelerDashboard() {
                         </span>
                         <span>{reservation.voyage.ville_arrivee_nom}</span>
                       </div>
+                      {reservation.voyage.gare_depart || reservation.voyage.gare_arrivee ? (
+                        <div className="traveler-booking-stations">
+                          {reservation.voyage.gare_depart?.maps_url ? (
+                            <a
+                              className="traveler-map-link"
+                              href={reservation.voyage.gare_depart.maps_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Voir la gare de départ ${reservation.voyage.gare_depart.nom} sur Google Maps`}
+                            >
+                              <MapPin aria-hidden="true" />
+                              <span><small>Départ</small>{reservation.voyage.gare_depart.nom}</span>
+                              <ExternalLink aria-hidden="true" />
+                            </a>
+                          ) : null}
+                          {reservation.voyage.gare_arrivee?.maps_url ? (
+                            <a
+                              className="traveler-map-link"
+                              href={reservation.voyage.gare_arrivee.maps_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              aria-label={`Voir la gare d’arrivée ${reservation.voyage.gare_arrivee.nom} sur Google Maps`}
+                            >
+                              <MapPin aria-hidden="true" />
+                              <span><small>Arrivée</small>{reservation.voyage.gare_arrivee.nom}</span>
+                              <ExternalLink aria-hidden="true" />
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null}
                       <div className="traveler-booking-summary">
                         <p className="traveler-price">
                           {formatPrice(reservation.montant_total)}

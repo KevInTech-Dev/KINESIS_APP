@@ -158,8 +158,34 @@ function VoyageDetailContent() {
                   <span className="voyage-detail__fact-icon" aria-hidden="true">02</span>
                   <span><small>Ville d’arrivée</small><strong>{trip.ville_arrivee_nom}</strong></span>
                 </div>
+                {trip.gare_depart ? (
+                  <div>
+                    <span className="voyage-detail__fact-icon" aria-hidden="true">03</span>
+                    <span>
+                      <small>Gare de départ</small>
+                      <strong>{trip.gare_depart.nom}</strong>
+                      <span>{trip.gare_depart.adresse}</span>
+                      {trip.gare_depart.maps_url ? (
+                        <a href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">Voir sur Google Maps</a>
+                      ) : null}
+                    </span>
+                  </div>
+                ) : null}
+                {trip.gare_arrivee ? (
+                  <div>
+                    <span className="voyage-detail__fact-icon" aria-hidden="true">04</span>
+                    <span>
+                      <small>Gare d’arrivée</small>
+                      <strong>{trip.gare_arrivee.nom}</strong>
+                      <span>{trip.gare_arrivee.adresse}</span>
+                      {trip.gare_arrivee.maps_url ? (
+                        <a href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">Voir sur Google Maps</a>
+                      ) : null}
+                    </span>
+                  </div>
+                ) : null}
                 <div>
-                  <span className="voyage-detail__fact-icon" aria-hidden="true">03</span>
+                  <span className="voyage-detail__fact-icon" aria-hidden="true">05</span>
                   <span>
                     <small>Places disponibles</small>
                     <strong>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""}</strong>

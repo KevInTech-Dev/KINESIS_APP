@@ -7,11 +7,14 @@ import { useEffect, useMemo, useState, type FormEvent } from "react";
 import KinesisLoader from "@/components/kinesis-loader";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
+type Station = { nom: string; adresse: string; maps_url: string | null };
 type Trip = {
   id_voyage: string;
   compagnie_nom: string;
   ville_depart_nom: string;
   ville_arrivee_nom: string;
+  gare_depart: Station | null;
+  gare_arrivee: Station | null;
   date_depart: string;
   heure_depart: string;
   places_disponibles: number;
@@ -26,6 +29,19 @@ type BaggageTariff = {
   prix: string | number;
 };
 
+function isStation(value: unknown): value is Station {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "nom" in value &&
+    typeof value.nom === "string" &&
+    "adresse" in value &&
+    typeof value.adresse === "string" &&
+    "maps_url" in value &&
+    (typeof value.maps_url === "string" || value.maps_url === null)
+  );
+}
+
 function isTrip(value: unknown): value is Trip {
   return (
     typeof value === "object" &&
@@ -38,6 +54,10 @@ function isTrip(value: unknown): value is Trip {
     typeof value.ville_depart_nom === "string" &&
     "ville_arrivee_nom" in value &&
     typeof value.ville_arrivee_nom === "string" &&
+    "gare_depart" in value &&
+    (value.gare_depart === null || isStation(value.gare_depart)) &&
+    "gare_arrivee" in value &&
+    (value.gare_arrivee === null || isStation(value.gare_arrivee)) &&
     "date_depart" in value &&
     typeof value.date_depart === "string" &&
     "heure_depart" in value &&
@@ -360,6 +380,22 @@ export default function BookingPage({
                   {" · "}
                   {trip.heure_depart.slice(0, 5)}
                 </p>
+                {trip.gare_depart ? (
+                  <p>
+                    Départ : {trip.gare_depart.nom} — {trip.gare_depart.adresse}
+                    {trip.gare_depart.maps_url ? (
+                      <> · <a href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">Google Maps</a></>
+                    ) : null}
+                  </p>
+                ) : null}
+                {trip.gare_arrivee ? (
+                  <p>
+                    Arrivée : {trip.gare_arrivee.nom} — {trip.gare_arrivee.adresse}
+                    {trip.gare_arrivee.maps_url ? (
+                      <> · <a href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">Google Maps</a></>
+                    ) : null}
+                  </p>
+                ) : null}
               </div>
               <strong>{formatPrice(trip.prix)} / place</strong>
             </section>
