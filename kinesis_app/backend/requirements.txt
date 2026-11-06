@@ -10,3 +10,5 @@ django-cloudinary-storage
 pytest-django
 ruff
 black
+Gunicorn
+WhiteNoise

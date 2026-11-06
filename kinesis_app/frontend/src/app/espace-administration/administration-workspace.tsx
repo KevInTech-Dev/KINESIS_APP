@@ -282,7 +282,7 @@ function getUserRegistrationBuckets(
   registrations: UserSummary["registrations"],
   range: UserRange,
 ) {
-  const days = USER_RANGES.find((item) => item.id === range)?.days ?? 30;
+  const days = USER_RANGES.find((item) => item.id === range)?.days ?? 7;
   const end = new Date();
   end.setHours(23, 59, 59, 999);
   const start = new Date(end);
@@ -400,7 +400,7 @@ export default function AdministrationWorkspace() {
   const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
   const [userSummaryLoading, setUserSummaryLoading] = useState(false);
   const [userSummaryError, setUserSummaryError] = useState<string | null>(null);
-  const [userRange, setUserRange] = useState<UserRange>("30");
+  const [userRange, setUserRange] = useState<UserRange>("7");
   const [userSearchInput, setUserSearchInput] = useState("");
   const [userSearch, setUserSearch] = useState("");
   const [loading, setLoading] = useState(true);

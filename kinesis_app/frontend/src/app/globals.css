@@ -12918,3 +12918,403 @@ select:focus-visible {
     animation-duration: 3s;
   }
 }
+
+.app-dialog {
+  width: min(560px, calc(100% - 32px));
+  max-width: none;
+  max-height: min(90dvh, 900px);
+  margin: auto;
+  padding: 0;
+  overflow: auto;
+  border: 1px solid #dfe7df;
+  border-radius: 18px;
+  background: #fff;
+  color: var(--ink);
+  box-shadow: 0 24px 80px rgb(15 35 25 / 22%);
+}
+
+.app-dialog::backdrop {
+  background: rgb(9 26 18 / 58%);
+  backdrop-filter: blur(3px);
+}
+
+.app-dialog__header {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 12px 20px;
+  border-bottom: 1px solid #e6ece6;
+  background: #fff;
+}
+
+.app-dialog__header h2 {
+  margin: 0;
+  color: #23392a;
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.app-dialog__header button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid #e1e8e1;
+  border-radius: 9px;
+  background: #f8faf8;
+  color: #415248;
+}
+
+.app-dialog__header button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.site-header--menu-open {
+  background: #073d2e;
+  box-shadow: 0 5px 20px rgb(3 35 26 / 12%);
+}
+
+.traveler-details-dialog {
+  width: min(520px, calc(100% - 32px));
+}
+
+.traveler-details-dialog > .traveler-detail-panel {
+  margin: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 13px;
+}
+
+.traveler-detail-panel ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.traveler-ticket-modal {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  padding: 20px;
+}
+
+.traveler-ticket-modal .traveler-ticket-qr {
+  width: 180px;
+  height: 180px;
+  padding: 9px;
+}
+
+.traveler-ticket-modal .traveler-detail-panel {
+  width: 100%;
+  margin: 0;
+  padding: 14px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.traveler-ticket-download {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: #0b6b4b;
+  color: white;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.traveler-ticket-download:hover {
+  background: #09583e;
+}
+
+.traveler-ticket-card__summary {
+  min-width: 0;
+}
+
+.traveler-overview-list {
+  min-width: 0;
+}
+
+.traveler-workspace-content .traveler-repository-grid,
+.traveler-workspace-content .traveler-recent-list,
+.traveler-workspace-content .traveler-overview-main,
+.traveler-workspace-content .traveler-github-profile {
+  min-width: 0;
+}
+
+.catalog-filters-desktop {
+  min-width: 0;
+}
+
+.catalog-mobile-filter-trigger {
+  display: none;
+}
+
+@media (min-width: 701px) {
+  .hero .hero-cta--mobile {
+    display: none;
+  }
+}
+
+.hero-cta--mobile {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .site-header--menu-open .mobile-nav {
+    border-color: rgb(255 255 255 / 12%);
+    border-radius: 0;
+    background: #073d2e;
+    box-shadow: none;
+    color: white;
+  }
+
+  .site-header--menu-open .mobile-nav a:hover,
+  .site-header--menu-open .mobile-nav button:hover {
+    background: rgb(255 255 255 / 10%);
+  }
+
+  .site-header--menu-open .menu-button {
+    border-color: rgb(255 255 255 / 35%);
+    background: rgb(255 255 255 / 15%);
+    color: white;
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .hero .hero-cta--desktop {
+    display: none;
+  }
+
+  .hero .hero-cta--mobile {
+    display: inline-flex;
+    border: 0;
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .booking-section {
+    display: none;
+  }
+
+  .booking-search-dialog {
+    width: min(560px, calc(100% - 24px));
+    max-height: calc(100dvh - 24px);
+  }
+
+  .booking-search-dialog .booking-form {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "from"
+      "swap"
+      "to"
+      "date"
+      "passengers"
+      "search";
+    gap: 9px;
+    padding: 14px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .booking-search-dialog .swap-button {
+    justify-self: center;
+    transform: rotate(90deg);
+  }
+
+  .booking-search-dialog .search-button {
+    width: 100%;
+  }
+
+  .booking-search-dialog .search-feedback,
+  .booking-search-dialog .api-notice {
+    margin: 0 14px 14px;
+  }
+
+  .catalog-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .catalog-filters-desktop {
+    display: none;
+  }
+
+  .catalog-mobile-filter-trigger {
+    display: inline-flex;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border: 1px solid #d9e5db;
+    border-radius: 12px;
+    background: #fff;
+    color: #176345;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 750;
+  }
+
+  .catalog-filters-dialog {
+    width: min(560px, calc(100% - 24px));
+    max-height: calc(100dvh - 24px);
+  }
+
+  .catalog-filters-dialog .catalog-filters {
+    position: static;
+    display: grid;
+    max-height: calc(100dvh - 100px);
+    gap: 14px;
+    overflow-y: auto;
+    padding: 14px 18px 20px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .traveler-workspace-content .traveler-overview-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .traveler-workspace-content .traveler-github-profile {
+    grid-template-columns: 54px minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 11px;
+  }
+
+  .traveler-workspace-content .traveler-github-avatar {
+    width: 54px;
+    grid-row: span 2;
+  }
+
+  .traveler-workspace-content .traveler-github-profile h3 {
+    align-self: end;
+    margin: 0;
+    font-size: 15px;
+  }
+
+  .traveler-workspace-content .traveler-github-handle {
+    align-self: start;
+    font-size: 10px;
+  }
+
+  .traveler-workspace-content .traveler-profile-phone,
+  .traveler-workspace-content .traveler-profile-note {
+    display: none;
+  }
+
+  .traveler-workspace-content .traveler-profile-action {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    width: auto;
+    min-height: 34px;
+    margin: 0;
+    padding: 0 10px;
+    font-size: 10px;
+  }
+
+  .traveler-workspace-content .traveler-repository-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .traveler-workspace-content .traveler-repository-grid button {
+    min-height: 92px;
+    gap: 6px;
+    padding: 10px;
+  }
+
+  .traveler-workspace-content .traveler-repository-grid button > span {
+    gap: 5px;
+    font-size: 11px;
+  }
+
+  .traveler-workspace-content .traveler-repository-grid button > strong {
+    font-size: 20px;
+  }
+
+  .traveler-workspace-content .traveler-repository-grid button > small {
+    font-size: 9px;
+    line-height: 1.3;
+  }
+
+  .traveler-workspace-content .traveler-overview-list {
+    margin-top: 14px;
+    padding: 12px 12px 2px;
+  }
+
+  .traveler-workspace-content .traveler-recent-list article:nth-child(n + 3) {
+    display: none;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card {
+    display: grid;
+    grid-template-columns: 92px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+  }
+
+  .traveler-workspace-content .traveler-ticket-qr {
+    width: 92px;
+    height: 92px;
+    flex-basis: 92px;
+    padding: 4px;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card__summary {
+    min-width: 0;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card h3 {
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card .traveler-ticket-brand {
+    font-size: 8px;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card .traveler-ticket-passenger {
+    font-size: 10px;
+    line-height: 1.4;
+  }
+
+  .traveler-workspace-content .traveler-ticket-card .traveler-booking-actions {
+    margin-top: 10px;
+  }
+
+  .traveler-details-dialog {
+    width: min(520px, calc(100% - 24px));
+  }
+}
+
+@media (max-width: 360px) {
+  .traveler-workspace-content .traveler-github-profile {
+    grid-template-columns: 46px minmax(0, 1fr);
+  }
+
+  .traveler-workspace-content .traveler-github-avatar {
+    width: 46px;
+  }
+
+  .traveler-workspace-content .traveler-profile-action {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+}

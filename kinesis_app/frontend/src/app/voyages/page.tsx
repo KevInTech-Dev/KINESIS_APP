@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState, type FormEvent } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import VoyagesPageHeader from "@/components/voyages-page-header";
@@ -118,6 +119,94 @@ function buildQuery(filters: Filters) {
   return query;
 }
 
+type CatalogFiltersFormProps = {
+  filters: Filters;
+  cities: Ville[];
+  companies: { id: string; name: string }[];
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onClear: () => void;
+  onChange: (field: keyof Filters, value: string) => void;
+};
+
+function CatalogFiltersForm({
+  filters,
+  cities,
+  companies,
+  onSubmit,
+  onClear,
+  onChange,
+}: CatalogFiltersFormProps) {
+  return (
+    <form className="catalog-filters" onSubmit={onSubmit}>
+      <div className="catalog-filters__heading">
+        <div>
+          <span className="catalog-filters__eyebrow">AFFINER</span>
+          <h2>Votre recherche</h2>
+        </div>
+        <button type="button" onClick={onClear}>Effacer</button>
+      </div>
+      <label>
+        Ville de départ
+        <select value={filters.ville_depart} onChange={(event) => onChange("ville_depart", event.target.value)}>
+          <option value="">Toutes les villes</option>
+          {cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}
+        </select>
+      </label>
+      <label>
+        Ville d’arrivée
+        <select value={filters.ville_arrivee} onChange={(event) => onChange("ville_arrivee", event.target.value)}>
+          <option value="">Toutes les villes</option>
+          {cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}
+        </select>
+      </label>
+      <label>
+        Date précise
+        <input type="date" value={filters.date_depart} onChange={(event) => onChange("date_depart", event.target.value)} />
+      </label>
+      <div className="catalog-filters__row">
+        <label>
+          À partir du
+          <input type="date" value={filters.date_depart_apres} onChange={(event) => onChange("date_depart_apres", event.target.value)} />
+        </label>
+        <label>
+          Jusqu’au
+          <input type="date" value={filters.date_depart_avant} onChange={(event) => onChange("date_depart_avant", event.target.value)} />
+        </label>
+      </div>
+      <label>
+        Compagnie
+        <select value={filters.compagnie} onChange={(event) => onChange("compagnie", event.target.value)}>
+          <option value="">Toutes les compagnies</option>
+          {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
+        </select>
+      </label>
+      <div className="catalog-filters__row">
+        <label>
+          Prix min. (FCFA)
+          <input type="number" min="0" value={filters.prix_min} onChange={(event) => onChange("prix_min", event.target.value)} />
+        </label>
+        <label>
+          Prix max. (FCFA)
+          <input type="number" min="0" value={filters.prix_max} onChange={(event) => onChange("prix_max", event.target.value)} />
+        </label>
+      </div>
+      <label>
+        Nombre de places
+        <input type="number" min="1" max="100" value={filters.places_min} onChange={(event) => onChange("places_min", event.target.value)} />
+      </label>
+      <label>
+        Trier par
+        <select value={filters.ordering} onChange={(event) => onChange("ordering", event.target.value)}>
+          <option value="date_depart">Départ le plus proche</option>
+          <option value="prix">Prix croissant</option>
+          <option value="-prix">Prix décroissant</option>
+        </select>
+      </label>
+      <button className="catalog-submit" type="submit">Rechercher</button>
+    </form>
+  );
+}
+
 function VoyagesCatalog() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.toString();
@@ -129,6 +218,7 @@ function VoyagesCatalog() {
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const { pageItems: pageTrips, pagination, resetPage } =
     useListPagination(trips);
 
@@ -210,6 +300,7 @@ function VoyagesCatalog() {
         isVoyage,
       );
       setTrips(results);
+      setMobileFiltersOpen(false);
     } catch (searchError) {
       setError(
         searchError instanceof Error
@@ -229,6 +320,7 @@ function VoyagesCatalog() {
     setError("");
     try {
       setTrips(await getList("/api/voyages", isVoyage));
+      setMobileFiltersOpen(false);
     } catch (clearError) {
       setError(
         clearError instanceof Error
@@ -264,113 +356,39 @@ function VoyagesCatalog() {
       </section>
 
       <div className="catalog-layout">
-        <form className="catalog-filters" onSubmit={search}>
-          <div className="catalog-filters__heading">
-            <div>
-              <span className="catalog-filters__eyebrow">AFFINER</span>
-              <h2>Votre recherche</h2>
-            </div>
-            <button type="button" onClick={() => void clearFilters()}>Effacer</button>
-          </div>
-          <label>
-            Ville de départ
-            <select
-              value={filters.ville_depart}
-              onChange={(event) => updateFilter("ville_depart", event.target.value)}
-            >
-              <option value="">Toutes les villes</option>
-              {cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}
-            </select>
-          </label>
-          <label>
-            Ville d’arrivée
-            <select
-              value={filters.ville_arrivee}
-              onChange={(event) => updateFilter("ville_arrivee", event.target.value)}
-            >
-              <option value="">Toutes les villes</option>
-              {cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}
-            </select>
-          </label>
-          <label>
-            Date précise
-            <input
-              type="date"
-              value={filters.date_depart}
-              onChange={(event) => updateFilter("date_depart", event.target.value)}
-            />
-          </label>
-          <div className="catalog-filters__row">
-            <label>
-              À partir du
-              <input
-                type="date"
-                value={filters.date_depart_apres}
-                onChange={(event) => updateFilter("date_depart_apres", event.target.value)}
-              />
-            </label>
-            <label>
-              Jusqu’au
-              <input
-                type="date"
-                value={filters.date_depart_avant}
-                onChange={(event) => updateFilter("date_depart_avant", event.target.value)}
-              />
-            </label>
-          </div>
-          <label>
-            Compagnie
-            <select
-              value={filters.compagnie}
-              onChange={(event) => updateFilter("compagnie", event.target.value)}
-            >
-              <option value="">Toutes les compagnies</option>
-              {companies.map((company) => <option key={company.id} value={company.id}>{company.name}</option>)}
-            </select>
-          </label>
-          <div className="catalog-filters__row">
-            <label>
-              Prix min. (FCFA)
-              <input
-                type="number"
-                min="0"
-                value={filters.prix_min}
-                onChange={(event) => updateFilter("prix_min", event.target.value)}
-              />
-            </label>
-            <label>
-              Prix max. (FCFA)
-              <input
-                type="number"
-                min="0"
-                value={filters.prix_max}
-                onChange={(event) => updateFilter("prix_max", event.target.value)}
-              />
-            </label>
-          </div>
-          <label>
-            Nombre de places
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={filters.places_min}
-              onChange={(event) => updateFilter("places_min", event.target.value)}
-            />
-          </label>
-          <label>
-            Trier par
-            <select
-              value={filters.ordering}
-              onChange={(event) => updateFilter("ordering", event.target.value)}
-            >
-              <option value="date_depart">Départ le plus proche</option>
-              <option value="prix">Prix croissant</option>
-              <option value="-prix">Prix décroissant</option>
-            </select>
-          </label>
-          <button className="catalog-submit" type="submit">Rechercher</button>
-        </form>
+        <div className="catalog-filters-desktop">
+          <CatalogFiltersForm
+            filters={filters}
+            cities={cities}
+            companies={companies}
+            onSubmit={search}
+            onClear={() => void clearFilters()}
+            onChange={updateFilter}
+          />
+        </div>
+        <button
+          className="catalog-mobile-filter-trigger"
+          type="button"
+          onClick={() => setMobileFiltersOpen(true)}
+        >
+          Filtrer les voyages
+        </button>
+        <AppDialog
+          open={mobileFiltersOpen}
+          title="Filtrer les voyages"
+          className="catalog-filters-dialog"
+          onClose={() => setMobileFiltersOpen(false)}
+        >
+          {error ? <p className="catalog-message catalog-message--error" role="alert">{error}</p> : null}
+          <CatalogFiltersForm
+            filters={filters}
+            cities={cities}
+            companies={companies}
+            onSubmit={search}
+            onClear={() => void clearFilters()}
+            onChange={updateFilter}
+          />
+        </AppDialog>
 
         <section className="catalog-results" aria-live="polite">
           <div className="catalog-results__heading">

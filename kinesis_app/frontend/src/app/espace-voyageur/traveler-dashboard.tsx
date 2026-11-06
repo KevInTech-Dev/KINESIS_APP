@@ -12,7 +12,6 @@ import {
   Clock3,
   CreditCard,
   Download,
-  FileText,
   LayoutDashboard,
   Luggage,
   Search,
@@ -27,6 +26,7 @@ import {
   type FormEvent,
 } from "react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
@@ -1240,21 +1240,9 @@ export default function TravelerDashboard() {
                         </span>
                         <span>{reservation.voyage.ville_arrivee_nom}</span>
                       </div>
-                      <p className="traveler-company">
-                        <BusFront aria-hidden="true" />
-                        {reservation.voyage.compagnie_nom}
-                      </p>
                       <div className="traveler-booking-summary">
-                        <p className="traveler-reference">
-                          <FileText aria-hidden="true" />
-                          Réf. {reservation.reference}
-                        </p>
                         <p className="traveler-price">
                           {formatPrice(reservation.montant_total)}
-                        </p>
-                        <p className="traveler-seats">
-                          {reservation.places.length} place
-                          {reservation.places.length > 1 ? "s" : ""}
                         </p>
                       </div>
                     </div>
@@ -1316,25 +1304,9 @@ export default function TravelerDashboard() {
                         >
                           {detailLoading === reservation.id_reservation
                             ? "Chargement…"
-                            : reservationDetail?.id_reservation === reservation.id_reservation
-                              ? "Masquer les détails"
-                              : "Détails"}
+                            : "Détails"}
                         </button>
                       </div>
-                      {reservationDetail?.id_reservation === reservation.id_reservation ? (
-                        <div className="traveler-detail-panel">
-                          <strong>Passagers et sièges</strong>
-                          <ul>
-                            {reservationDetail.places.map((place) => (
-                              <li key={place.numero_siege}>{place.nom_passager} · Siège {place.numero_siege}</li>
-                            ))}
-                          </ul>
-                          <span>Réservée le {formatDate(reservationDetail.date_reservation, { day: "numeric", month: "long", year: "numeric" })}</span>
-                          {reservationDetail.date_expiration ? (
-                            <span>Expiration du paiement : {formatDate(reservationDetail.date_expiration, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                          ) : null}
-                        </div>
-                      ) : null}
                       {reservation.statut === "EN_ATTENTE_PAIEMENT" ? (
                         <div className="traveler-booking-actions">
                           <button
@@ -1520,7 +1492,7 @@ export default function TravelerDashboard() {
                       includeMargin
                       title={`Billet de ${ticket.nom_passager}`}
                     />
-                    <div>
+                    <div className="traveler-ticket-card__summary">
                       <p className="traveler-ticket-brand">KINESIS · BILLET DE VOYAGE</p>
                       <h3>
                         {ticket.voyage.ville_depart_nom}
@@ -1531,28 +1503,7 @@ export default function TravelerDashboard() {
                         <UserRound aria-hidden="true" />
                         {ticket.nom_passager} · Siège {ticket.numero_siege}
                       </p>
-                      <p className="traveler-reference">
-                        <FileText aria-hidden="true" />
-                        Billet {ticket.code_billet} · Réservation {ticket.reservation_reference}
-                      </p>
-                      <p className="traveler-ticket-departure">
-                        Départ le{" "}
-                        {formatDate(ticket.voyage.date_depart, {
-                          day: "numeric",
-                          month: "long",
-                          year: "numeric",
-                        })}{" "}
-                        à {ticket.voyage.heure_depart.slice(0, 5)}
-                      </p>
                       <div className="traveler-booking-actions">
-                        <button
-                          type="button"
-                          title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression."
-                          onClick={() => downloadTicket(ticket)}
-                        >
-                          <Download aria-hidden="true" size={14} />
-                          Télécharger le billet
-                        </button>
                         <button
                           type="button"
                           onClick={() =>
@@ -1564,28 +1515,10 @@ export default function TravelerDashboard() {
                         >
                           {detailLoading === ticket.id_billet
                             ? "Chargement…"
-                            : ticketDetail?.id_billet === ticket.id_billet
-                              ? "Masquer les détails"
-                              : "Détails du billet"}
+                            : "Détails du billet"}
                         </button>
                       </div>
-                      {ticketDetail?.id_billet === ticket.id_billet ? (
-                        <div className="traveler-detail-panel">
-                          <strong>Informations du billet</strong>
-                          <span>Départ le {formatDate(ticketDetail.voyage.date_depart, { day: "numeric", month: "long", year: "numeric" })} à {ticketDetail.voyage.heure_depart.slice(0, 5)}</span>
-                          <span>Code : {ticketDetail.code_billet}</span>
-                          {ticketDetail.date_creation ? (
-                            <span>Émis le {formatDate(ticketDetail.date_creation, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                          ) : null}
-                          {ticketDetail.date_embarquement ? (
-                            <span>Embarquement confirmé le {formatDate(ticketDetail.date_embarquement, { day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
-                          ) : null}
-                        </div>
-                      ) : null}
                     </div>
-                    <span className="traveler-status traveler-status--payee">
-                      {ticket.statut === "EMBARQUE" ? "Embarqué" : "Valide"}
-                    </span>
                   </article>
                 ))}
               </div>
@@ -1666,6 +1599,145 @@ export default function TravelerDashboard() {
               setReservationToCancel(null);
             }}
           />
+        ) : null}
+        {reservationDetail ? (
+          <AppDialog
+            open
+            title="Détails de la réservation"
+            className="traveler-details-dialog"
+            onClose={() => setReservationDetail(null)}
+          >
+            <div className="traveler-detail-panel">
+              <strong>
+                {reservationDetail.voyage.ville_depart_nom} →{" "}
+                {reservationDetail.voyage.ville_arrivee_nom}
+              </strong>
+              <span>Compagnie : {reservationDetail.voyage.compagnie_nom}</span>
+              <span>Référence : {reservationDetail.reference}</span>
+              <span>
+                {reservationDetail.places.length} place
+                {reservationDetail.places.length > 1 ? "s" : ""} ·{" "}
+                {formatPrice(reservationDetail.montant_total)}
+              </span>
+              <span>
+                Départ le{" "}
+                {formatDate(reservationDetail.voyage.date_depart, {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}{" "}
+                à {reservationDetail.voyage.heure_depart.slice(0, 5)}
+              </span>
+              <strong>Passagers et sièges</strong>
+              <ul>
+                {reservationDetail.places.map((place) => (
+                  <li key={place.numero_siege}>
+                    {place.nom_passager} · Siège {place.numero_siege}
+                  </li>
+                ))}
+              </ul>
+              <span>
+                Réservée le{" "}
+                {formatDate(reservationDetail.date_reservation, {
+                  day: "numeric",
+                  month: "long",
+                  year: "numeric",
+                })}
+              </span>
+              {reservationDetail.date_expiration ? (
+                <span>
+                  Expiration du paiement :{" "}
+                  {formatDate(reservationDetail.date_expiration, {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+              ) : null}
+            </div>
+          </AppDialog>
+        ) : null}
+        {ticketDetail ? (
+          <AppDialog
+            open
+            title="Détails du billet"
+            className="traveler-details-dialog"
+            onClose={() => setTicketDetail(null)}
+          >
+            <article
+              className="traveler-ticket-modal"
+              data-print-ticket-card={ticketDetail.id_billet}
+            >
+              <QRCodeSVG
+                className="traveler-ticket-qr"
+                value={ticketDetail.code_qr}
+                size={180}
+                level="M"
+                includeMargin
+                title={`Billet de ${ticketDetail.nom_passager}`}
+              />
+              <div className="traveler-detail-panel">
+                <strong>
+                  {ticketDetail.voyage.ville_depart_nom} →{" "}
+                  {ticketDetail.voyage.ville_arrivee_nom}
+                </strong>
+                <span>
+                  Passager : {ticketDetail.nom_passager} · Siège{" "}
+                  {ticketDetail.numero_siege}
+                </span>
+                <span>
+                  Départ le{" "}
+                  {formatDate(ticketDetail.voyage.date_depart, {
+                    day: "numeric",
+                    month: "long",
+                    year: "numeric",
+                  })}{" "}
+                  à {ticketDetail.voyage.heure_depart.slice(0, 5)}
+                </span>
+                <span>Code du billet : {ticketDetail.code_billet}</span>
+                <span>Réservation : {ticketDetail.reservation_reference}</span>
+                <span>
+                  Statut :{" "}
+                  {ticketDetail.statut === "EMBARQUE" ? "Embarqué" : "Valide"}
+                </span>
+                {ticketDetail.date_creation ? (
+                  <span>
+                    Émis le{" "}
+                    {formatDate(ticketDetail.date_creation, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                ) : null}
+                {ticketDetail.date_embarquement ? (
+                  <span>
+                    Embarquement confirmé le{" "}
+                    {formatDate(ticketDetail.date_embarquement, {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              <button
+                className="traveler-ticket-download"
+                type="button"
+                title="Choisissez « Enregistrer au format PDF » dans la fenêtre d’impression."
+                onClick={() => downloadTicket(ticketDetail)}
+              >
+                <Download aria-hidden="true" size={15} />
+                Télécharger le billet
+              </button>
+            </article>
+          </AppDialog>
         ) : null}
       </div>
     </RoleWorkspaceShell>

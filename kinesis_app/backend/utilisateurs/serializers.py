@@ -104,7 +104,19 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return Utilisateur.objects.create_user(password=password, **validated_data)
 
 
+class UserProfilePhotoField(serializers.ImageField):
+    def to_representation(self, value):
+        user = self.parent.instance
+        if user and user.role == Utilisateur.Role.COMPAGNIE:
+            try:
+                value = user.profil_compagnie.logo
+            except Compagnie.DoesNotExist:
+                value = None
+        return super().to_representation(value)
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
+    photo_profil = UserProfilePhotoField(allow_null=True)
     agent_permissions = serializers.SerializerMethodField()
     compagnie_nom = serializers.SerializerMethodField()
 

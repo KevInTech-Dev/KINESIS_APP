@@ -172,6 +172,45 @@ class UserAuthenticationTests(APITestCase):
 							photo_response.data["photo_profil"],
 						)
 
+	def test_company_profile_photo_is_its_logo(self):
+		with TemporaryDirectory() as media_root, override_settings(
+			MEDIA_ROOT=media_root,
+			STORAGES={
+				"default": {
+					"BACKEND": "django.core.files.storage.FileSystemStorage",
+				},
+				"staticfiles": {
+					"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage",
+				},
+			},
+		):
+			user = User.objects.create_user(
+				email="company-logo@example.com",
+				password=self.password,
+				nom="Transport",
+				role=User.Role.COMPAGNIE,
+			)
+			image = BytesIO()
+			Image.new("RGB", (2, 2), color="green").save(image, format="PNG")
+			company = Compagnie.objects.create(
+				utilisateur=user,
+				nom_commercial="Transport Kinesis",
+				logo=SimpleUploadedFile(
+					"logo.png",
+					image.getvalue(),
+					content_type="image/png",
+				),
+			)
+			self.client.force_authenticate(user=user)
+
+			response = self.client.get(reverse("current-user"))
+
+			self.assertEqual(response.status_code, status.HTTP_200_OK)
+			self.assertEqual(
+				response.data["photo_profil"],
+				f"http://testserver{company.logo.url}",
+			)
+
 	def test_logout_revokes_the_refresh_token(self):
 		user = User.objects.create_user(
 			email="voyageur@example.com",

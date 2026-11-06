@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Ville, Voyage } from "@/lib/types";
+import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import ProfileAvatar from "@/components/profile-avatar";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
@@ -324,6 +325,150 @@ function TripCard({
   );
 }
 
+type BookingSearchFormProps = {
+  id: string;
+  cities: Ville[];
+  from: string;
+  to: string;
+  date: string;
+  minimumDate: string;
+  passengers: number;
+  loadingCities: boolean;
+  searching: boolean;
+  onFromChange: (value: string) => void;
+  onToChange: (value: string) => void;
+  onDateChange: (value: string) => void;
+  onPassengersChange: (value: number | ((current: number) => number)) => void;
+  onSwap: () => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+};
+
+function BookingSearchForm({
+  id,
+  cities,
+  from,
+  to,
+  date,
+  minimumDate,
+  passengers,
+  loadingCities,
+  searching,
+  onFromChange,
+  onToChange,
+  onDateChange,
+  onPassengersChange,
+  onSwap,
+  onSubmit,
+}: BookingSearchFormProps) {
+  return (
+    <form className="booking-form" id={id} onSubmit={onSubmit}>
+      <label className="booking-field booking-field--from">
+        <span className="booking-field__label">Départ</span>
+        <span className="booking-field__control">
+          <span className="field-icon"><Icon name="location" /></span>
+          <select
+            aria-label="Ville de départ"
+            value={from}
+            onChange={(event) => onFromChange(event.target.value)}
+            disabled={cities.length === 0}
+            required
+          >
+            {cities.length === 0 ? <option value="">Chargement…</option> : null}
+            {cities.map((city) => (
+              <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>
+            ))}
+          </select>
+          <Icon name="chevron" className="field-chevron" />
+        </span>
+      </label>
+
+      <button
+        className="swap-button"
+        type="button"
+        onClick={onSwap}
+        disabled={!from || !to}
+        aria-label="Inverser départ et arrivée"
+      >
+        <Icon name="swap" />
+      </button>
+
+      <label className="booking-field booking-field--to">
+        <span className="booking-field__label">Arrivée</span>
+        <span className="booking-field__control">
+          <span className="field-icon"><Icon name="location" /></span>
+          <select
+            aria-label="Ville d’arrivée"
+            value={to}
+            onChange={(event) => onToChange(event.target.value)}
+            disabled={cities.length === 0}
+            required
+          >
+            {cities.length === 0 ? <option value="">Chargement…</option> : null}
+            {cities.map((city) => (
+              <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>
+            ))}
+          </select>
+          <Icon name="chevron" className="field-chevron" />
+        </span>
+      </label>
+
+      <label className="booking-field booking-field--date">
+        <span className="booking-field__label">Date</span>
+        <span className="booking-field__control">
+          <span className="field-icon"><Icon name="calendar" /></span>
+          <input
+            type="date"
+            aria-label="Date de départ"
+            min={minimumDate}
+            value={date}
+            onChange={(event) => onDateChange(event.target.value)}
+            required
+          />
+        </span>
+      </label>
+
+      <div className="booking-field booking-field--passengers">
+        <span className="booking-field__label">Voyageurs</span>
+        <span className="booking-field__control">
+          <span className="field-icon"><Icon name="users" /></span>
+          <div className="passenger-stepper" aria-label="Voyageurs">
+            <button
+              className="passenger-stepper__button"
+              type="button"
+              onClick={() => onPassengersChange((count) => Math.max(1, count - 1))}
+              disabled={passengers <= 1}
+              aria-label="Retirer un voyageur"
+            >
+              −
+            </button>
+            <span className="passenger-stepper__value" aria-live="polite" aria-atomic="true">
+              {passengers} {passengers > 1 ? "places" : "place"}
+            </span>
+            <button
+              className="passenger-stepper__button"
+              type="button"
+              onClick={() => onPassengersChange((count) => Math.min(100, count + 1))}
+              disabled={passengers >= 100}
+              aria-label="Ajouter un voyageur (maximum 100)"
+            >
+              +
+            </button>
+          </div>
+        </span>
+      </div>
+
+      <button
+        className="search-button"
+        type="submit"
+        disabled={searching || loadingCities || cities.length < 2}
+      >
+        {searching ? "Recherche…" : "Rechercher"}
+        <span><Icon name="arrow" /></span>
+      </button>
+    </form>
+  );
+}
+
 export default function HomePage() {
   const router = useRouter();
   const [cities, setCities] = useState<Ville[]>([]);
@@ -341,6 +486,7 @@ export default function HomePage() {
   const [searchMessage, setSearchMessage] = useState("");
   const [searching, setSearching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [searchDialogOpen, setSearchDialogOpen] = useState(false);
   const [headerScrolled, setHeaderScrolled] = useState(false);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const profileHref =
@@ -487,6 +633,7 @@ export default function HomePage() {
         (trip) => trip.places_disponibles >= passengers,
       );
       if (suitableTrips.length === 1) {
+        setSearchDialogOpen(false);
         router.push(
           `/voyages/${encodeURIComponent(suitableTrips[0].id_voyage)}?passagers=${passengers}`,
         );
@@ -498,6 +645,7 @@ export default function HomePage() {
           ? "Aucun départ ne correspond à ces critères. Essayez une autre date ou un autre trajet."
           : `${suitableTrips.length} départ${suitableTrips.length > 1 ? "s" : ""} disponible${suitableTrips.length > 1 ? "s" : ""}.`,
       );
+      setSearchDialogOpen(false);
     } catch (error) {
       setSearchMessage(
         error instanceof Error
@@ -512,7 +660,7 @@ export default function HomePage() {
   return (
     <div className="site-shell">
       <header
-        className={`site-header${headerScrolled ? " site-header--scrolled" : ""}`}
+        className={`site-header${headerScrolled ? " site-header--scrolled" : ""}${menuOpen ? " site-header--menu-open" : ""}`}
       >
         <div className="header-inner">
           <a className="brand" href="#accueil" aria-label="Kinesis, accueil">
@@ -608,12 +756,20 @@ export default function HomePage() {
                 Avec KINESIS, réservez votre place en quelques clics et voyagez
                 entre les villes du Togo en toute sérénité.
               </p>
-              <a className="hero-cta" href="#recherche">
+              <a className="hero-cta hero-cta--desktop" href="#recherche">
                 Rechercher un voyage
                 <span>
                   <Icon name="arrow" />
                 </span>
               </a>
+              <button
+                className="hero-cta hero-cta--mobile"
+                type="button"
+                onClick={() => setSearchDialogOpen(true)}
+              >
+                Rechercher un voyage
+                <span><Icon name="arrow" /></span>
+              </button>
             </div>
           </div>
         </section>
@@ -638,139 +794,23 @@ export default function HomePage() {
                 prochains départs.
               </p>
             </div>
-            <form
-              className="booking-form"
+            <BookingSearchForm
               id="search-form"
+              cities={cities}
+              from={from}
+              to={to}
+              date={date}
+              minimumDate={minimumDate}
+              passengers={passengers}
+              loadingCities={loadingCities}
+              searching={searching}
+              onFromChange={setFrom}
+              onToChange={setTo}
+              onDateChange={setDate}
+              onPassengersChange={setPassengers}
+              onSwap={swapCities}
               onSubmit={searchTrips}
-            >
-            <label className="booking-field booking-field--from">
-              <span className="booking-field__label">Départ</span>
-              <span className="booking-field__control">
-                <span className="field-icon">
-                  <Icon name="location" />
-                </span>
-                <select
-                  aria-label="Ville de départ"
-                  value={from}
-                  onChange={(event) => setFrom(event.target.value)}
-                  disabled={cities.length === 0}
-                  required
-                >
-                  {cities.length === 0 ? (
-                    <option value="">Chargement…</option>
-                  ) : null}
-                  {cities.map((city) => (
-                    <option key={city.id_ville} value={city.id_ville}>
-                      {city.nom}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="chevron" className="field-chevron" />
-              </span>
-            </label>
-
-            <button
-              className="swap-button"
-              type="button"
-              onClick={swapCities}
-              disabled={!from || !to}
-              aria-label="Inverser départ et arrivée"
-            >
-              <Icon name="swap" />
-            </button>
-
-            <label className="booking-field booking-field--to">
-              <span className="booking-field__label">Arrivée</span>
-              <span className="booking-field__control">
-                <span className="field-icon">
-                  <Icon name="location" />
-                </span>
-                <select
-                  aria-label="Ville d’arrivée"
-                  value={to}
-                  onChange={(event) => setTo(event.target.value)}
-                  disabled={cities.length === 0}
-                  required
-                >
-                  {cities.length === 0 ? (
-                    <option value="">Chargement…</option>
-                  ) : null}
-                  {cities.map((city) => (
-                    <option key={city.id_ville} value={city.id_ville}>
-                      {city.nom}
-                    </option>
-                  ))}
-                </select>
-                <Icon name="chevron" className="field-chevron" />
-              </span>
-            </label>
-
-            <label className="booking-field booking-field--date">
-              <span className="booking-field__label">Date</span>
-              <span className="booking-field__control">
-                <span className="field-icon">
-                  <Icon name="calendar" />
-                </span>
-                <input
-                  type="date"
-                  aria-label="Date de départ"
-                  min={minimumDate}
-                  value={date}
-                  onChange={(event) => setDate(event.target.value)}
-                  required
-                />
-              </span>
-            </label>
-
-            <div className="booking-field booking-field--passengers">
-              <span className="booking-field__label">Voyageurs</span>
-              <span className="booking-field__control">
-                <span className="field-icon">
-                  <Icon name="users" />
-                </span>
-                <div className="passenger-stepper" aria-label="Voyageurs">
-                  <button
-                    className="passenger-stepper__button"
-                    type="button"
-                    onClick={() =>
-                      setPassengers((count) => Math.max(1, count - 1))
-                    }
-                    disabled={passengers <= 1}
-                    aria-label="Retirer un voyageur"
-                  >
-                    −
-                  </button>
-                  <span
-                    className="passenger-stepper__value"
-                    aria-live="polite"
-                    aria-atomic="true"
-                  >
-                    {passengers} {passengers > 1 ? "places" : "place"}
-                  </span>
-                  <button
-                    className="passenger-stepper__button"
-                    type="button"
-                    onClick={() => setPassengers((count) => Math.min(100, count + 1))}
-                    disabled={passengers >= 100}
-                    aria-label="Ajouter un voyageur (maximum 100)"
-                  >
-                    +
-                  </button>
-                </div>
-              </span>
-            </div>
-
-            <button
-              className="search-button"
-              type="submit"
-              disabled={searching || loadingCities || cities.length < 2}
-            >
-              {searching ? "Recherche…" : "Rechercher"}
-              <span>
-                <Icon name="arrow" />
-              </span>
-            </button>
-            </form>
+            />
 
             {cityError || tripError ? (
               <div className="api-notice" role="status">
@@ -931,6 +971,43 @@ export default function HomePage() {
           </div>
         </section>
       </main>
+
+      <AppDialog
+        open={searchDialogOpen}
+        title="Rechercher un voyage"
+        className="booking-search-dialog"
+        onClose={() => setSearchDialogOpen(false)}
+      >
+        <BookingSearchForm
+          id="mobile-search-form"
+          cities={cities}
+          from={from}
+          to={to}
+          date={date}
+          minimumDate={minimumDate}
+          passengers={passengers}
+          loadingCities={loadingCities}
+          searching={searching}
+          onFromChange={setFrom}
+          onToChange={setTo}
+          onDateChange={setDate}
+          onPassengersChange={setPassengers}
+          onSwap={swapCities}
+          onSubmit={searchTrips}
+        />
+        {cityError || tripError ? (
+          <div className="api-notice" role="status">
+            <strong>Informations de voyage indisponibles.</strong>
+            {cityError ? <span>Villes : {cityError}</span> : null}
+            {tripError ? <span>Départs : {tripError}</span> : null}
+          </div>
+        ) : null}
+        {searchMessage ? (
+          <div className="search-feedback" role="status" aria-live="polite">
+            <p>{searchMessage}</p>
+          </div>
+        ) : null}
+      </AppDialog>
 
       <footer className="site-footer">
         <div className="footer-main">

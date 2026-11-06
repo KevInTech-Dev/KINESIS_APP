@@ -405,7 +405,7 @@ function getPaymentBuckets(
   range: PaymentRange,
   now: number,
 ) {
-  const days = PAYMENT_RANGES.find((item) => item.id === range)?.days ?? 30;
+  const days = PAYMENT_RANGES.find((item) => item.id === range)?.days ?? 7;
   const end = new Date(now);
   end.setHours(23, 59, 59, 999);
   const start = new Date(end);
@@ -602,7 +602,7 @@ function CompanySidebar({
 export default function CompanyWorkspace() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
-  const [paymentRange, setPaymentRange] = useState<PaymentRange>("30d");
+  const [paymentRange, setPaymentRange] = useState<PaymentRange>("7d");
   const [dashboardNow, setDashboardNow] = useState<number | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -1536,7 +1536,7 @@ export default function CompanyWorkspace() {
         {tab === "profile" ? (
           <div className="company-content">
             <section className="company-panel company-profile-panel">
-              <div className="company-panel-heading">              <div><h2>Informations de la compagnie</h2><p>Les coordonnées légales restent en lecture seule après validation. Vous pouvez modifier l’adresse, la description et le logo.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
+              <div className="company-panel-heading">              <div><h2>Informations de la compagnie</h2><p>Les coordonnées légales restent en lecture seule après validation. Vous pouvez modifier l’adresse, la description et le logo, qui sert aussi de photo de profil.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
               <div className="company-profile-identity">
               <ProfileAvatar
                 className="company-profile-identity__logo"
@@ -1561,7 +1561,7 @@ export default function CompanyWorkspace() {
               </div>
               <label><span>Adresse <small>(modifiable)</small></span><input name="adresse" maxLength={255} defaultValue={company.adresse} /></label>
               <label><span>Description <small>(modifiable)</small></span><textarea name="description" rows={4} defaultValue={company.description} /></label>
-                <label><span>Logo <small>(image, facultatif)</small></span><input name="logo" type="file" accept="image/*" /></label>
+                <label><span>Logo / photo de profil <small>(image, facultatif)</small></span><input name="logo" type="file" accept="image/*" /></label>
                 <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : "Enregistrer les changements"}</button>
               </form>
             </section>
