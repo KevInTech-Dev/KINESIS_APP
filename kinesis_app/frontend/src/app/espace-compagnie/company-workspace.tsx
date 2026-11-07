@@ -27,6 +27,7 @@ import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import StationLocationInput from "@/components/station-location-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
+import { getPublicCities } from "@/lib/public-cities";
 import { Separator } from "@/components/ui/separator";
 import {
   Sidebar,
@@ -201,14 +202,6 @@ function isCompany(value: unknown): value is Company {
     typeof value.description === "string" &&
     typeof value.adresse === "string" &&
     typeof value.statut === "string"
-  );
-}
-
-function isCity(value: unknown): value is City {
-  return (
-    isRecord(value) &&
-    typeof value.id_ville === "string" &&
-    typeof value.nom === "string"
   );
 }
 
@@ -686,7 +679,7 @@ export default function CompanyWorkspace() {
         tariffsData,
         notificationsData,
         paymentsData,
-        citiesResponse,
+        citiesData,
         stationsData,
       ] =
         await Promise.all([
@@ -698,7 +691,7 @@ export default function CompanyWorkspace() {
           requestApi("bagages/tarifs?page_size=100"),
           requestApi("notifications?page_size=100"),
           requestApi("paiements?page_size=100"),
-          fetch("/api/villes", { cache: "no-store" }),
+          getPublicCities(),
           requestApi("stations"),
         ]);
       const sessionBody: unknown = await sessionResponse.json().catch(() => null);
@@ -711,10 +704,6 @@ export default function CompanyWorkspace() {
         setRedirecting(true);
         router.replace("/espace-voyageur");
         return;
-      }
-      const cityBody: unknown = await citiesResponse.json().catch(() => null);
-      if (!citiesResponse.ok) {
-        throw new Error(messageFrom(cityBody) ?? "Impossible de charger les villes.");
       }
       if (!isCompany(companyData)) {
         throw new Error("Le profil de la compagnie reçu est invalide.");
@@ -733,7 +722,7 @@ export default function CompanyWorkspace() {
       setTariffs(listFrom(tariffsData, isBaggageTariff));
       setNotifications(listFrom(notificationsData, isNotification));
       setPayments(listFrom(paymentsData, isPayment));
-      setCities(listFrom(cityBody, isCity));
+      setCities(citiesData);
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
       );

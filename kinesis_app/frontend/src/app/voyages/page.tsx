@@ -3,7 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState, type FormEvent } from "react";
+import {
+  Suspense,
+  useEffect,
+  useRef,
+  useState,
+  type FormEvent,
+} from "react";
 import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
@@ -17,6 +23,7 @@ import {
   fetchPaginatedApiResponse,
   type PaginatedApiResponse,
 } from "@/lib/paginated-api";
+import { getPublicCities } from "@/lib/public-cities";
 
 type Filters = {
   ville_depart: string;
@@ -55,17 +62,6 @@ function filtersFromQuery(query: string): Filters {
   return initialFilters;
 }
 
-function isVille(value: unknown): value is Ville {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id_ville" in value &&
-    typeof value.id_ville === "string" &&
-    "nom" in value &&
-    typeof value.nom === "string"
-  );
-}
-
 function isVoyage(value: unknown): value is Voyage {
   return (
     typeof value === "object" &&
@@ -81,28 +77,6 @@ function isVoyage(value: unknown): value is Voyage {
   );
 }
 
-async function getList<T>(
-  url: string,
-  isItem: (value: unknown) => value is T,
-): Promise<T[]> {
-  const response = await fetch(url, { cache: "no-store" });
-  const payload: unknown = await response.json();
-  if (!response.ok) {
-    const detail =
-      typeof payload === "object" &&
-      payload !== null &&
-      "detail" in payload &&
-      typeof payload.detail === "string"
-        ? payload.detail
-        : "Le chargement des voyages a échoué.";
-    throw new Error(detail);
-  }
-  if (!Array.isArray(payload) || !payload.every(isItem)) {
-    throw new Error("Les données reçues du serveur sont invalides.");
-  }
-  return payload;
-}
-
 function isCompanyOption(value: unknown): value is CompanyOption {
   return (
     typeof value === "object" &&
@@ -114,21 +88,26 @@ function isCompanyOption(value: unknown): value is CompanyOption {
   );
 }
 
+function parseCompanyOptions(value: unknown): CompanyOption[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || !value.every(isCompanyOption)) {
+    throw new Error("La liste des compagnies reçue est invalide.");
+  }
+  return value;
+}
+
 async function getCatalogPage(url: string): Promise<
-  PaginatedApiResponse<Voyage> & { companies: CompanyOption[] }
+  PaginatedApiResponse<Voyage> & { companies?: CompanyOption[] }
 > {
   const result = await fetchPaginatedApiResponse(
     url,
     isVoyage,
     "Le chargement des voyages a échoué.",
   );
-  if (
-    !Array.isArray(result.companies) ||
-    !result.companies.every(isCompanyOption)
-  ) {
-    throw new Error("La liste des compagnies reçue est invalide.");
-  }
-  return { ...result, companies: result.companies };
+  return {
+    ...result,
+    companies: parseCompanyOptions(result.companies),
+  };
 }
 
 function formatPrice(price: string | number) {
@@ -257,6 +236,7 @@ function VoyagesCatalog() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [cityError, setCityError] = useState("");
+  const includeFacetsOnNextRequest = useRef(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState<ListPageSize>(10);
@@ -264,7 +244,7 @@ function VoyagesCatalog() {
 
   useEffect(() => {
     let active = true;
-    getList("/api/villes", isVille)
+    getPublicCities()
       .then((cityList) => {
         if (active) setCities(cityList);
       })
@@ -287,14 +267,19 @@ function VoyagesCatalog() {
     const query = new URLSearchParams(submittedQuery);
     query.set("page", String(page));
     query.set("page_size", String(pageSize));
-    query.set("include_facets", "1");
+    if (includeFacetsOnNextRequest.current) {
+      query.set("include_facets", "1");
+    }
 
     getCatalogPage(`/api/voyages?${query.toString()}`)
       .then((result) => {
         if (!active) return;
         setTrips(result.results);
         setTripCount(result.count);
-        setCompanies(result.companies ?? []);
+        if (result.companies) {
+          setCompanies(result.companies);
+          includeFacetsOnNextRequest.current = false;
+        }
       })
       .catch((loadError: unknown) => {
         if (active) {
@@ -349,6 +334,7 @@ function VoyagesCatalog() {
     window.history.replaceState(null, "", nextUrl);
     setLoading(true);
     setError("");
+    includeFacetsOnNextRequest.current = true;
     setSubmittedQuery(query.toString());
     setPage(1);
     setRefreshKey((current) => current + 1);
@@ -360,6 +346,7 @@ function VoyagesCatalog() {
     window.history.replaceState(null, "", "/voyages");
     setLoading(true);
     setError("");
+    includeFacetsOnNextRequest.current = true;
     setSubmittedQuery("");
     setPage(1);
     setRefreshKey((current) => current + 1);

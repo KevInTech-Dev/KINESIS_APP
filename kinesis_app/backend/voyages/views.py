@@ -32,15 +32,18 @@ class AgentVoyageListView(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return Voyage.objects.filter(
-            compagnie=self.request.user.profil_agent.compagnie,
-        ).select_related(
-            "compagnie__utilisateur",
-            "ville_depart",
-            "ville_arrivee",
-            "gare_depart__ville",
-            "gare_arrivee__ville",
+        queryset = (
+            Voyage.objects.filter(compagnie=self.request.user.profil_agent.compagnie)
+            .select_related(
+                "compagnie__utilisateur",
+                "ville_depart",
+                "ville_arrivee",
+                "gare_depart__ville",
+                "gare_arrivee__ville",
+            )
+            .order_by("date_depart", "heure_depart", "pk")
         )
+        return with_availability(queryset, timezone.localtime())
 
 
 class VoyageListCreateView(generics.ListCreateAPIView):

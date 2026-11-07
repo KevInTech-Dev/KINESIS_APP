@@ -1,8 +1,9 @@
 from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -131,6 +132,60 @@ class VoyageApiTests(APITestCase):
         trip_ids = [item["id_voyage"] for item in response.data["results"]]
         self.assertIn(str(self.voyage.pk), trip_ids)
         self.assertNotIn(str(other_trip.pk), trip_ids)
+
+    def test_agent_trip_list_does_not_add_queries_per_trip(self):
+        agent_user = User.objects.create_user(
+            email="agent-performance@example.com",
+            password=self.password,
+            nom="Agent",
+            prenoms="Performance",
+            role=User.Role.AGENT_COMPAGNIE,
+        )
+        agent = AgentCompagnie.objects.create(
+            utilisateur=agent_user,
+            compagnie=self.company,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.SCANNER_BILLET,
+        )
+        PermissionAgent.objects.create(
+            agent=agent,
+            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+        )
+        for index in range(4):
+            Voyage.objects.create(
+                compagnie=self.company,
+                ville_depart=self.depart,
+                ville_arrivee=self.arrivee,
+                date_depart=self.future_date + timedelta(days=index + 1),
+                heure_depart=time(10, 0),
+                place_totale=20,
+                prix="5000",
+            )
+        self.client.credentials(
+            HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
+        )
+
+        with CaptureQueriesContext(connection) as single_trip_queries:
+            single_trip_response = self.client.get(
+                reverse("agent-voyage-list"),
+                {"page_size": 1},
+            )
+        with CaptureQueriesContext(connection) as multiple_trip_queries:
+            multiple_trip_response = self.client.get(
+                reverse("agent-voyage-list"),
+                {"page_size": 5},
+            )
+
+        self.assertEqual(single_trip_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(multiple_trip_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(single_trip_response.data["results"]), 1)
+        self.assertEqual(len(multiple_trip_response.data["results"]), 5)
+        self.assertEqual(
+            len(single_trip_queries.captured_queries),
+            len(multiple_trip_queries.captured_queries),
+        )
 
     def test_agent_without_both_boarding_permissions_cannot_list_trips(self):
         agent_user = User.objects.create_user(

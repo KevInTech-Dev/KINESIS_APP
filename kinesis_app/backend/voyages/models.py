@@ -98,6 +98,20 @@ class Voyage(models.Model):
 
     class Meta:
         ordering = ("date_depart", "heure_depart")
+        indexes = [
+            models.Index(
+                fields=("statut", "date_depart", "heure_depart"),
+                name="voyage_statut_date_idx",
+            ),
+            models.Index(
+                fields=("ville_depart", "date_depart", "heure_depart"),
+                name="voyage_depart_date_idx",
+            ),
+            models.Index(
+                fields=("ville_arrivee", "date_depart", "heure_depart"),
+                name="voyage_arrivee_date_idx",
+            ),
+        ]
         constraints = [
             models.CheckConstraint(
                 condition=Q(place_totale__gt=0),

@@ -9,6 +9,7 @@ import AppDialog from "@/components/app-dialog";
 import ProfileAvatar from "@/components/profile-avatar";
 import { HomeTripSkeletons } from "@/components/voyage-skeletons";
 import { fetchPaginatedApiResponse } from "@/lib/paginated-api";
+import { getPublicCities } from "@/lib/public-cities";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type IconName =
@@ -108,17 +109,6 @@ const routePhotos = [
   "https://images.unsplash.com/photo-1738427436305-453325092968?auto=format&fit=crop&w=1000&q=85",
 ];
 
-function isVille(value: unknown): value is Ville {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id_ville" in value &&
-    typeof value.id_ville === "string" &&
-    "nom" in value &&
-    typeof value.nom === "string"
-  );
-}
-
 function isVoyage(value: unknown): value is Voyage {
   return (
     typeof value === "object" &&
@@ -208,35 +198,6 @@ function localDateString(date: Date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
-}
-
-async function getList<T>(
-  url: string,
-  isItem: (value: unknown) => value is T,
-): Promise<T[]> {
-  const response = await fetch(url, { cache: "no-store" });
-  const body: unknown = await response.json().catch(() => null);
-
-  if (!response.ok) {
-    const detail =
-      typeof body === "object" &&
-      body !== null &&
-      "detail" in body &&
-      typeof body.detail === "string"
-        ? body.detail
-        : `La requête a échoué (${response.status}).`;
-    throw new Error(detail);
-  }
-
-  if (body === null) {
-    throw new Error("La réponse de l’API est illisible.");
-  }
-
-  if (!Array.isArray(body) || !body.every(isItem)) {
-    throw new Error("Le format des données reçu de l’API est invalide.");
-  }
-
-  return body;
 }
 
 function getErrorMessage(error: unknown) {
@@ -534,7 +495,7 @@ export default function HomePage() {
 
       async function loadCities() {
         try {
-          const cityList = await getList("/api/villes", isVille);
+          const cityList = await getPublicCities();
           if (!active) return;
 
           setCities(cityList);
