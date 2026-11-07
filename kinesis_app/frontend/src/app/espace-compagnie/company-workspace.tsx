@@ -1540,7 +1540,6 @@ export default function CompanyWorkspace() {
                       alt={`Image du trajet ${editingTrip.ville_depart_nom} vers ${editingTrip.ville_arrivee_nom}`}
                       width={320}
                       height={180}
-                      unoptimized
                     />
                   </div>
                 ) : null}

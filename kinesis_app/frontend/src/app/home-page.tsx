@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
-import KinesisLoader from "@/components/kinesis-loader";
 import ProfileAvatar from "@/components/profile-avatar";
+import { HomeTripSkeletons } from "@/components/voyage-skeletons";
+import { fetchPaginatedApiResponse } from "@/lib/paginated-api";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type IconName =
@@ -288,7 +289,6 @@ function TripCard({
         alt=""
         fill
         sizes="(max-width: 700px) 90vw, (max-width: 1100px) 45vw, 33vw"
-        unoptimized
         className="trip-card__image"
       />
       <div className="trip-card__shade" />
@@ -473,6 +473,7 @@ export default function HomePage() {
   const router = useRouter();
   const [cities, setCities] = useState<Ville[]>([]);
   const [trips, setTrips] = useState<Voyage[]>([]);
+  const [tripCount, setTripCount] = useState(0);
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [date, setDate] = useState("");
@@ -483,6 +484,7 @@ export default function HomePage() {
   const [cityError, setCityError] = useState("");
   const [tripError, setTripError] = useState("");
   const [searchResults, setSearchResults] = useState<Voyage[] | null>(null);
+  const [searchResultCount, setSearchResultCount] = useState(0);
   const [searchMessage, setSearchMessage] = useState("");
   const [searching, setSearching] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -560,10 +562,15 @@ export default function HomePage() {
 
       async function loadTrips() {
         try {
-          const tripList = await getList("/api/voyages", isVoyage);
+          const tripPage = await fetchPaginatedApiResponse(
+            "/api/voyages?page=1&page_size=3",
+            isVoyage,
+            "Les voyages n’ont pas pu être chargés.",
+          );
           if (!active) return;
 
-          setTrips(tripList);
+          setTrips(tripPage.results);
+          setTripCount(tripPage.count);
           setTripError("");
         } catch (error) {
           if (active) setTripError(getErrorMessage(error));
@@ -601,6 +608,7 @@ export default function HomePage() {
   async function searchTrips(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSearchResults(null);
+    setSearchResultCount(0);
 
     if (!from || !to || !date) {
       setSearchMessage("Choisissez une ville de départ, d’arrivée et une date.");
@@ -625,11 +633,12 @@ export default function HomePage() {
     });
 
     try {
-      const matchingTrips = await getList(
-        `/api/voyages?${query.toString()}`,
+      const matchingTrips = await fetchPaginatedApiResponse(
+        `/api/voyages?${query.toString()}&page=1&page_size=100`,
         isVoyage,
+        "La recherche a échoué.",
       );
-      const suitableTrips = matchingTrips.filter(
+      const suitableTrips = matchingTrips.results.filter(
         (trip) => trip.places_disponibles >= passengers,
       );
       if (suitableTrips.length === 1) {
@@ -640,10 +649,13 @@ export default function HomePage() {
         return;
       }
       setSearchResults(suitableTrips);
+      setSearchResultCount(matchingTrips.count);
       setSearchMessage(
         suitableTrips.length === 0
           ? "Aucun départ ne correspond à ces critères. Essayez une autre date ou un autre trajet."
-          : `${suitableTrips.length} départ${suitableTrips.length > 1 ? "s" : ""} disponible${suitableTrips.length > 1 ? "s" : ""}.`,
+          : matchingTrips.count > suitableTrips.length
+            ? `${suitableTrips.length} premiers départs affichés sur ${matchingTrips.count} disponibles.`
+            : `${matchingTrips.count} départ${matchingTrips.count > 1 ? "s" : ""} disponible${matchingTrips.count > 1 ? "s" : ""}.`,
       );
       setSearchDialogOpen(false);
     } catch (error) {
@@ -845,6 +857,7 @@ export default function HomePage() {
                   onClick={() => {
                     setSearchMessage("");
                     setSearchResults(null);
+                    setSearchResultCount(0);
                   }}
                   aria-label="Fermer le résultat"
                 >
@@ -892,7 +905,7 @@ export default function HomePage() {
               </p>
             )
           ) : loadingTrips ? (
-            <KinesisLoader message="Chargement des prochains départs…" variant="inline" />
+            <HomeTripSkeletons />
           ) : tripError ? (
             <p className="empty-state">
               Les départs ne peuvent pas être chargés pour le moment.
@@ -915,14 +928,14 @@ export default function HomePage() {
               ))}
             </div>
           )}
-          {searchResults === null && trips.length > 3 ? (
+          {searchResults === null && tripCount > 3 ? (
             <div className="trip-more">
               <Link className="trip-more__button" href="/voyages">
                 Voir plus de voyages <Icon name="arrow" className="icon-small" />
               </Link>
             </div>
           ) : null}
-          {searchResults && searchResults.length > 1 ? (
+          {searchResults && searchResultCount > 1 ? (
             <div className="trip-more">
               <Link
                 className="trip-more__button"

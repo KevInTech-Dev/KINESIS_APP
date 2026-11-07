@@ -7,8 +7,16 @@ import { Suspense, useEffect, useState, type FormEvent } from "react";
 import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
-import { useListPagination } from "@/components/list-pagination";
+import { CatalogTripSkeletons } from "@/components/voyage-skeletons";
+import {
+  ListPagination,
+  type ListPageSize,
+} from "@/components/list-pagination";
 import VoyagesPageHeader from "@/components/voyages-page-header";
+import {
+  fetchPaginatedApiResponse,
+  type PaginatedApiResponse,
+} from "@/lib/paginated-api";
 
 type Filters = {
   ville_depart: string;
@@ -23,6 +31,7 @@ type Filters = {
   ordering: string;
 };
 
+type CompanyOption = { id: string; name: string };
 const emptyFilters: Filters = {
   ville_depart: "",
   ville_arrivee: "",
@@ -92,6 +101,34 @@ async function getList<T>(
     throw new Error("Les données reçues du serveur sont invalides.");
   }
   return payload;
+}
+
+function isCompanyOption(value: unknown): value is CompanyOption {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "id" in value &&
+    typeof value.id === "string" &&
+    "name" in value &&
+    typeof value.name === "string"
+  );
+}
+
+async function getCatalogPage(url: string): Promise<
+  PaginatedApiResponse<Voyage> & { companies: CompanyOption[] }
+> {
+  const result = await fetchPaginatedApiResponse(
+    url,
+    isVoyage,
+    "Le chargement des voyages a échoué.",
+  );
+  if (
+    !Array.isArray(result.companies) ||
+    !result.companies.every(isCompanyOption)
+  ) {
+    throw new Error("La liste des compagnies reçue est invalide.");
+  }
+  return { ...result, companies: result.companies };
 }
 
 function formatPrice(price: string | number) {
@@ -209,38 +246,57 @@ function CatalogFiltersForm({
 
 function VoyagesCatalog() {
   const searchParams = useSearchParams();
-  const initialQuery = searchParams.toString();
-  const [cities, setCities] = useState<Ville[]>([]);
-  const [allTrips, setAllTrips] = useState<Voyage[]>([]);
-  const [trips, setTrips] = useState<Voyage[]>([]);
-  const [filters, setFilters] = useState<Filters>(() =>
-    filtersFromQuery(initialQuery),
+  const [submittedQuery, setSubmittedQuery] = useState(() =>
+    searchParams.toString(),
   );
+  const [cities, setCities] = useState<Ville[]>([]);
+  const [trips, setTrips] = useState<Voyage[]>([]);
+  const [tripCount, setTripCount] = useState(0);
+  const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(submittedQuery));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [cityError, setCityError] = useState("");
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
-  const { pageItems: pageTrips, pagination, resetPage } =
-    useListPagination(trips);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState<ListPageSize>(10);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let active = true;
-    async function load() {
-      setLoading(true);
-      try {
-        const query = buildQuery(filtersFromQuery(initialQuery));
-        const [cityList, allVoyages, visibleTrips] = await Promise.all([
-          getList("/api/villes", isVille),
-          getList("/api/voyages", isVoyage),
-          query.size > 0
-            ? getList(`/api/voyages?${query.toString()}`, isVoyage)
-            : Promise.resolve(null),
-        ]);
+    getList("/api/villes", isVille)
+      .then((cityList) => {
+        if (active) setCities(cityList);
+      })
+      .catch((loadError: unknown) => {
+        if (active) {
+          setCityError(
+            loadError instanceof Error
+              ? loadError.message
+              : "Les villes n’ont pas pu être chargées.",
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    const query = new URLSearchParams(submittedQuery);
+    query.set("page", String(page));
+    query.set("page_size", String(pageSize));
+    query.set("include_facets", "1");
+
+    getCatalogPage(`/api/voyages?${query.toString()}`)
+      .then((result) => {
         if (!active) return;
-        setCities(cityList);
-        setAllTrips(allVoyages);
-        setTrips(visibleTrips ?? allVoyages);
-        setError("");
-      } catch (loadError) {
+        setTrips(result.results);
+        setTripCount(result.count);
+        setCompanies(result.companies ?? []);
+      })
+      .catch((loadError: unknown) => {
         if (active) {
           setError(
             loadError instanceof Error
@@ -248,23 +304,22 @@ function VoyagesCatalog() {
               : "Les voyages n’ont pas pu être chargés.",
           );
         }
-      } finally {
+      })
+      .finally(() => {
         if (active) setLoading(false);
-      }
-    }
-    void load();
+      });
+
     return () => {
       active = false;
     };
-  }, [initialQuery]);
+  }, [submittedQuery, page, pageSize, refreshKey]);
 
   function updateFilter(field: keyof Filters, value: string) {
     setFilters((current) => ({ ...current, [field]: value }));
   }
 
-  async function search(event: FormEvent<HTMLFormElement>) {
+  function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    resetPage();
     if (
       filters.ville_depart &&
       filters.ville_arrivee &&
@@ -294,54 +349,22 @@ function VoyagesCatalog() {
     window.history.replaceState(null, "", nextUrl);
     setLoading(true);
     setError("");
-    try {
-      const results = await getList(
-        query.size ? `/api/voyages?${query.toString()}` : "/api/voyages",
-        isVoyage,
-      );
-      setTrips(results);
-      setMobileFiltersOpen(false);
-    } catch (searchError) {
-      setError(
-        searchError instanceof Error
-          ? searchError.message
-          : "La recherche a échoué.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    setSubmittedQuery(query.toString());
+    setPage(1);
+    setRefreshKey((current) => current + 1);
+    setMobileFiltersOpen(false);
   }
 
-  async function clearFilters() {
-    resetPage();
+  function clearFilters() {
     setFilters(emptyFilters);
     window.history.replaceState(null, "", "/voyages");
     setLoading(true);
     setError("");
-    try {
-      setTrips(await getList("/api/voyages", isVoyage));
-      setMobileFiltersOpen(false);
-    } catch (clearError) {
-      setError(
-        clearError instanceof Error
-          ? clearError.message
-          : "Les voyages n’ont pas pu être chargés.",
-      );
-    } finally {
-      setLoading(false);
-    }
+    setSubmittedQuery("");
+    setPage(1);
+    setRefreshKey((current) => current + 1);
+    setMobileFiltersOpen(false);
   }
-
-  const companies = Array.from(
-    new Map(
-      allTrips
-        .filter((trip) => trip.compagnie && trip.compagnie_nom)
-        .map((trip) => [
-          trip.compagnie,
-          { id: trip.compagnie, name: trip.compagnie_nom },
-        ]),
-    ).values(),
-  ).sort((a, b) => a.name.localeCompare(b.name, "fr"));
 
   return (
     <main className="voyage-catalog">
@@ -362,7 +385,7 @@ function VoyagesCatalog() {
             cities={cities}
             companies={companies}
             onSubmit={search}
-            onClear={() => void clearFilters()}
+            onClear={clearFilters}
             onChange={updateFilter}
           />
         </div>
@@ -385,12 +408,17 @@ function VoyagesCatalog() {
             cities={cities}
             companies={companies}
             onSubmit={search}
-            onClear={() => void clearFilters()}
+            onClear={clearFilters}
             onChange={updateFilter}
           />
         </AppDialog>
 
         <section className="catalog-results" aria-live="polite">
+          {cityError ? (
+            <p className="catalog-message catalog-message--error" role="alert">
+              Les filtres de ville sont indisponibles : {cityError}
+            </p>
+          ) : null}
           <div className="catalog-results__heading">
             <div>
               <p className="catalog-results__eyebrow">SÉLECTION KINESIS</p>
@@ -398,25 +426,27 @@ function VoyagesCatalog() {
             </div>
             {!loading && !error ? (
               <span className="catalog-results__count">
-                <strong>{trips.length}</strong>
-                <span>voyage{trips.length > 1 ? "s" : ""}</span>
+                <strong>{tripCount}</strong>
+                <span>voyage{tripCount > 1 ? "s" : ""}</span>
               </span>
             ) : null}
           </div>
-          {loading ? <KinesisLoader message="Chargement des voyages…" variant="inline" /> : null}
           {error ? <p className="catalog-message catalog-message--error" role="alert">{error}</p> : null}
           {!loading && !error && trips.length === 0 ? (
             <p className="catalog-message">Aucun voyage ne correspond à ces critères. Modifiez vos filtres et réessayez.</p>
           ) : null}
+          {loading ? (
+            <CatalogTripSkeletons count={pageSize} />
+          ) : (
           <div className="catalog-grid">
-            {pageTrips.map((trip) => (
+            {trips.map((trip) => (
               <Link
                 className="catalog-card"
                 href={`/voyages/${encodeURIComponent(trip.id_voyage)}?passagers=${encodeURIComponent(filters.places_min || "1")}`}
                 key={trip.id_voyage}
               >
                 <div className="catalog-card__image">
-                  {trip.image ? <Image src={trip.image} alt="" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw" unoptimized /> : null}
+                  {trip.image ? <Image src={trip.image} alt="" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw" /> : null}
                   <span>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}</span>
                 </div>
                 <div className="catalog-card__body">
@@ -441,7 +471,24 @@ function VoyagesCatalog() {
               </Link>
             ))}
           </div>
-          {pagination}
+          )}
+          <ListPagination
+            totalItems={tripCount}
+            page={page}
+            pageSize={pageSize}
+            loading={loading}
+            onPageChange={(nextPage) => {
+              setLoading(true);
+              setError("");
+              setPage(nextPage);
+            }}
+            onPageSizeChange={(nextPageSize) => {
+              setLoading(true);
+              setError("");
+              setPageSize(nextPageSize);
+              setPage(1);
+            }}
+          />
         </section>
       </div>
     </main>

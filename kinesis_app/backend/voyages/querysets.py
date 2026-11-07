@@ -1,6 +1,27 @@
-from django.db.models import Count, Q, QuerySet
+from django.db.models import Count, F, Q, QuerySet
+from django.utils import timezone
 
 from .models import Voyage
+
+
+def public_voyages_queryset(now=None) -> QuerySet[Voyage]:
+    now = now or timezone.localtime()
+    public = Q(statut=Voyage.Statut.PUBLIE, compagnie__statut="ACTIVE")
+    public &= Q(date_depart__gt=now.date()) | Q(
+        date_depart=now.date(),
+        heure_depart__gte=now.time().replace(tzinfo=None),
+    )
+    queryset = Voyage.objects.select_related(
+        "compagnie__utilisateur",
+        "ville_depart",
+        "ville_arrivee",
+        "gare_depart__ville",
+        "gare_arrivee__ville",
+    )
+    return with_availability(queryset, now).filter(
+        public,
+        _places_occupees__lt=F("place_totale"),
+    )
 
 
 def with_availability(queryset: QuerySet[Voyage], now) -> QuerySet[Voyage]:

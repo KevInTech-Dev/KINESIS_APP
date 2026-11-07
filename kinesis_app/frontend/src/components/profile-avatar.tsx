@@ -35,7 +35,6 @@ export default function ProfileAvatar({
         width={size}
         height={size}
         alt={alt}
-        unoptimized
         onError={() => setFailedSource(src)}
       />
     );

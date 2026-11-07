@@ -16,7 +16,7 @@ from reservations.services import filter_active_reservations
 
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
-from .querysets import with_availability
+from .querysets import public_voyages_queryset, with_availability
 from .serializers import VilleSerializer, VoyageSearchSerializer, VoyageSerializer
 
 
@@ -46,6 +46,7 @@ class AgentVoyageListView(generics.ListAPIView):
 class VoyageListCreateView(generics.ListCreateAPIView):
     serializer_class = VoyageSerializer
     parser_classes = (JSONParser, FormParser, MultiPartParser)
+    pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
         if self.request.method == "POST":
@@ -53,55 +54,35 @@ class VoyageListCreateView(generics.ListCreateAPIView):
         return [AllowAny()]
 
     def get_queryset(self):
-        queryset = Voyage.objects.select_related(
-            "compagnie__utilisateur",
-            "ville_depart",
-            "ville_arrivee",
-            "gare_depart__ville",
-            "gare_arrivee__ville",
-        )
         if self.request.method == "POST":
-            return queryset.none()
+            return Voyage.objects.none()
 
         now = timezone.localtime()
-        public = Q(statut=Voyage.Statut.PUBLIE)
-        public &= Q(compagnie__statut="ACTIVE")
-        public &= Q(date_depart__gt=now.date()) | Q(
-            date_depart=now.date(),
-            heure_depart__gte=now.time().replace(tzinfo=None),
-        )
+        queryset = public_voyages_queryset(now)
 
         search = VoyageSearchSerializer(data=self.request.query_params)
         search.is_valid(raise_exception=True)
         filters = search.validated_data
         if "ville_depart" in filters:
-            public &= Q(ville_depart_id=filters["ville_depart"])
+            queryset = queryset.filter(ville_depart_id=filters["ville_depart"])
         if "ville_arrivee" in filters:
-            public &= Q(ville_arrivee_id=filters["ville_arrivee"])
+            queryset = queryset.filter(ville_arrivee_id=filters["ville_arrivee"])
         if "date_depart" in filters:
-            public &= Q(date_depart=filters["date_depart"])
+            queryset = queryset.filter(date_depart=filters["date_depart"])
         if "date_depart_apres" in filters:
-            public &= Q(date_depart__gte=filters["date_depart_apres"])
+            queryset = queryset.filter(date_depart__gte=filters["date_depart_apres"])
         if "date_depart_avant" in filters:
-            public &= Q(date_depart__lte=filters["date_depart_avant"])
+            queryset = queryset.filter(date_depart__lte=filters["date_depart_avant"])
         if "compagnie" in filters:
-            public &= Q(compagnie_id=filters["compagnie"])
+            queryset = queryset.filter(compagnie_id=filters["compagnie"])
         if "prix_min" in filters:
-            public &= Q(prix__gte=filters["prix_min"])
+            queryset = queryset.filter(prix__gte=filters["prix_min"])
         if "prix_max" in filters:
-            public &= Q(prix__lte=filters["prix_max"])
+            queryset = queryset.filter(prix__lte=filters["prix_max"])
 
-        queryset = with_availability(queryset, now).filter(public)
-        queryset = queryset.filter(_places_occupees__lt=F("place_totale"))
         if "places_min" in filters:
             queryset = queryset.filter(
                 _places_occupees__lte=F("place_totale") - filters["places_min"]
-            )
-        if "ordering" in filters:
-            queryset = queryset.order_by(
-                filters["ordering"],
-                "date_depart",
-                "heure_depart",
             )
         user = self.request.user
         if user.is_authenticated and user.role == user.Role.COMPAGNIE:
@@ -116,7 +97,30 @@ class VoyageListCreateView(generics.ListCreateAPIView):
                 now,
             ).filter(compagnie__utilisateur=user)
             queryset = queryset | own_trips
-        return queryset
+        ordering = filters.get("ordering", "date_depart")
+        return queryset.order_by(ordering, "date_depart", "heure_depart", "pk")
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        if (
+            request.query_params.get("include_facets") == "1"
+            and isinstance(response.data, dict)
+            and "results" in response.data
+        ):
+            companies = (
+                public_voyages_queryset()
+                .order_by()
+                .values_list("compagnie_id", "compagnie__utilisateur__nom")
+                .distinct()
+            )
+            response.data["companies"] = [
+                {"id": str(company_id), "name": company_name}
+                for company_id, company_name in companies.order_by(
+                    "compagnie__utilisateur__nom",
+                    "compagnie_id",
+                )
+            ]
+        return response
 
     def perform_create(self, serializer):
         serializer.save(compagnie=self.request.user.profil_compagnie)
@@ -145,13 +149,7 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             return queryset.filter(compagnie__utilisateur=self.request.user)
 
         now = timezone.localtime()
-        public = Q(statut=Voyage.Statut.PUBLIE, compagnie__statut="ACTIVE")
-        public &= Q(date_depart__gt=now.date()) | Q(
-            date_depart=now.date(),
-            heure_depart__gte=now.time().replace(tzinfo=None),
-        )
-        queryset = with_availability(queryset, now).filter(public)
-        queryset = queryset.filter(_places_occupees__lt=F("place_totale"))
+        queryset = public_voyages_queryset(now)
         user = self.request.user
         if user.is_authenticated and user.role == user.Role.COMPAGNIE:
             own_trips = with_availability(

@@ -180,12 +180,21 @@ class VoyageApiTests(APITestCase):
                 "ville_depart": str(self.depart.pk),
                 "ville_arrivee": str(self.arrivee.pk),
                 "date_depart": self.future_date.isoformat(),
+                "include_facets": "1",
             },
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["id_voyage"], str(self.voyage.pk))
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(
+            response.data["results"][0]["id_voyage"],
+            str(self.voyage.pk),
+        )
+        self.assertEqual(
+            response.data["companies"],
+            [{"id": str(self.company.pk), "name": self.company_user.nom}],
+        )
 
     def test_public_catalog_accepts_optional_filters_and_minimum_seats(self):
         response = self.client.get(
@@ -202,15 +211,20 @@ class VoyageApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(response.data), 1)
-        self.assertEqual(response.data[0]["id_voyage"], str(self.voyage.pk))
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(len(response.data["results"]), 1)
+        self.assertEqual(
+            response.data["results"][0]["id_voyage"],
+            str(self.voyage.pk),
+        )
 
         no_match = self.client.get(
             reverse("voyage-list"),
             {"places_min": "46"},
         )
         self.assertEqual(no_match.status_code, status.HTTP_200_OK)
-        self.assertEqual(no_match.data, [])
+        self.assertEqual(no_match.data["count"], 0)
+        self.assertEqual(no_match.data["results"], [])
 
     def test_public_catalog_rejects_reversed_price_ranges(self):
         response = self.client.get(
@@ -219,6 +233,44 @@ class VoyageApiTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_public_catalog_paginates_results_and_keeps_pages_stable(self):
+        for index in range(21):
+            Voyage.objects.create(
+                compagnie=self.company,
+                ville_depart=self.depart,
+                ville_arrivee=self.arrivee,
+                date_depart=self.future_date + timedelta(days=index + 1),
+                heure_depart=time(9, 0),
+                place_totale=20,
+                prix="5000",
+            )
+
+        first_page = self.client.get(
+            reverse("voyage-list"),
+            {"page": 1, "page_size": 5},
+        )
+        second_page = self.client.get(
+            reverse("voyage-list"),
+            {"page": 2, "page_size": 5},
+        )
+
+        self.assertEqual(first_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_page.data["count"], 22)
+        self.assertEqual(len(first_page.data["results"]), 5)
+        self.assertNotIn("companies", first_page.data)
+        self.assertIsNotNone(first_page.data["next"])
+        self.assertIsNone(first_page.data["previous"])
+        self.assertEqual(len(second_page.data["results"]), 5)
+        self.assertIsNotNone(second_page.data["next"])
+        self.assertIsNotNone(second_page.data["previous"])
+        first_ids = {item["id_voyage"] for item in first_page.data["results"]}
+        second_ids = {item["id_voyage"] for item in second_page.data["results"]}
+        self.assertFalse(first_ids & second_ids)
+
+        default_page = self.client.get(reverse("voyage-list"))
+        self.assertEqual(len(default_page.data["results"]), 20)
+        self.assertEqual(default_page.data["count"], 22)
 
     def test_public_results_show_remaining_seats_and_hide_full_trips(self):
         self.voyage.place_totale = 2
@@ -270,7 +322,7 @@ class VoyageApiTests(APITestCase):
         response = self.client.get(reverse("voyage-list"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        trips = {item["id_voyage"]: item for item in response.data}
+        trips = {item["id_voyage"]: item for item in response.data["results"]}
         self.assertIn(str(self.voyage.pk), trips)
         self.assertEqual(trips[str(self.voyage.pk)]["places_disponibles"], 1)
         self.assertNotIn(str(full_trip.pk), trips)

@@ -122,7 +122,6 @@ function VoyageDetailContent() {
                 fill
                 priority
                 sizes="(max-width: 900px) 100vw, 1240px"
-                unoptimized
               />
             ) : null}
             <div className="voyage-detail__cover-shade" />

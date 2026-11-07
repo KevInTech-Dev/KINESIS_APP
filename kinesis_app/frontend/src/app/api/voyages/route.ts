@@ -11,6 +11,9 @@ const searchFields = [
   "prix_max",
   "places_min",
   "ordering",
+  "page",
+  "page_size",
+  "include_facets",
 ] as const;
 
 export function GET(request: Request) {
