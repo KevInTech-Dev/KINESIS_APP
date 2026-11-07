@@ -127,6 +127,9 @@ type DashboardData = {
   notifications: Notification[];
 };
 
+let cachedTravelerDashboard: { userId: string; data: DashboardData } | null =
+  null;
+
 type TravelerTab =
   | "overview"
   | "reservations"
@@ -401,6 +404,8 @@ export default function TravelerDashboard() {
   const router = useRouter();
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasDashboardData = useRef(false);
+  const dashboardUserId = useRef<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busyReservation, setBusyReservation] = useState<string | null>(null);
   const [reservationToCancel, setReservationToCancel] =
@@ -435,13 +440,17 @@ export default function TravelerDashboard() {
   }, []);
 
   const loadDashboard = useCallback(async () => {
-    setLoading(true);
+    setLoading(!hasDashboardData.current);
     setError(null);
     try {
       const profileResponse = await fetch("/api/auth/session", {
         cache: "no-store",
       });
       if (profileResponse.status === 401) {
+        cachedTravelerDashboard = null;
+        dashboardUserId.current = null;
+        hasDashboardData.current = false;
+        setData(null);
         router.replace("/connexion");
         return;
       }
@@ -452,6 +461,29 @@ export default function TravelerDashboard() {
       const profileData: unknown = await profileResponse.json();
       if (!isUserProfile(profileData)) {
         throw new Error("Le profil reçu du serveur est invalide.");
+      }
+
+      const cachedData =
+        profileData.role === "VOYAGEUR" &&
+        cachedTravelerDashboard?.userId === profileData.id
+          ? { ...cachedTravelerDashboard.data, profile: profileData }
+          : null;
+      if (cachedData) {
+        hasDashboardData.current = true;
+        dashboardUserId.current = profileData.id;
+        setData(cachedData);
+        setNom(profileData.nom);
+        setPrenoms(profileData.prenoms);
+        setTelephone(profileData.telephone ?? "");
+        setLoading(false);
+      } else if (
+        hasDashboardData.current &&
+        dashboardUserId.current !== profileData.id
+      ) {
+        hasDashboardData.current = false;
+        dashboardUserId.current = null;
+        setData(null);
+        setLoading(true);
       }
 
       if (profileData.role !== "VOYAGEUR") {
@@ -592,11 +624,28 @@ export default function TravelerDashboard() {
     };
   }, [loadDashboard]);
 
+  useEffect(() => {
+    if (data?.profile?.role === "VOYAGEUR") {
+      cachedTravelerDashboard = {
+        userId: data.profile.id,
+        data,
+      };
+      hasDashboardData.current = true;
+      dashboardUserId.current = data.profile.id;
+    }
+  }, [data]);
+
   async function signOut() {
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) {
         throw new Error(await getErrorMessage(response));
+      }
+      if (data?.profile) {
+        cachedTravelerDashboard = null;
+        dashboardUserId.current = null;
+        hasDashboardData.current = false;
+        setData(null);
       }
       router.replace("/");
     } catch (signOutError) {
@@ -959,7 +1008,7 @@ export default function TravelerDashboard() {
     return <KinesisLoader message="Chargement de votre espace voyageur…" />;
   }
 
-  if (error) {
+  if (error && !data) {
     return (
       <main className="traveler-workspace-state traveler-workspace-state--error" role="alert">
         <p>{error}</p>
@@ -1000,6 +1049,14 @@ export default function TravelerDashboard() {
       onLogout={() => void signOut()}
     >
       <div className="traveler-workspace-content">
+        {error ? (
+          <div className="traveler-workspace-refresh-error" role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={() => void loadDashboard()}>
+              Réessayer
+            </button>
+          </div>
+        ) : null}
         <div className="traveler-page-heading">
           <div>
             <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>

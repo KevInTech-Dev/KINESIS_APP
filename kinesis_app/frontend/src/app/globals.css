@@ -2925,6 +2925,51 @@ select:focus-visible {
   white-space: nowrap;
 }
 
+.booking-trip-stations {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+}
+
+.booking-trip-station {
+  display: grid;
+  grid-template-columns: minmax(112px, 0.3fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px 14px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #e8eee8;
+  border-radius: 11px;
+  background: #fbfcfa;
+}
+
+.booking-trip-station__label {
+  color: #64746b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.booking-trip-station__details {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #65756c;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.booking-trip-station__details strong {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.booking-trip-station .maps-link--compact {
+  margin: 0;
+  white-space: nowrap;
+}
+
 .booking-card-heading {
   display: flex;
   align-items: center;
@@ -3152,6 +3197,21 @@ select:focus-visible {
     flex-direction: column;
     gap: 12px;
     padding: 19px;
+  }
+
+  .booking-trip-station {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 5px;
+  }
+
+  .booking-trip-station .maps-link--compact {
+    justify-self: start;
+    margin-top: 3px;
+  }
+
+  .traveler-workspace-refresh-error {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .booking-card {
@@ -12812,6 +12872,32 @@ select:focus-visible {
   border-radius: 17px;
   background: white;
   box-shadow: 0 5px 18px rgb(22 52 40 / 3%);
+}
+
+.traveler-workspace-refresh-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 15px;
+  border: 1px solid #efcaca;
+  border-radius: 10px;
+  background: #fff6f5;
+  color: #8d2929;
+  font-size: 13px;
+}
+
+.traveler-workspace-refresh-error button {
+  flex: 0 0 auto;
+  padding: 6px 10px;
+  border: 1px solid currentColor;
+  border-radius: 7px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
 }
 
 .traveler-workspace-content .traveler-notifications > .traveler-section-heading {

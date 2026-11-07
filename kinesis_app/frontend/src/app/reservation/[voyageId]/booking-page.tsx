@@ -381,29 +381,59 @@ export default function BookingPage({
                   {" · "}
                   {trip.heure_depart.slice(0, 5)}
                 </p>
-                {trip.gare_depart ? (
-                  <p>
-                    Départ : {trip.gare_depart.nom} — {trip.gare_depart.adresse}
-                    {trip.gare_depart.maps_url ? (
-                      <a className="maps-link maps-link--compact" href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">
-                        <MapPin aria-hidden="true" />
-                        <span>Ouvrir dans Google Maps</span>
-                        <ArrowUpRight aria-hidden="true" />
-                      </a>
+                {trip.gare_depart || trip.gare_arrivee ? (
+                  <div className="booking-trip-stations">
+                    {trip.gare_depart ? (
+                      <div className="booking-trip-station">
+                        <span className="booking-trip-station__label">
+                          Gare de départ
+                        </span>
+                        <span className="booking-trip-station__details">
+                          <strong>{trip.gare_depart.nom}</strong>
+                          {trip.gare_depart.adresse ? (
+                            <span>{trip.gare_depart.adresse}</span>
+                          ) : null}
+                        </span>
+                        {trip.gare_depart.maps_url ? (
+                          <a
+                            className="maps-link maps-link--compact"
+                            href={trip.gare_depart.maps_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <MapPin aria-hidden="true" />
+                            <span>Voir sur la carte</span>
+                            <ArrowUpRight aria-hidden="true" />
+                          </a>
+                        ) : null}
+                      </div>
                     ) : null}
-                  </p>
-                ) : null}
-                {trip.gare_arrivee ? (
-                  <p>
-                    Arrivée : {trip.gare_arrivee.nom} — {trip.gare_arrivee.adresse}
-                    {trip.gare_arrivee.maps_url ? (
-                      <a className="maps-link maps-link--compact" href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">
-                        <MapPin aria-hidden="true" />
-                        <span>Ouvrir dans Google Maps</span>
-                        <ArrowUpRight aria-hidden="true" />
-                      </a>
+                    {trip.gare_arrivee ? (
+                      <div className="booking-trip-station">
+                        <span className="booking-trip-station__label">
+                          Gare d’arrivée
+                        </span>
+                        <span className="booking-trip-station__details">
+                          <strong>{trip.gare_arrivee.nom}</strong>
+                          {trip.gare_arrivee.adresse ? (
+                            <span>{trip.gare_arrivee.adresse}</span>
+                          ) : null}
+                        </span>
+                        {trip.gare_arrivee.maps_url ? (
+                          <a
+                            className="maps-link maps-link--compact"
+                            href={trip.gare_arrivee.maps_url}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            <MapPin aria-hidden="true" />
+                            <span>Voir sur la carte</span>
+                            <ArrowUpRight aria-hidden="true" />
+                          </a>
+                        ) : null}
+                      </div>
                     ) : null}
-                  </p>
+                  </div>
                 ) : null}
               </div>
               <strong>{formatPrice(trip.prix)} / place</strong>
