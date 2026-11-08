@@ -1,6 +1,7 @@
 from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
+from django.core.cache import cache
 from django.db import IntegrityError, connection, transaction
 from django.test import TestCase
 from django.test.utils import CaptureQueriesContext
@@ -31,6 +32,7 @@ class VoyageApiTests(APITestCase):
     password = "Qx7!mR4#vN8p"
 
     def setUp(self):
+        cache.clear()
         self.company_user = User.objects.create_user(
             email="compagnie@example.com",
             password=self.password,
@@ -250,6 +252,73 @@ class VoyageApiTests(APITestCase):
             response.data["companies"],
             [{"id": str(self.company.pk), "name": self.company_user.nom}],
         )
+
+    def test_public_catalog_cache_avoids_repeating_database_queries(self):
+        url = reverse("voyage-list")
+        first_response = self.client.get(url, {"page_size": 5})
+
+        with CaptureQueriesContext(connection) as repeated_queries:
+            cached_response = self.client.get(url, {"page_size": 5})
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(cached_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(cached_response.json(), first_response.json())
+        self.assertEqual(len(repeated_queries.captured_queries), 0)
+
+    def test_public_catalog_cache_is_invalidated_after_trip_update(self):
+        url = reverse("voyage-list")
+        first_response = self.client.get(url)
+        self.assertEqual(first_response.data["count"], 1)
+
+        self.client.force_authenticate(user=self.company_user)
+        with self.captureOnCommitCallbacks(execute=True):
+            update_response = self.client.patch(
+                reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+                {"statut": Voyage.Statut.ARCHIVE},
+                format="json",
+            )
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+
+        self.client.force_authenticate(user=None)
+        refreshed_response = self.client.get(url)
+        self.assertEqual(refreshed_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(refreshed_response.data["count"], 0)
+
+    def test_public_catalog_cache_is_invalidated_after_city_update(self):
+        url = reverse("voyage-list")
+        first_response = self.client.get(url)
+        self.assertEqual(first_response.data["results"][0]["ville_depart_nom"], "Lome")
+
+        with self.captureOnCommitCallbacks(execute=True):
+            self.depart.nom = "Grand Lome"
+            self.depart.save(update_fields=("nom",))
+
+        refreshed_response = self.client.get(url)
+        self.assertEqual(refreshed_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            refreshed_response.data["results"][0]["ville_depart_nom"],
+            "Grand Lome",
+        )
+
+    def test_authenticated_company_catalog_does_not_use_public_cache(self):
+        self.client.get(reverse("voyage-list"))
+        archived_trip = Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=self.future_date + timedelta(days=1),
+            heure_depart=time(10, 0),
+            place_totale=30,
+            prix="4500",
+            statut=Voyage.Statut.ARCHIVE,
+        )
+
+        self.client.force_authenticate(user=self.company_user)
+        response = self.client.get(reverse("voyage-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        trip_ids = {item["id_voyage"] for item in response.data["results"]}
+        self.assertIn(str(archived_trip.pk), trip_ids)
 
     def test_public_catalog_accepts_optional_filters_and_minimum_seats(self):
         response = self.client.get(

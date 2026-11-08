@@ -5,6 +5,7 @@ from rest_framework import generics
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
 from compagnies.models import PermissionAgent
 from compagnies.permissions import CanOperateAgentVoyages
@@ -14,6 +15,13 @@ from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
 from reservations.services import filter_active_reservations
 
+from .cache import (
+    cache_public_cities,
+    cache_public_voyages,
+    get_cached_public_cities,
+    get_cached_public_voyages,
+    get_public_voyages_cache_key,
+)
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
 from .querysets import public_voyages_queryset, with_availability
@@ -23,12 +31,22 @@ from .serializers import VilleSerializer, VoyageSearchSerializer, VoyageSerializ
 class VilleListView(generics.ListAPIView):
     queryset = Ville.objects.all()
     serializer_class = VilleSerializer
-    permission_classes = [AllowAny]
+    permission_classes = (AllowAny,)
+
+    def list(self, request, *args, **kwargs):
+        cached_data = get_cached_public_cities()
+        if cached_data is not None:
+            return Response(cached_data)
+
+        response = super().list(request, *args, **kwargs)
+        if response.status_code == 200:
+            cache_public_cities(response.data)
+        return response
 
 
 class AgentVoyageListView(generics.ListAPIView):
     serializer_class = VoyageSerializer
-    permission_classes = [CanOperateAgentVoyages]
+    permission_classes = (CanOperateAgentVoyages,)
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
@@ -110,6 +128,14 @@ class VoyageListCreateView(generics.ListCreateAPIView):
         )
 
     def list(self, request, *args, **kwargs):
+        cache_key = None
+        if request.method == "GET" and not request.user.is_authenticated:
+            cache_key = get_public_voyages_cache_key(request)
+            if cache_key:
+                cached_data = get_cached_public_voyages(cache_key)
+                if cached_data is not None:
+                    return Response(cached_data)
+
         response = super().list(request, *args, **kwargs)
         if (
             request.query_params.get("include_facets") == "1"
@@ -129,6 +155,8 @@ class VoyageListCreateView(generics.ListCreateAPIView):
                     "compagnie_id",
                 )
             ]
+        if cache_key and response.status_code == 200:
+            cache_public_voyages(cache_key, response.data)
         return response
 
     def perform_create(self, serializer):

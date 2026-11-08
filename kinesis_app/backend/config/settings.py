@@ -105,6 +105,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    "config.middleware.SlowRequestLoggingMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -114,6 +115,8 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+SLOW_REQUEST_LOG_THRESHOLD_MS = env.int("SLOW_REQUEST_LOG_THRESHOLD_MS", default=500)
 
 ROOT_URLCONF = "config.urls"
 
@@ -143,6 +146,29 @@ DATABASES = {
 }
 
 DATABASES["default"]["CONN_MAX_AGE"] = 60
+
+REDIS_URL = env("REDIS_URL", default="").strip()
+if REDIS_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": REDIS_URL,
+            "TIMEOUT": 300,
+            "KEY_PREFIX": "kinesis",
+            "OPTIONS": {
+                "socket_connect_timeout": 1,
+                "socket_timeout": 1,
+            },
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "kinesis-local-cache",
+            "TIMEOUT": 300,
+        }
+    }
 
 
 # Password validation

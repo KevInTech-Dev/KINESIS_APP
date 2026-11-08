@@ -3,6 +3,7 @@ djangorestframework
 djangorestframework-simplejwt>=5.5,<6
 drf-spectacular
 psycopg[binary]>=3.2
+redis>=5.2,<7
 django-environ
 Pillow>=11.0
 cloudinary
