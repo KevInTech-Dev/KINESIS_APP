@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   Bell,
   BusFront,
@@ -157,6 +157,13 @@ type Tab =
   | "notifications"
   | "profile";
 type PaymentRange = "7d" | "30d" | "90d";
+type DeferredData = "locations" | "tariffs" | "notifications";
+
+function deferredDataForTab(tab: Tab): DeferredData | null {
+  if (tab === "stations" || tab === "trips") return "locations";
+  if (tab === "tariffs" || tab === "notifications") return tab;
+  return null;
+}
 
 const PERMISSIONS = [
   ["ENREGISTRER_BAGAGE", "Enregistrer un bagage"],
@@ -656,6 +663,14 @@ export default function CompanyWorkspace() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [overviewDataLoading, setOverviewDataLoading] = useState(true);
+  const [overviewDataFailed, setOverviewDataFailed] = useState(false);
+  const [deferredDataLoading, setDeferredDataLoading] = useState<
+    Record<DeferredData, boolean>
+  >({ locations: false, tariffs: false, notifications: false });
+  const [deferredDataFailed, setDeferredDataFailed] = useState<
+    Record<DeferredData, boolean>
+  >({ locations: false, tariffs: false, notifications: false });
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -667,33 +682,90 @@ export default function CompanyWorkspace() {
   const [agentToDeactivate, setAgentToDeactivate] = useState<Agent | null>(null);
   const [tariffToDelete, setTariffToDelete] = useState<BaggageTariff | null>(null);
   const [agentPermissions, setAgentPermissions] = useState<Record<string, string[]>>({});
+  const loadedDeferredData = useRef(new Set<DeferredData>());
+  const pendingDeferredData = useRef(new Map<DeferredData, Promise<void>>());
 
-  const loadWorkspace = useCallback(async () => {
+  const loadOverviewData = useCallback(async (companyId: string) => {
+    setOverviewDataLoading(true);
+    setOverviewDataFailed(false);
+    setError(null);
     try {
-      const [
-        sessionResponse,
-        companyData,
-        tripsData,
-        agentsData,
-        reservationsData,
-        tariffsData,
-        notificationsData,
-        paymentsData,
-        citiesData,
-        stationsData,
-      ] =
+      const [tripsData, agentsData, reservationsData, paymentsData] =
         await Promise.all([
-          fetch("/api/auth/session", { cache: "no-store" }),
-          requestApi("me"),
           requestApi("voyages?page_size=100"),
           requestApi("agents?page_size=100"),
           requestApi("reservations?page_size=100"),
-          requestApi("bagages/tarifs?page_size=100"),
-          requestApi("notifications?page_size=100"),
           requestApi("paiements?page_size=100"),
-          getPublicCities(),
-          requestApi("stations"),
         ]);
+      const loadedAgents = listFrom(agentsData, isAgent);
+      setTrips(listFrom(tripsData, isTrip).filter((trip) => trip.compagnie === companyId));
+      setAgents(loadedAgents);
+      setReservations(listFrom(reservationsData, isCompanyReservation));
+      setPayments(listFrom(paymentsData, isPayment));
+      setAgentPermissions(
+        Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
+      );
+    } catch (loadError) {
+      console.error("Company overview data loading failed", loadError);
+      setOverviewDataFailed(true);
+      setError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Impossible de charger les données du tableau de bord.",
+      );
+    } finally {
+      setOverviewDataLoading(false);
+    }
+  }, []);
+
+  const loadDeferredData = useCallback(async (data: DeferredData) => {
+    if (loadedDeferredData.current.has(data)) return;
+    const pending = pendingDeferredData.current.get(data);
+    if (pending) return pending;
+
+    const load = (async () => {
+      setDeferredDataLoading((current) => ({ ...current, [data]: true }));
+      setDeferredDataFailed((current) => ({ ...current, [data]: false }));
+      try {
+        if (data === "locations") {
+          const [citiesData, stationsData] = await Promise.all([
+            getPublicCities(),
+            requestApi("stations"),
+          ]);
+          setCities(citiesData);
+          setStations(listFrom(stationsData, isStation));
+        } else if (data === "tariffs") {
+          const tariffsData = await requestApi("bagages/tarifs?page_size=100");
+          setTariffs(listFrom(tariffsData, isBaggageTariff));
+        } else {
+          const notificationsData = await requestApi("notifications?page_size=100");
+          setNotifications(listFrom(notificationsData, isNotification));
+        }
+        loadedDeferredData.current.add(data);
+        setError(null);
+      } catch (loadError) {
+        console.error("Company workspace data loading failed", loadError);
+        setDeferredDataFailed((current) => ({ ...current, [data]: true }));
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Impossible de charger les données de cet onglet.",
+        );
+      } finally {
+        pendingDeferredData.current.delete(data);
+        setDeferredDataLoading((current) => ({ ...current, [data]: false }));
+      }
+    })();
+    pendingDeferredData.current.set(data, load);
+    await load;
+  }, []);
+
+  const loadWorkspace = useCallback(async (refreshAll = false) => {
+    try {
+      const [sessionResponse, companyData] = await Promise.all([
+        fetch("/api/auth/session", { cache: "no-store" }),
+        requestApi("me"),
+      ]);
       const sessionBody: unknown = await sessionResponse.json().catch(() => null);
       if (!sessionResponse.ok || !isUserProfile(sessionBody)) {
         setRedirecting(true);
@@ -708,14 +780,35 @@ export default function CompanyWorkspace() {
       if (!isCompany(companyData)) {
         throw new Error("Le profil de la compagnie reçu est invalide.");
       }
-      const loadedTrips = listFrom(tripsData, isTrip).filter(
-        (trip) => trip.compagnie === sessionBody.id,
-      );
-      const loadedAgents = listFrom(agentsData, isAgent);
       setError(null);
       setCompany(companyData);
       setProfile(sessionBody);
-      setTrips(loadedTrips);
+      if (!refreshAll) {
+        void loadOverviewData(sessionBody.id);
+        return;
+      }
+
+      const [
+        tripsData,
+        agentsData,
+        reservationsData,
+        tariffsData,
+        notificationsData,
+        paymentsData,
+        citiesData,
+        stationsData,
+      ] = await Promise.all([
+        requestApi("voyages?page_size=100"),
+        requestApi("agents?page_size=100"),
+        requestApi("reservations?page_size=100"),
+        requestApi("bagages/tarifs?page_size=100"),
+        requestApi("notifications?page_size=100"),
+        requestApi("paiements?page_size=100"),
+        getPublicCities(),
+        requestApi("stations"),
+      ]);
+      const loadedAgents = listFrom(agentsData, isAgent);
+      setTrips(listFrom(tripsData, isTrip).filter((trip) => trip.compagnie === sessionBody.id));
       setStations(listFrom(stationsData, isStation));
       setAgents(loadedAgents);
       setReservations(listFrom(reservationsData, isCompanyReservation));
@@ -726,6 +819,12 @@ export default function CompanyWorkspace() {
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
       );
+      setOverviewDataFailed(false);
+      setOverviewDataLoading(false);
+      loadedDeferredData.current.add("locations");
+      loadedDeferredData.current.add("tariffs");
+      loadedDeferredData.current.add("notifications");
+      setDeferredDataFailed({ locations: false, tariffs: false, notifications: false });
     } catch (loadError) {
       console.error("Company workspace loading failed", loadError);
       setError(
@@ -736,11 +835,16 @@ export default function CompanyWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [router]);
+  }, [loadOverviewData, router]);
 
   useEffect(() => {
-    void Promise.resolve().then(loadWorkspace);
+    void Promise.resolve().then(() => loadWorkspace());
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    const data = deferredDataForTab(tab);
+    if (data) void loadDeferredData(data);
+  }, [loadDeferredData, tab]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => setDashboardNow(Date.now()), 0);
@@ -888,7 +992,7 @@ export default function CompanyWorkspace() {
       setTripDepartStation("");
       setTripArrivalStation("");
       form.reset();
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(editingTrip ? "Le trajet a été mis à jour." : "Le trajet a été publié.");
     } catch (saveError) {
       setError(
@@ -921,7 +1025,7 @@ export default function CompanyWorkspace() {
     try {
       await requestApi("stations", "POST", payload);
       form.reset();
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice("La gare a été ajoutée.");
     } catch (saveError) {
       setError(
@@ -938,7 +1042,7 @@ export default function CompanyWorkspace() {
     setNotice(null);
     try {
       await requestApi(`stations/${station.id_gare}`, "PATCH", { active });
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(active ? "La gare est de nouveau active." : "La gare a été désactivée.");
     } catch (saveError) {
       setError(
@@ -956,7 +1060,7 @@ export default function CompanyWorkspace() {
     setNotice(null);
     try {
       await requestApi(`voyages/${trip.id_voyage}`, "PATCH", { statut: status });
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(`Le trajet est maintenant « ${statusLabel(status)} ».`);
     } catch (saveError) {
       setError(
@@ -986,7 +1090,7 @@ export default function CompanyWorkspace() {
     try {
       await requestApi("agents", "POST", payload);
       form.reset();
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
     } catch (saveError) {
       setError(
@@ -1021,7 +1125,7 @@ export default function CompanyWorkspace() {
     setNotice(null);
     try {
       await requestApi(`agents/${agent.id}`, "PATCH", changes);
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(`Le compte de ${agent.prenoms} ${agent.nom} a été mis à jour.`);
       return true;
     } catch (saveError) {
@@ -1041,7 +1145,7 @@ export default function CompanyWorkspace() {
     try {
       await requestApi(`agents/${agent.id}`, "DELETE");
       setAgentToDelete(null);
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(`${agent.prenoms} ${agent.nom} a été retiré de votre équipe.`);
     } catch (deleteError) {
       setError(
@@ -1073,7 +1177,7 @@ export default function CompanyWorkspace() {
       );
       setEditingTariff(null);
       form.reset();
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
     } catch (saveError) {
       setError(
@@ -1091,7 +1195,7 @@ export default function CompanyWorkspace() {
     try {
       await requestApi(`bagages/tarifs/${tariff.id_tarif}`, "DELETE");
       setTariffToDelete(null);
-      await loadWorkspace();
+      await loadWorkspace(true);
       setNotice("Le tarif bagage a été supprimé.");
     } catch (deleteError) {
       setError(
@@ -1203,6 +1307,19 @@ export default function CompanyWorkspace() {
   const editingTripHasDeparted = Boolean(editingTrip?.date_depart_effective);
   const editingTripFieldsLocked =
     editingTripHasActiveReservations || editingTripHasDeparted;
+  const activeDeferredData = deferredDataForTab(tab);
+  const activeTabNeedsOverviewData =
+    tab === "overview" ||
+    tab === "trips" ||
+    tab === "agents" ||
+    tab === "reservations" ||
+    tab === "payments";
+  const activeTabDataLoading =
+    (activeTabNeedsOverviewData && overviewDataLoading) ||
+    Boolean(activeDeferredData && deferredDataLoading[activeDeferredData]);
+  const activeTabDataFailed =
+    (activeTabNeedsOverviewData && overviewDataFailed) ||
+    Boolean(activeDeferredData && deferredDataFailed[activeDeferredData]);
 
   return (
     <TooltipProvider>
@@ -1283,6 +1400,17 @@ export default function CompanyWorkspace() {
                 </button>
               </div>
             </section>
+            {overviewDataLoading ? (
+              <p className="company-empty" role="status">Chargement des indicateurs de votre activité…</p>
+            ) : overviewDataFailed ? (
+              <p className="company-alert company-alert--error" role="alert">
+                Les indicateurs n’ont pas pu être chargés.{" "}
+                <button type="button" className="company-text-button" onClick={() => void loadOverviewData(profile.id)}>
+                  Réessayer
+                </button>
+              </p>
+            ) : (
+              <>
             <div className="company-stat-grid">
               <article className="company-stat-card">
                 <span className="company-stat-card__icon"><BusFront aria-hidden="true" /></span>
@@ -1414,10 +1542,34 @@ export default function CompanyWorkspace() {
                 ) : <p className="company-empty">Aucun départ publié à venir. Créez votre premier trajet.</p>}
               </section>
             </div>
+              </>
+            )}
           </div>
         ) : null}
 
-        {tab === "stations" ? (
+        {tab !== "overview" && activeTabDataLoading ? (
+          <p className="company-empty" role="status">Chargement des données de cet espace…</p>
+        ) : null}
+        {tab !== "overview" && activeTabDataFailed ? (
+          <p className="company-alert company-alert--error" role="alert">
+            Ces données n’ont pas pu être chargées.{" "}
+            <button
+              type="button"
+              className="company-text-button"
+              onClick={() => {
+                if (activeDeferredData) {
+                  void loadDeferredData(activeDeferredData);
+                } else {
+                  void loadOverviewData(profile.id);
+                }
+              }}
+            >
+              Réessayer
+            </button>
+          </p>
+        ) : null}
+
+        {tab === "stations" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
               <div className="company-panel-heading">
@@ -1489,7 +1641,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "trips" ? (
+        {tab === "trips" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
               <div className="company-panel-heading">
@@ -1587,7 +1739,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "agents" ? (
+        {tab === "agents" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
               <div className="company-panel-heading"><div><h2>Ajouter un agent</h2><p>Un e-mail lui permettra de choisir son mot de passe et d’activer son compte.</p></div></div>
@@ -1621,7 +1773,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "reservations" ? (
+        {tab === "reservations" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content">
             <section className="company-panel">
               <div className="company-panel-heading">
@@ -1659,7 +1811,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "tariffs" ? (
+        {tab === "tariffs" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content company-content--split">
             <section className="company-panel">
               <div className="company-panel-heading">
@@ -1702,7 +1854,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "payments" ? (
+        {tab === "payments" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content">
             <section className="company-panel">
               <div className="company-panel-heading"><div><h2>Suivi des paiements</h2><p>Transactions liées aux réservations de vos trajets.</p></div><strong className="company-payment-total">{formatPrice(confirmedPaymentAmount)} confirmés</strong></div>
@@ -1714,7 +1866,7 @@ export default function CompanyWorkspace() {
           </div>
         ) : null}
 
-        {tab === "notifications" ? (
+        {tab === "notifications" && !activeTabDataLoading && !activeTabDataFailed ? (
           <div className="company-content">
             <section className="company-panel">
               <div className="company-panel-heading">
