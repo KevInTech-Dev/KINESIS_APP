@@ -4,6 +4,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -46,9 +50,15 @@ export default function PasswordResetRequestForm() {
       if (!response.ok) {
         setFeedback({
           kind: "error",
-          message:
+          message: getUserFacingErrorMessage(
             getErrorMessage(result) ??
+              getUserFacingApiError(
+                result,
+                "La demande n’a pas abouti. Réessayez dans quelques instants.",
+                response.status,
+              ),
             "La demande n’a pas abouti. Réessayez dans quelques instants.",
+          ),
         });
         return;
       }
@@ -62,7 +72,10 @@ export default function PasswordResetRequestForm() {
       console.error("Password reset request failed", error);
       setFeedback({
         kind: "error",
-        message: "Le serveur est inaccessible. Réessayez dans quelques instants.",
+        message: getUserFacingErrorMessage(
+          error,
+          "Impossible de joindre le service. Réessayez dans quelques instants.",
+        ),
       });
     } finally {
       setSubmitting(false);

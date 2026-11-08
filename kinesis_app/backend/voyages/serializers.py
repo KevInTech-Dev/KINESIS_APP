@@ -104,6 +104,7 @@ class VoyageSerializer(serializers.ModelSerializer):
             "gare_arrivee",
             "gare_arrivee_id",
             "date_depart",
+            "date_creation",
             "heure_depart",
             "date_depart_effective",
             "place_totale",
@@ -116,6 +117,7 @@ class VoyageSerializer(serializers.ModelSerializer):
             "id_voyage",
             "compagnie",
             "compagnie_nom",
+            "date_creation",
             "date_depart_effective",
         )
 

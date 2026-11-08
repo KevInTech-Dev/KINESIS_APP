@@ -51,7 +51,8 @@ async function requestAuthBackend(
     return {
       status: 502,
       data: {
-        detail: "L’API est temporairement indisponible. Réessayez plus tard.",
+        detail:
+          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
       },
     };
   }

@@ -4,6 +4,7 @@ import uuid
 from django.conf import settings
 from django.core.validators import RegexValidator
 from django.db import models
+from django.utils import timezone
 
 from .storage import AuthenticatedCompanyDocumentStorage
 
@@ -91,6 +92,7 @@ class Gare(models.Model):
         related_name="gares",
     )
     nom = models.CharField(max_length=150)
+    date_creation = models.DateTimeField(default=timezone.now, editable=False)
     adresse = models.CharField(max_length=500)
     latitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
     longitude = models.DecimalField(max_digits=9, decimal_places=6, null=True, blank=True)
@@ -99,7 +101,7 @@ class Gare(models.Model):
     active = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ("ville__nom", "nom", "id_gare")
+        ordering = ("-date_creation", "ville__nom", "nom", "id_gare")
         constraints = [
             models.CheckConstraint(
                 condition=(

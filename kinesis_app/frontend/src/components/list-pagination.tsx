@@ -100,7 +100,7 @@ export function ListPagination({
 
 export function useListPagination<T>(
   items: T[],
-  initialPageSize: ListPageSize = 10,
+  initialPageSize: ListPageSize = 5,
   showPageNumbers = true,
 ) {
   const [page, setPage] = useState(1);

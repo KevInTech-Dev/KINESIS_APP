@@ -1,3 +1,5 @@
+from django.db.models import Prefetch
+from django.utils import timezone
 from drf_spectacular.utils import OpenApiExample, extend_schema
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -6,11 +8,28 @@ from rest_framework.views import APIView
 
 from config.pagination import StandardResultsSetPagination
 from utilisateurs.models import Utilisateur
+from voyages.models import Voyage
+from voyages.querysets import with_availability
 
 from .models import Reservation
 from .permissions import CanViewReservations, IsVoyageur, reservation_view_company
 from .serializers import ReservationCreateSerializer, ReservationSerializer
 from .services import cancel_reservation, expire_overdue_reservations
+
+
+def reservations_with_related_data(queryset):
+    voyage_queryset = Voyage.objects.select_related(
+        "compagnie__utilisateur",
+        "ville_depart",
+        "ville_arrivee",
+        "gare_depart__ville",
+        "gare_arrivee__ville",
+    )
+    voyage_queryset = with_availability(voyage_queryset, timezone.now())
+    return queryset.select_related("voyageur").prefetch_related(
+        "places",
+        Prefetch("voyage", queryset=voyage_queryset),
+    )
 
 
 class ReservationListCreateView(generics.ListCreateAPIView):
@@ -28,12 +47,7 @@ class ReservationListCreateView(generics.ListCreateAPIView):
                 return Reservation.objects.none()
             expire_overdue_reservations(company=company)
             queryset = Reservation.objects.filter(voyage__compagnie=company)
-        return queryset.select_related(
-            "voyage__compagnie__utilisateur",
-            "voyage__ville_depart",
-            "voyage__ville_arrivee",
-            "voyageur",
-        ).prefetch_related("places")
+        return reservations_with_related_data(queryset)
 
     def get_serializer_class(self):
         if self.request.method == "POST":
@@ -94,12 +108,7 @@ class ReservationDetailView(generics.RetrieveAPIView):
                 return Reservation.objects.none()
             expire_overdue_reservations(company=company)
             queryset = Reservation.objects.filter(voyage__compagnie=company)
-        return queryset.select_related(
-            "voyage__compagnie__utilisateur",
-            "voyage__ville_depart",
-            "voyage__ville_arrivee",
-            "voyageur",
-        ).prefetch_related("places")
+        return reservations_with_related_data(queryset)
 
 
 class ReservationCancelView(APIView):

@@ -1,7 +1,8 @@
 from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
+from django.test.utils import CaptureQueriesContext
 from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +15,8 @@ from notifications.models import Notification
 from voyages.models import Ville, Voyage
 
 from .models import PlaceReservee, Reservation
+from .serializers import ReservationSerializer
+from .views import reservations_with_related_data
 
 User = get_user_model()
 
@@ -384,8 +387,31 @@ class ReservationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["count"], 21)
-        self.assertEqual(len(response.data["results"]), 20)
+        self.assertEqual(len(response.data["results"]), 5)
         self.assertIsNotNone(response.data["next"])
+
+    def test_reservation_list_serializes_voyage_availability_in_three_queries(self):
+        for index in range(3):
+            Reservation.objects.create(
+                reference=f"RES-BATCH-{index}",
+                voyageur=self.traveler,
+                voyage=self.voyage,
+                date_expiration=timezone.now() + timedelta(minutes=5),
+                montant_total=5000,
+            )
+
+        with CaptureQueriesContext(connection) as queries:
+            reservations = reservations_with_related_data(
+                Reservation.objects.filter(voyageur=self.traveler)
+            )
+            serialized = ReservationSerializer(reservations, many=True).data
+
+        self.assertEqual(len(serialized), 3)
+        self.assertEqual(
+            [reservation["voyage"]["places_disponibles"] for reservation in serialized],
+            [2, 2, 2],
+        )
+        self.assertEqual(len(queries), 3)
 
 
 class ReservationModelTests(TestCase):

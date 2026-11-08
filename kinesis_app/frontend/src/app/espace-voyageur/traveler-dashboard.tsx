@@ -37,6 +37,10 @@ import RoleWorkspaceShell, {
   type RoleWorkspaceItem,
 } from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 type Reservation = {
   id_reservation: string;
@@ -361,15 +365,11 @@ function isNotificationList(value: unknown): value is { results: Notification[] 
 
 async function getErrorMessage(response: Response) {
   const data: unknown = await response.json().catch(() => null);
-  if (
-    typeof data === "object" &&
-    data !== null &&
-    "detail" in data &&
-    typeof data.detail === "string"
-  ) {
-    return data.detail;
-  }
-  return "Une erreur est survenue. Veuillez réessayer.";
+  return getUserFacingApiError(
+    data,
+    "Une erreur est survenue. Réessayez dans quelques instants.",
+    response.status,
+  );
 }
 
 function formatDate(value: string, options: Intl.DateTimeFormatOptions) {
@@ -407,7 +407,10 @@ export default function TravelerDashboard() {
   const [loading, setLoading] = useState(true);
   const hasDashboardData = useRef(false);
   const dashboardUserId = useRef<string | null>(null);
+  const dashboardRequestId = useRef(0);
   const [error, setError] = useState<string | null>(null);
+  const [reservationsError, setReservationsError] = useState<string | null>(null);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
   const [busyReservation, setBusyReservation] = useState<string | null>(null);
   const [reservationToCancel, setReservationToCancel] =
     useState<Reservation | null>(null);
@@ -438,8 +441,11 @@ export default function TravelerDashboard() {
   }, []);
 
   const loadDashboard = useCallback(async () => {
+    const requestId = ++dashboardRequestId.current;
     setLoading(!hasDashboardData.current);
     setError(null);
+    setReservationsError(null);
+    setReservationsLoading(false);
     try {
       const profileResponse = await fetch("/api/auth/session", {
         cache: "no-store",
@@ -485,6 +491,8 @@ export default function TravelerDashboard() {
       }
 
       if (profileData.role !== "VOYAGEUR") {
+        setReservationsError(null);
+        setReservationsLoading(false);
         setData({
           profile: profileData,
           reservations: [],
@@ -493,6 +501,16 @@ export default function TravelerDashboard() {
           notifications: [],
         });
         return;
+      }
+
+      if (!cachedData) {
+        setData({
+          profile: profileData,
+          reservations: [],
+          tickets: [],
+          baggages: [],
+          notifications: [],
+        });
       }
 
       const paymentId = new URLSearchParams(window.location.search).get(
@@ -506,15 +524,54 @@ export default function TravelerDashboard() {
           ? paymentId
           : null;
 
+      const reservationsRequest = fetch(
+        "/api/reservations?page_size=100",
+        { cache: "no-store" },
+      ).then(async (response) => {
+        if (response.status === 401) {
+          router.replace("/connexion");
+        }
+        if (!response.ok) throw new Error(await getErrorMessage(response));
+        const reservationData: unknown = await response.json();
+        if (!isReservationList(reservationData)) {
+          throw new Error("La liste des réservations reçue est invalide.");
+        }
+        return reservationData.results;
+      });
+      setReservationsLoading(true);
+      void reservationsRequest
+        .then((reservations) => {
+          if (requestId !== dashboardRequestId.current) return;
+          setReservationsError(null);
+          setReservationsLoading(false);
+          setData((current) =>
+            current?.profile?.id === profileData.id
+              ? { ...current, reservations }
+              : current,
+          );
+        })
+        .catch((reservationLoadError: unknown) => {
+          if (requestId !== dashboardRequestId.current) return;
+          setReservationsLoading(false);
+          console.error(
+            "Traveler reservations request failed",
+            reservationLoadError,
+          );
+          setReservationsError(
+            getUserFacingErrorMessage(
+              reservationLoadError,
+              "Vos réservations ne peuvent pas être chargées pour le moment.",
+            ),
+          );
+        });
+
       const [
-        reservationsResponse,
         ticketsResponse,
         baggagesResponse,
         notificationsResponse,
         paymentResponse,
       ] =
         await Promise.all([
-          fetch("/api/reservations?page_size=100", { cache: "no-store" }),
           fetch("/api/billets?page_size=100", { cache: "no-store" }),
           fetch("/api/bagages", { cache: "no-store" }),
           fetch("/api/notifications?page_size=100", { cache: "no-store" }),
@@ -551,16 +608,12 @@ export default function TravelerDashboard() {
       }
 
       if (
-        reservationsResponse.status === 401 ||
         ticketsResponse.status === 401 ||
         baggagesResponse.status === 401 ||
         notificationsResponse.status === 401
       ) {
         router.replace("/connexion");
         return;
-      }
-      if (!reservationsResponse.ok) {
-        throw new Error(await getErrorMessage(reservationsResponse));
       }
       if (!ticketsResponse.ok) {
         throw new Error(await getErrorMessage(ticketsResponse));
@@ -572,13 +625,9 @@ export default function TravelerDashboard() {
         throw new Error(await getErrorMessage(notificationsResponse));
       }
 
-      const reservationsData: unknown = await reservationsResponse.json();
       const ticketsData: unknown = await ticketsResponse.json();
       const baggagesData: unknown = await baggagesResponse.json();
       const notificationsData: unknown = await notificationsResponse.json();
-      if (!isReservationList(reservationsData)) {
-        throw new Error("La liste des réservations reçue est invalide.");
-      }
       if (!isTicketList(ticketsData)) {
         throw new Error("La liste des billets reçue est invalide.");
       }
@@ -588,25 +637,31 @@ export default function TravelerDashboard() {
       if (!isNotificationList(notificationsData)) {
         throw new Error("La liste des notifications reçue est invalide.");
       }
-      setData({
+      if (requestId !== dashboardRequestId.current) return;
+      setData((current) => ({
         profile: profileData,
-        reservations: reservationsData.results,
+        reservations:
+          current?.profile?.id === profileData.id
+            ? current.reservations
+            : cachedData?.reservations ?? [],
         tickets: ticketsData.results,
         baggages: baggagesData,
         notifications: notificationsData.results,
-      });
+      }));
       setNom(profileData.nom);
       setPrenoms(profileData.prenoms);
       setTelephone(profileData.telephone ?? "");
     } catch (loadError) {
+      if (requestId !== dashboardRequestId.current) return;
       console.error("Traveler dashboard request failed", loadError);
       setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger votre espace pour le moment.",
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger votre espace pour le moment.",
+        ),
       );
     } finally {
-      setLoading(false);
+      if (requestId === dashboardRequestId.current) setLoading(false);
     }
   }, [router]);
 
@@ -619,6 +674,7 @@ export default function TravelerDashboard() {
     });
     return () => {
       active = false;
+      dashboardRequestId.current += 1;
     };
   }, [loadDashboard]);
 
@@ -649,9 +705,7 @@ export default function TravelerDashboard() {
     } catch (signOutError) {
       console.error("Logout request failed", signOutError);
       toast.error(
-        signOutError instanceof Error
-          ? signOutError.message
-          : "La déconnexion n’a pas pu être confirmée.",
+        getUserFacingErrorMessage(signOutError, "La déconnexion n’a pas pu être confirmée."),
       );
     }
   }
@@ -688,9 +742,7 @@ export default function TravelerDashboard() {
     } catch (saveError) {
       console.error("Profile update failed", saveError);
       toast.error(
-        saveError instanceof Error
-          ? saveError.message
-          : "La mise à jour du profil a échoué.",
+        getUserFacingErrorMessage(saveError, "La mise à jour du profil a échoué."),
       );
     } finally {
       setProfileSaving(false);
@@ -723,9 +775,7 @@ export default function TravelerDashboard() {
     } catch (payError) {
       console.error("Payment initialization failed", payError);
       toast.error(
-        payError instanceof Error
-          ? payError.message
-          : "Le paiement n’a pas pu être démarré.",
+        getUserFacingErrorMessage(payError, "Le paiement n’a pas pu être démarré."),
       );
     } finally {
       setBusyReservation(null);
@@ -746,9 +796,7 @@ export default function TravelerDashboard() {
     } catch (cancelError) {
       console.error("Reservation cancellation failed", cancelError);
       toast.error(
-        cancelError instanceof Error
-          ? cancelError.message
-          : "L’annulation n’a pas pu être effectuée.",
+        getUserFacingErrorMessage(cancelError, "L’annulation n’a pas pu être effectuée."),
       );
     } finally {
       setBusyReservation(null);
@@ -773,9 +821,7 @@ export default function TravelerDashboard() {
     } catch (detailError) {
       console.error("Reservation detail request failed", detailError);
       setError(
-        detailError instanceof Error
-          ? detailError.message
-          : "Impossible de charger cette réservation.",
+        getUserFacingErrorMessage(detailError, "Impossible de charger cette réservation."),
       );
     } finally {
       setDetailLoading(null);
@@ -800,9 +846,7 @@ export default function TravelerDashboard() {
     } catch (detailError) {
       console.error("Ticket detail request failed", detailError);
       setError(
-        detailError instanceof Error
-          ? detailError.message
-          : "Impossible de charger ce billet.",
+        getUserFacingErrorMessage(detailError, "Impossible de charger ce billet."),
       );
     } finally {
       setDetailLoading(null);
@@ -939,9 +983,10 @@ export default function TravelerDashboard() {
     } catch (readError) {
       console.error("Notification read request failed", readError);
       setError(
-        readError instanceof Error
-          ? readError.message
-          : "Impossible de marquer cette notification comme lue.",
+        getUserFacingErrorMessage(
+          readError,
+          "Impossible de marquer cette notification comme lue.",
+        ),
       );
     }
   }
@@ -966,9 +1011,10 @@ export default function TravelerDashboard() {
     } catch (readError) {
       console.error("Mark all notifications as read failed", readError);
       setError(
-        readError instanceof Error
-          ? readError.message
-          : "Impossible de mettre à jour les notifications.",
+        getUserFacingErrorMessage(
+          readError,
+          "Impossible de mettre à jour les notifications.",
+        ),
       );
     }
   }
@@ -1301,7 +1347,17 @@ export default function TravelerDashboard() {
               </span>
             </div>
 
-            {data?.reservations.length ? (
+            {reservationsError ? (
+              <div className="traveler-workspace-refresh-error" role="alert">
+                <span>{reservationsError}</span>
+                <button type="button" onClick={() => void loadDashboard()}>
+                  Réessayer
+                </button>
+              </div>
+            ) : null}
+            {reservationsLoading && !data?.reservations.length ? (
+              <p role="status">Chargement de vos réservations…</p>
+            ) : data?.reservations.length ? (
               <div className="traveler-booking-list">
                 {pageReservations.map((reservation) => (
                   <article
@@ -1437,7 +1493,7 @@ export default function TravelerDashboard() {
                   </article>
                 ))}
               </div>
-            ) : (
+            ) : reservationsError ? null : (
               <div className="traveler-empty">
                 <span aria-hidden="true"><CalendarDays /></span>
                 <h3>Aucune réservation pour le moment</h3>

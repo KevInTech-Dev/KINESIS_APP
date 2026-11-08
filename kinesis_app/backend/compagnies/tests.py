@@ -196,7 +196,8 @@ class CompanyApiTests(APITestCase):
         response = self.client.get(reverse("company-stations"))
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        station_ids = [item["id_gare"] for item in response.data]
+        self.assertEqual(response.data["count"], 1)
+        station_ids = [item["id_gare"] for item in response.data["results"]]
         self.assertEqual(station_ids, [str(own_station.pk)])
 
         update_response = self.client.patch(

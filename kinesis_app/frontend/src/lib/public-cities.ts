@@ -1,4 +1,8 @@
 import type { Ville } from "@/lib/types";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 const CITY_CACHE_DURATION_MS = 5 * 60 * 1000;
 
@@ -27,21 +31,30 @@ export function getPublicCities(): Promise<Ville[]> {
     .then(async (response) => {
       const payload: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const detail =
-          typeof payload === "object" &&
-          payload !== null &&
-          "detail" in payload &&
-          typeof payload.detail === "string"
-            ? payload.detail
-            : "Les villes n’ont pas pu être chargées.";
-        throw new Error(detail);
+        throw new Error(
+          getUserFacingApiError(
+            payload,
+            "Les villes n’ont pas pu être chargées.",
+            response.status,
+          ),
+        );
       }
       if (!Array.isArray(payload) || !payload.every(isVille)) {
-        throw new Error("Le format des villes reçu de l’API est invalide.");
+        throw new Error(
+          "Les villes reçues sont incomplètes. Réessayez dans quelques instants.",
+        );
       }
       cachedCities = payload;
       cacheExpiresAt = Date.now() + CITY_CACHE_DURATION_MS;
       return payload;
+    })
+    .catch((error: unknown) => {
+      throw new Error(
+        getUserFacingErrorMessage(
+          error,
+          "Les villes n’ont pas pu être chargées. Réessayez dans quelques instants.",
+        ),
+      );
     });
 
   pendingCitiesRequest = request;

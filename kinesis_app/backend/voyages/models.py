@@ -5,6 +5,7 @@ from django.core.validators import MinValueValidator
 from django.db import models
 from django.db.models import F, Q
 from django.db.models.functions import Lower
+from django.utils import timezone
 
 
 class Ville(models.Model):
@@ -74,6 +75,7 @@ class Voyage(models.Model):
         related_name="voyages_arrivee",
     )
     date_depart = models.DateField()
+    date_creation = models.DateTimeField(default=timezone.now, editable=False)
     heure_depart = models.TimeField()
     date_depart_effective = models.DateTimeField(null=True, blank=True)
     depart_effectue_par = models.ForeignKey(
@@ -97,7 +99,7 @@ class Voyage(models.Model):
     )
 
     class Meta:
-        ordering = ("date_depart", "heure_depart")
+        ordering = ("-date_creation", "date_depart", "heure_depart")
         indexes = [
             models.Index(
                 fields=("statut", "date_depart", "heure_depart"),

@@ -7,7 +7,13 @@ import { toast } from "sonner";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowUpRight, MapPin } from "lucide-react";
 import KinesisLoader from "@/components/kinesis-loader";
+import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  cacheVoyages,
+  getCachedVoyage,
+  isCachedVoyage,
+} from "@/lib/voyage-cache";
 
 type Station = { nom: string; adresse: string; maps_url: string | null };
 type Trip = {
@@ -105,7 +111,8 @@ export default function BookingPage({
   passengerCount: number;
 }) {
   const router = useRouter();
-  const [trip, setTrip] = useState<Trip | null>(null);
+  const cachedTrip = getCachedVoyage(voyageId);
+  const [trip, setTrip] = useState<Trip | null>(() => cachedTrip);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [names, setNames] = useState<string[]>([]);
   const [baggageAnswer, setBaggageAnswer] = useState<"yes" | "no" | null>(
@@ -118,7 +125,7 @@ export default function BookingPage({
   const [baggageTariffError, setBaggageTariffError] = useState<string | null>(
     null,
   );
-  const [loadingTrip, setLoadingTrip] = useState(true);
+  const [loadingTrip, setLoadingTrip] = useState(() => !cachedTrip);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -177,9 +184,10 @@ export default function BookingPage({
       setBaggageTariffs(items);
     } catch (loadError) {
       setBaggageTariffError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger les tarifs des bagages.",
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger les tarifs des bagages.",
+        ),
       );
     } finally {
       setLoadingBaggageTariffs(false);
@@ -195,15 +203,17 @@ export default function BookingPage({
         if (!tripResponse.ok) throw new Error(await responseMessage(tripResponse));
         const tripData: unknown = await tripResponse.json();
         if (!isTrip(tripData)) throw new Error("Les détails du voyage sont invalides.");
+        if (isCachedVoyage(tripData)) cacheVoyages([tripData]);
         if (!active) return;
         setTrip(tripData);
       })
       .catch((loadError: unknown) => {
         if (!active) return;
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Le voyage ne peut pas être chargé.",
+          getUserFacingErrorMessage(
+            loadError,
+            "Le voyage ne peut pas être chargé.",
+          ),
         );
       })
       .finally(() => {
@@ -234,9 +244,10 @@ export default function BookingPage({
       .catch((loadError: unknown) => {
         if (!active) return;
         setProfileError(
-          loadError instanceof Error
-            ? loadError.message
-            : "La session ne peut pas être vérifiée.",
+          getUserFacingErrorMessage(
+            loadError,
+            "La session ne peut pas être vérifiée.",
+          ),
         );
       })
       .finally(() => {
@@ -326,9 +337,10 @@ export default function BookingPage({
     } catch (submitError) {
       console.error("Traveler reservation flow failed", submitError);
       toast.error(
-        submitError instanceof Error
-          ? submitError.message
-          : "La réservation n’a pas pu être terminée.",
+        getUserFacingErrorMessage(
+          submitError,
+          "La réservation n’a pas pu être terminée.",
+        ),
       );
     } finally {
       setSubmitting(false);

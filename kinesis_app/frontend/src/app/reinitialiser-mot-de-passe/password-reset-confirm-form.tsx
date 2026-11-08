@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import PasswordInput from "@/components/password-input";
 import { toast } from "sonner";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -60,9 +64,15 @@ export default function PasswordResetConfirmForm() {
       if (!response.ok) {
         setFeedback({
           kind: "error",
-          message:
+          message: getUserFacingErrorMessage(
             getErrorMessage(result) ??
+              getUserFacingApiError(
+                result,
+                "Le lien est invalide ou expiré. Demandez-en un nouveau.",
+                response.status,
+              ),
             "Le lien est invalide ou expiré. Demandez-en un nouveau.",
+          ),
         });
         return;
       }
@@ -74,7 +84,10 @@ export default function PasswordResetConfirmForm() {
       console.error("Password reset confirmation failed", error);
       setFeedback({
         kind: "error",
-        message: "Le serveur est inaccessible. Réessayez dans quelques instants.",
+        message: getUserFacingErrorMessage(
+          error,
+          "Impossible de joindre le service. Réessayez dans quelques instants.",
+        ),
       });
     } finally {
       setSubmitting(false);

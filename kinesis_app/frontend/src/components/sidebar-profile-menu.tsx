@@ -14,6 +14,10 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type SidebarProfileMenuProps = {
@@ -105,14 +109,13 @@ export default function SidebarProfileMenu({
       });
       const result: unknown = await response.json().catch(() => null);
       if (!response.ok) {
-        const detail =
-          typeof result === "object" &&
-          result !== null &&
-          "detail" in result &&
-          typeof result.detail === "string"
-            ? result.detail
-            : `La mise à jour a échoué (${response.status}).`;
-        throw new Error(detail);
+        throw new Error(
+          getUserFacingApiError(
+            result,
+            "La mise à jour de votre profil a échoué.",
+            response.status,
+          ),
+        );
       }
       if (!isUserProfile(result)) {
         throw new Error("Le profil reçu après modification est invalide.");
@@ -123,9 +126,10 @@ export default function SidebarProfileMenu({
     } catch (saveError) {
       console.error("Profile update failed", saveError);
       setError(
-        saveError instanceof Error
-          ? saveError.message
-          : "Impossible de mettre à jour votre profil.",
+        getUserFacingErrorMessage(
+          saveError,
+          "Impossible de mettre à jour votre profil.",
+        ),
       );
     } finally {
       setSaving(false);

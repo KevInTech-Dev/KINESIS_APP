@@ -6,6 +6,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import PasswordInput from "@/components/password-input";
 import { toast } from "sonner";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -64,8 +68,10 @@ export default function AgentActivationForm() {
           typeof result.email !== "string"
         ) {
           setError(
-            getErrorMessage(result) ??
+            getUserFacingErrorMessage(
+              getErrorMessage(result),
               "Ce lien d’invitation est invalide ou a expiré.",
+            ),
           );
           return;
         }
@@ -76,7 +82,10 @@ export default function AgentActivationForm() {
         console.error("Agent invitation lookup failed", requestError);
         if (active) {
           setError(
-            "Le service est temporairement indisponible. Réessayez dans quelques instants.",
+            getUserFacingErrorMessage(
+              requestError,
+              "Impossible de vérifier l’invitation. Réessayez dans quelques instants.",
+            ),
           );
         }
       })
@@ -106,8 +115,15 @@ export default function AgentActivationForm() {
       const result: unknown = await response.json().catch(() => null);
       if (!response.ok) {
         setError(
-          getErrorMessage(result) ??
+          getUserFacingErrorMessage(
+            getErrorMessage(result) ??
+              getUserFacingApiError(
+                result,
+                "L’activation a échoué. Vérifiez le lien et réessayez.",
+                response.status,
+              ),
             "L’activation a échoué. Vérifiez le lien et réessayez.",
+          ),
         );
         return;
       }
@@ -118,7 +134,10 @@ export default function AgentActivationForm() {
     } catch (requestError) {
       console.error("Agent account activation failed", requestError);
       setError(
-        "Le serveur est inaccessible. Réessayez dans quelques instants.",
+        getUserFacingErrorMessage(
+          requestError,
+          "Impossible de joindre le service. Réessayez dans quelques instants.",
+        ),
       );
     } finally {
       setSubmitting(false);

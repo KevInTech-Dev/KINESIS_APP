@@ -21,6 +21,10 @@ import RoleWorkspaceShell, {
   type RoleWorkspaceItem,
 } from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 const STATUSES = [
   "EN_ATTENTE_VALIDATION",
@@ -313,39 +317,32 @@ function getUserRegistrationBuckets(
   return buckets;
 }
 
-function apiMessage(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = apiMessage(item);
-      if (message) return message;
-    }
-  }
-  if (isRecord(value)) {
-    if ("detail" in value) {
-      const detail = apiMessage(value.detail);
-      if (detail) return detail;
-    }
-    for (const child of Object.values(value)) {
-      const message = apiMessage(child);
-      if (message) return message;
-    }
-  }
-  return null;
-}
-
 async function requestAdministrationApi(
   resource: string,
   method = "GET",
 ): Promise<unknown> {
-  const response = await fetch(`/api/administration/${resource}`, {
-    method,
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/administration/${resource}`, {
+      method,
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(
+      getUserFacingErrorMessage(
+        error,
+        "Le service ne répond pas pour le moment. Vérifiez votre connexion puis réessayez.",
+      ),
+    );
+  }
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(
-      apiMessage(data) ?? `La requête a échoué (${response.status}).`,
+      getUserFacingApiError(
+        data,
+        "L’action n’a pas pu aboutir. Réessayez dans quelques instants.",
+        response.status,
+      ),
     );
   }
   return data;
@@ -391,11 +388,11 @@ export default function AdministrationWorkspace() {
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("EN_ATTENTE_VALIDATION");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<ListPageSize>(10);
+  const [pageSize, setPageSize] = useState<ListPageSize>(5);
   const [data, setData] = useState<CompanyPage | null>(null);
   const [userFilter, setUserFilter] = useState<UserFilter>("TOUS");
   const [userPage, setUserPage] = useState(1);
-  const [userPageSize, setUserPageSize] = useState<ListPageSize>(10);
+  const [userPageSize, setUserPageSize] = useState<ListPageSize>(5);
   const [users, setUsers] = useState<UserPage | null>(null);
   const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
   const [userSummaryLoading, setUserSummaryLoading] = useState(false);
@@ -436,9 +433,10 @@ export default function AdministrationWorkspace() {
       } catch (loadError) {
         console.error("Administration company list loading failed", loadError);
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Impossible de charger les dossiers compagnie.",
+          getUserFacingErrorMessage(
+            loadError,
+            "Impossible de charger les dossiers compagnie. Réessayez dans quelques instants.",
+          ),
         );
       } finally {
         setListLoading(false);
@@ -469,9 +467,10 @@ export default function AdministrationWorkspace() {
       } catch (loadError) {
         console.error("Administration user list loading failed", loadError);
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Impossible de charger les comptes.",
+          getUserFacingErrorMessage(
+            loadError,
+            "Impossible de charger les comptes. Réessayez dans quelques instants.",
+          ),
         );
       } finally {
         setUsersLoading(false);
@@ -490,9 +489,10 @@ export default function AdministrationWorkspace() {
     } catch (loadError) {
       console.error("Administration user summary loading failed", loadError);
       setUserSummaryError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger la répartition des comptes.",
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger la répartition des comptes.",
+        ),
       );
     } finally {
       setUserSummaryLoading(false);
@@ -532,9 +532,10 @@ export default function AdministrationWorkspace() {
         console.error("Administration session loading failed", loadError);
         if (active) {
           setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Impossible de vérifier votre session administrateur.",
+            getUserFacingErrorMessage(
+              loadError,
+              "Impossible de vérifier votre session administrateur.",
+            ),
           );
           setLoading(false);
         }
@@ -606,9 +607,10 @@ export default function AdministrationWorkspace() {
     } catch (actionError) {
       console.error("Administration company action failed", actionError);
       toast.error(
-        actionError instanceof Error
-          ? actionError.message
-          : "L’action n’a pas pu être effectuée.",
+        getUserFacingErrorMessage(
+          actionError,
+          "L’action n’a pas pu être effectuée. Réessayez dans quelques instants.",
+        ),
       );
     } finally {
       setBusyCompany(null);
@@ -621,17 +623,15 @@ export default function AdministrationWorkspace() {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) {
         const result: unknown = await response.json().catch(() => null);
-        throw new Error(apiMessage(result) ?? "La déconnexion n’a pas abouti.");
+        throw new Error(
+          getUserFacingApiError(result, "La déconnexion n’a pas abouti.", response.status),
+        );
       }
       router.replace("/");
       router.refresh();
     } catch (signOutError) {
       console.error("Administration logout failed", signOutError);
-      toast.error(
-        signOutError instanceof Error
-          ? signOutError.message
-          : "Impossible de fermer la session.",
-      );
+      toast.error(getUserFacingErrorMessage(signOutError, "Impossible de fermer la session."));
     }
   }
 

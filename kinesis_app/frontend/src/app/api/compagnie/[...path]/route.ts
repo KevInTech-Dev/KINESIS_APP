@@ -116,7 +116,10 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
               return {
                 key,
                 status: 502,
-                data: { detail: "La réponse du serveur est illisible." },
+                data: {
+                  detail:
+                    "Une erreur est survenue pendant le chargement. Réessayez dans quelques instants.",
+                },
               };
             }
           }
@@ -142,7 +145,10 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
     } catch (error) {
       console.error("Company dashboard request failed", error);
       const response = NextResponse.json(
-        { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+        {
+          detail:
+            "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+        },
         { status: 502, headers: { "Cache-Control": "no-store" } },
       );
       if (auth.session.rotated) {
@@ -205,7 +211,10 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
   } catch (error) {
     console.error(`Company API request failed for ${url.pathname}`, error);
     return NextResponse.json(
-      { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+      {
+        detail:
+          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+      },
       { status: 502 },
     );
   }
@@ -216,8 +225,17 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
     try {
       data = JSON.parse(responseText) as unknown;
     } catch (error) {
-      console.error(`Company API response was not valid JSON for ${url.pathname}`, error);
-      data = { detail: "La réponse du serveur est illisible." };
+      const contentType = backendResponse.headers.get("content-type");
+      console.error("Company API returned a non-JSON response", {
+        path: url.pathname,
+        status: backendResponse.status,
+        contentType,
+        error,
+      });
+      data = {
+        detail:
+          "Une erreur est survenue pendant l’enregistrement. Vérifiez les informations puis réessayez. Si le problème persiste, contactez le support.",
+      };
       if (backendResponse.ok) {
         backendResponse = new Response(null, { status: 502 });
       }

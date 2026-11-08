@@ -38,11 +38,7 @@ export default function TicketQrScanner({ onDetected }: TicketQrScannerProps) {
       .catch((scanError: unknown) => {
         if (cancelled) return;
         console.error("Could not start ticket QR scanner", scanError);
-        setError(
-          scanError instanceof Error
-            ? scanError.message
-            : "Impossible d’accéder à la caméra. Vérifiez son autorisation.",
-        );
+        setError("Impossible d’accéder à la caméra. Vérifiez son autorisation.");
         setActive(false);
       });
 

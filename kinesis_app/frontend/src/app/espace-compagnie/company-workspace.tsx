@@ -24,6 +24,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import ConfirmationDialog from "@/components/confirmation-dialog";
+import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
@@ -49,6 +50,10 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 const StationLocationInput = dynamic(
   () => import("@/components/station-location-input"),
@@ -76,6 +81,7 @@ type Station = {
   ville: string;
   ville_nom: string;
   nom: string;
+  date_creation?: string;
   adresse: string;
   latitude: string | null;
   longitude: string | null;
@@ -86,6 +92,7 @@ type Station = {
 type Trip = {
   id_voyage: string;
   compagnie: string;
+  date_creation?: string;
   ville_depart: string;
   ville_depart_nom: string;
   ville_arrivee: string;
@@ -103,6 +110,7 @@ type Trip = {
 };
 type Agent = {
   id: string;
+  date_creation?: string | null;
   email: string;
   nom: string;
   prenoms: string;
@@ -127,6 +135,7 @@ type Payment = {
 };
 type BaggageTariff = {
   id_tarif: string;
+  date_creation?: string;
   poids_min: string | number;
   poids_max: string | number;
   prix: string | number;
@@ -225,6 +234,7 @@ function isTrip(value: unknown): value is Trip {
     isRecord(value) &&
     typeof value.id_voyage === "string" &&
     typeof value.compagnie === "string" &&
+    (value.date_creation === undefined || typeof value.date_creation === "string") &&
     typeof value.ville_depart === "string" &&
     typeof value.ville_depart_nom === "string" &&
     typeof value.ville_arrivee === "string" &&
@@ -258,6 +268,7 @@ function isStation(value: unknown): value is Station {
     typeof value.ville === "string" &&
     typeof value.ville_nom === "string" &&
     typeof value.nom === "string" &&
+    (value.date_creation === undefined || typeof value.date_creation === "string") &&
     typeof value.adresse === "string" &&
     (typeof value.latitude === "string" || value.latitude === null) &&
     (typeof value.longitude === "string" || value.longitude === null) &&
@@ -271,6 +282,9 @@ function isAgent(value: unknown): value is Agent {
   return (
     isRecord(value) &&
     typeof value.id === "string" &&
+    (value.date_creation === undefined ||
+      typeof value.date_creation === "string" ||
+      value.date_creation === null) &&
     typeof value.email === "string" &&
     typeof value.nom === "string" &&
     typeof value.prenoms === "string" &&
@@ -304,6 +318,7 @@ function isBaggageTariff(value: unknown): value is BaggageTariff {
   return (
     isRecord(value) &&
     typeof value.id_tarif === "string" &&
+    (value.date_creation === undefined || typeof value.date_creation === "string") &&
     (typeof value.poids_min === "string" || typeof value.poids_min === "number") &&
     (typeof value.poids_max === "string" || typeof value.poids_max === "number") &&
     (typeof value.prix === "string" || typeof value.prix === "number")
@@ -349,6 +364,7 @@ function isNotification(value: unknown): value is Notification {
 function listFrom<T>(
   value: unknown,
   guard: (item: unknown) => item is T,
+  resource: string,
 ): T[] {
   let rows: unknown[] | null = null;
   if (Array.isArray(value)) {
@@ -357,30 +373,35 @@ function listFrom<T>(
     rows = value.results;
   }
   if (!rows || !rows.every(guard)) {
-    throw new Error("Le format des données reçu de l’API est invalide.");
+    const invalidIndexes = rows
+      ?.map((row, index) => (guard(row) ? -1 : index))
+      .filter((index) => index >= 0);
+    console.error("Company API returned an unexpected list format", {
+      resource,
+      invalidIndexes,
+    });
+    throw new Error(
+      "Certaines informations sont incomplètes. Actualisez la page puis réessayez.",
+    );
   }
   return rows;
 }
 
-function messageFrom(value: unknown): string | null {
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const message = messageFrom(item);
-      if (message) return message;
-    }
-  }
-  if (isRecord(value)) {
-    if ("detail" in value) {
-      const detail = messageFrom(value.detail);
-      if (detail) return detail;
-    }
-    for (const child of Object.values(value)) {
-      const message = messageFrom(child);
-      if (message) return message;
-    }
-  }
-  return null;
+function compareTripCreationDescending(first: Trip, second: Trip) {
+  if (!first.date_creation || !second.date_creation) return 0;
+  const difference =
+    Date.parse(second.date_creation) - Date.parse(first.date_creation);
+  return Number.isNaN(difference) ? 0 : difference;
+}
+
+function compareCreationDescending(
+  first: { date_creation?: string | null },
+  second: { date_creation?: string | null },
+) {
+  if (!first.date_creation || !second.date_creation) return 0;
+  const difference =
+    Date.parse(second.date_creation) - Date.parse(first.date_creation);
+  return Number.isNaN(difference) ? 0 : difference;
 }
 
 async function requestApi(
@@ -388,22 +409,36 @@ async function requestApi(
   method = "GET",
   payload?: FormData | Record<string, unknown>,
 ): Promise<unknown> {
-  const response = await fetch(`/api/compagnie/${resource}`, {
-    method,
-    ...(payload instanceof FormData
-      ? { body: payload }
-      : payload
-        ? {
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        : {}),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/compagnie/${resource}`, {
+      method,
+      ...(payload instanceof FormData
+        ? { body: payload }
+        : payload
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          : {}),
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(
+      getUserFacingErrorMessage(
+        error,
+        "Le service ne répond pas pour le moment. Vérifiez votre connexion puis réessayez.",
+      ),
+    );
+  }
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(
-      messageFrom(data) ?? `La requête a échoué (${response.status}).`,
+      getUserFacingApiError(
+        data,
+        "L’action n’a pas pu aboutir. Réessayez dans quelques instants.",
+        response.status,
+      ),
     );
   }
   return data;
@@ -654,6 +689,9 @@ function CompanySidebar({
 export default function CompanyWorkspace() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
+  const [tripDialogOpen, setTripDialogOpen] = useState(false);
+  const [stationDialogOpen, setStationDialogOpen] = useState(false);
+  const [agentDialogOpen, setAgentDialogOpen] = useState(false);
   const [paymentRange, setPaymentRange] = useState<PaymentRange>("7d");
   const [dashboardNow, setDashboardNow] = useState<number | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -701,15 +739,17 @@ export default function CompanyWorkspace() {
       if (!isRecord(dashboardData)) {
         throw new Error("Les données du tableau de bord reçues sont invalides.");
       }
-      const loadedAgents = listFrom(dashboardData.agents, isAgent);
+      const loadedAgents = listFrom(dashboardData.agents, isAgent, "agents");
       setTrips(
-        listFrom(dashboardData.trips, isTrip).filter(
+        listFrom(dashboardData.trips, isTrip, "trips").filter(
           (trip) => trip.compagnie === companyId,
         ),
       );
       setAgents(loadedAgents);
-      setReservations(listFrom(dashboardData.reservations, isCompanyReservation));
-      setPayments(listFrom(dashboardData.payments, isPayment));
+      setReservations(
+        listFrom(dashboardData.reservations, isCompanyReservation, "reservations"),
+      );
+      setPayments(listFrom(dashboardData.payments, isPayment, "payments"));
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
       );
@@ -717,9 +757,10 @@ export default function CompanyWorkspace() {
       console.error("Company overview data loading failed", loadError);
       setOverviewDataFailed(true);
       setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger les données du tableau de bord.",
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger les données du tableau de bord. Réessayez dans quelques instants.",
+        ),
       );
     } finally {
       setOverviewDataLoading(false);
@@ -738,16 +779,16 @@ export default function CompanyWorkspace() {
         if (data === "locations") {
           const [citiesData, stationsData] = await Promise.all([
             getPublicCities(),
-            requestApi("stations"),
+            requestApi("stations?page_size=100"),
           ]);
           setCities(citiesData);
-          setStations(listFrom(stationsData, isStation));
+          setStations(listFrom(stationsData, isStation, "stations"));
         } else if (data === "tariffs") {
           const tariffsData = await requestApi("bagages/tarifs?page_size=100");
-          setTariffs(listFrom(tariffsData, isBaggageTariff));
+          setTariffs(listFrom(tariffsData, isBaggageTariff, "tariffs"));
         } else {
           const notificationsData = await requestApi("notifications?page_size=100");
-          setNotifications(listFrom(notificationsData, isNotification));
+          setNotifications(listFrom(notificationsData, isNotification, "notifications"));
         }
         loadedDeferredData.current.add(data);
         setError(null);
@@ -755,9 +796,10 @@ export default function CompanyWorkspace() {
         console.error("Company workspace data loading failed", loadError);
         setDeferredDataFailed((current) => ({ ...current, [data]: true }));
         setError(
-          loadError instanceof Error
-            ? loadError.message
-            : "Impossible de charger les données de cet onglet.",
+          getUserFacingErrorMessage(
+            loadError,
+            "Impossible de charger ces informations. Réessayez dans quelques instants.",
+          ),
         );
       } finally {
         pendingDeferredData.current.delete(data);
@@ -813,16 +855,16 @@ export default function CompanyWorkspace() {
         requestApi("notifications?page_size=100"),
         requestApi("paiements?page_size=100"),
         getPublicCities(),
-        requestApi("stations"),
+        requestApi("stations?page_size=100"),
       ]);
-      const loadedAgents = listFrom(agentsData, isAgent);
-      setTrips(listFrom(tripsData, isTrip).filter((trip) => trip.compagnie === sessionBody.id));
-      setStations(listFrom(stationsData, isStation));
+      const loadedAgents = listFrom(agentsData, isAgent, "agents");
+      setTrips(listFrom(tripsData, isTrip, "trips").filter((trip) => trip.compagnie === sessionBody.id));
+      setStations(listFrom(stationsData, isStation, "stations"));
       setAgents(loadedAgents);
-      setReservations(listFrom(reservationsData, isCompanyReservation));
-      setTariffs(listFrom(tariffsData, isBaggageTariff));
-      setNotifications(listFrom(notificationsData, isNotification));
-      setPayments(listFrom(paymentsData, isPayment));
+      setReservations(listFrom(reservationsData, isCompanyReservation, "reservations"));
+      setTariffs(listFrom(tariffsData, isBaggageTariff, "tariffs"));
+      setNotifications(listFrom(notificationsData, isNotification, "notifications"));
+      setPayments(listFrom(paymentsData, isPayment, "payments"));
       setCities(citiesData);
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
@@ -836,9 +878,10 @@ export default function CompanyWorkspace() {
     } catch (loadError) {
       console.error("Company workspace loading failed", loadError);
       setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger votre espace compagnie.",
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger votre espace compagnie. Réessayez dans quelques instants.",
+        ),
       );
     } finally {
       setLoading(false);
@@ -860,17 +903,22 @@ export default function CompanyWorkspace() {
   }, []);
 
   const activeTrips = useMemo(
-    () => trips.filter((trip) => trip.statut === "PUBLIE" && isFuture(trip)),
+    () =>
+      trips
+        .filter((trip) => trip.statut === "PUBLIE" && isFuture(trip))
+        .sort(compareTripCreationDescending),
     [trips],
   );
-  const { pageItems: pageTrips, pagination: tripPagination } =
-    useListPagination(trips);
-  const { pageItems: pageAgents, pagination: agentPagination } =
-    useListPagination(agents, 5, false);
+  const { pageItems: pageTrips, pagination: tripPagination, resetPage: resetTripsPage } =
+    useListPagination([...trips].sort(compareTripCreationDescending));
+  const { pageItems: pageAgents, pagination: agentPagination, resetPage: resetAgentsPage } =
+    useListPagination([...agents].sort(compareCreationDescending));
+  const { pageItems: pageStations, pagination: stationPagination, resetPage: resetStationsPage } =
+    useListPagination([...stations].sort(compareCreationDescending));
   const { pageItems: pageReservations, pagination: reservationPagination } =
     useListPagination(reservations);
   const { pageItems: pageTariffs, pagination: tariffPagination } =
-    useListPagination(tariffs);
+    useListPagination([...tariffs].sort(compareCreationDescending));
   const { pageItems: pagePayments, pagination: paymentPagination } =
     useListPagination(payments);
   const { pageItems: pageNotifications, pagination: notificationPagination } =
@@ -935,6 +983,7 @@ export default function CompanyWorkspace() {
     setTripDepartStation("");
     setTripArrivalStation("");
     selectTab("trips");
+    setTripDialogOpen(true);
   }
 
   async function handleLogout() {
@@ -946,9 +995,7 @@ export default function CompanyWorkspace() {
     } catch (logoutError) {
       console.error("Company logout failed", logoutError);
       toast.error(
-        logoutError instanceof Error
-          ? logoutError.message
-          : "Impossible de fermer la session.",
+        getUserFacingErrorMessage(logoutError, "Impossible de fermer la session."),
       );
     }
   }
@@ -987,21 +1034,48 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi(
+      const savedTrip = await requestApi(
         editingTrip ? `voyages/${editingTrip.id_voyage}` : "voyages",
         editingTrip ? "PATCH" : "POST",
         requestPayload,
       );
+      if (isTrip(savedTrip)) {
+        setTrips((current) =>
+          editingTrip
+            ? current
+                .map((trip) =>
+                  trip.id_voyage === savedTrip.id_voyage ? savedTrip : trip,
+                )
+                .sort(compareTripCreationDescending)
+            : [savedTrip, ...current.filter(
+                (trip) => trip.id_voyage !== savedTrip.id_voyage,
+              )].sort(compareTripCreationDescending),
+        );
+      } else {
+        console.error("Saved trip response did not match the expected format.");
+        void requestApi("voyages?page_size=100")
+          .then((data) => setTrips(listFrom(data, isTrip, "trips")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh trips after saving", refreshError);
+            toast.error("Trajet enregistré, mais la liste n’a pas pu être actualisée.");
+          });
+      }
+      resetTripsPage();
       setEditingTrip(null);
       setTripDepartCity("");
       setTripArrivalCity("");
       setTripDepartStation("");
       setTripArrivalStation("");
       form.reset();
-      await loadWorkspace(true);
+      setTripDialogOpen(false);
       toast.success(editingTrip ? "Le trajet a été mis à jour." : "Le trajet a été publié.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le trajet.");
+      toast.error(
+        getUserFacingErrorMessage(
+          saveError,
+          "Impossible d’enregistrer le trajet. Vérifiez les informations puis réessayez.",
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -1026,12 +1100,32 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi("stations", "POST", payload);
+      const savedStation = await requestApi("stations", "POST", payload);
+      if (isStation(savedStation)) {
+        setStations((current) => [
+          savedStation,
+          ...current.filter((station) => station.id_gare !== savedStation.id_gare),
+        ]);
+      } else {
+        console.error("Saved station response did not match the expected format.");
+        void requestApi("stations?page_size=100")
+          .then((data) => setStations(listFrom(data, isStation, "stations")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh stations after saving", refreshError);
+            toast.error("Gare ajoutée, mais la liste n’a pas pu être actualisée.");
+          });
+      }
       form.reset();
-      await loadWorkspace(true);
+      resetStationsPage();
+      setStationDialogOpen(false);
       toast.success("La gare a été ajoutée.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’ajouter la gare.");
+      toast.error(
+        getUserFacingErrorMessage(
+          saveError,
+          "Impossible d’ajouter la gare. Vérifiez les informations puis réessayez.",
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -1041,11 +1135,29 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi(`stations/${station.id_gare}`, "PATCH", { active });
-      await loadWorkspace(true);
+      const updatedStation = await requestApi(
+        `stations/${station.id_gare}`,
+        "PATCH",
+        { active },
+      );
+      if (isStation(updatedStation)) {
+        setStations((current) =>
+          current.map((item) =>
+            item.id_gare === updatedStation.id_gare ? updatedStation : item,
+          ),
+        );
+      } else {
+        console.error("Updated station response did not match the expected format.");
+        void requestApi("stations?page_size=100")
+          .then((data) => setStations(listFrom(data, isStation, "stations")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh stations after updating", refreshError);
+            toast.error("Gare modifiée, mais la liste n’a pas pu être actualisée.");
+          });
+      }
       toast.success(active ? "La gare est de nouveau active." : "La gare a été désactivée.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible de modifier la gare.");
+      toast.error(getUserFacingErrorMessage(saveError, "Impossible de modifier la gare."));
     } finally {
       setSaving(false);
       setStationToDeactivate(null);
@@ -1056,11 +1168,31 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi(`voyages/${trip.id_voyage}`, "PATCH", { statut: status });
-      await loadWorkspace(true);
+      const updatedTrip = await requestApi(
+        `voyages/${trip.id_voyage}`,
+        "PATCH",
+        { statut: status },
+      );
+      if (isTrip(updatedTrip)) {
+        setTrips((current) =>
+          current
+            .map((item) =>
+              item.id_voyage === updatedTrip.id_voyage ? updatedTrip : item,
+            )
+            .sort(compareTripCreationDescending),
+        );
+      } else {
+        console.error("Updated trip response did not match the expected format.");
+        void requestApi("voyages?page_size=100")
+          .then((data) => setTrips(listFrom(data, isTrip, "trips")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh trips after updating", refreshError);
+            toast.error("Trajet modifié, mais la liste n’a pas pu être actualisée.");
+          });
+      }
       toast.success(`Le trajet est maintenant « ${statusLabel(status)} ».`);
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible de modifier le statut.");
+      toast.error(getUserFacingErrorMessage(saveError, "Impossible de modifier le statut du trajet."));
     } finally {
       setSaving(false);
     }
@@ -1082,12 +1214,36 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi("agents", "POST", payload);
+      const savedAgent = await requestApi("agents", "POST", payload);
+      if (isAgent(savedAgent)) {
+        setAgents((current) => [
+          savedAgent,
+          ...current.filter((agent) => agent.id !== savedAgent.id),
+        ]);
+        setAgentPermissions((current) => ({
+          ...current,
+          [savedAgent.id]: savedAgent.permissions,
+        }));
+      } else {
+        console.error("Saved agent response did not match the expected format.");
+        void requestApi("agents?page_size=100")
+          .then((data) => setAgents(listFrom(data, isAgent, "agents")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh agents after saving", refreshError);
+            toast.error("Agent créé, mais la liste n’a pas pu être actualisée.");
+          });
+      }
       form.reset();
-      await loadWorkspace(true);
+      resetAgentsPage();
+      setAgentDialogOpen(false);
       toast.success("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible de créer l’agent.");
+      toast.error(
+        getUserFacingErrorMessage(
+          saveError,
+          "Impossible de créer l’agent. Vérifiez les informations puis réessayez.",
+        ),
+      );
     } finally {
       setSaving(false);
     }
@@ -1101,7 +1257,10 @@ export default function CompanyWorkspace() {
       toast.success(`Une nouvelle invitation a été envoyée à ${agent.email}.`);
     } catch (sendError) {
       toast.error(
-        sendError instanceof Error ? sendError.message : "Impossible de renvoyer l’invitation.",
+        getUserFacingErrorMessage(
+          sendError,
+          "Impossible de renvoyer l’invitation. Réessayez dans quelques instants.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -1112,12 +1271,38 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi(`agents/${agent.id}`, "PATCH", changes);
-      await loadWorkspace(true);
+      const updatedAgent = await requestApi(`agents/${agent.id}`, "PATCH", changes);
+      if (isAgent(updatedAgent)) {
+        setAgents((current) =>
+          current.map((item) => item.id === updatedAgent.id ? updatedAgent : item),
+        );
+        setAgentPermissions((current) => ({
+          ...current,
+          [updatedAgent.id]: updatedAgent.permissions,
+        }));
+      } else {
+        console.error("Updated agent response did not match the expected format.");
+        setAgents((current) =>
+          current.map((item) =>
+            item.id === agent.id ? { ...item, ...changes } : item,
+          ),
+        );
+        if (Array.isArray(changes.permissions)) {
+          const permissions = changes.permissions.filter(
+            (permission): permission is string => typeof permission === "string",
+          );
+          if (permissions.length === changes.permissions.length) {
+            setAgentPermissions((current) => ({
+              ...current,
+              [agent.id]: permissions,
+            }));
+          }
+        }
+      }
       toast.success(`Le compte de ${agent.prenoms} ${agent.nom} a été mis à jour.`);
       return true;
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible de mettre à jour l’agent.");
+      toast.error(getUserFacingErrorMessage(saveError, "Impossible de mettre à jour l’agent."));
       return false;
     } finally {
       setSaving(false);
@@ -1130,12 +1315,15 @@ export default function CompanyWorkspace() {
     try {
       await requestApi(`agents/${agent.id}`, "DELETE");
       setAgentToDelete(null);
-      await loadWorkspace(true);
+      setAgents((current) => current.filter((item) => item.id !== agent.id));
+      setAgentPermissions((current) => {
+        const next = { ...current };
+        delete next[agent.id];
+        return next;
+      });
       toast.success(`${agent.prenoms} ${agent.nom} a été retiré de votre équipe.`);
     } catch (deleteError) {
-      toast.error(
-        deleteError instanceof Error ? deleteError.message : "Impossible de supprimer cet agent.",
-      );
+      toast.error(getUserFacingErrorMessage(deleteError, "Impossible de supprimer cet agent."));
     } finally {
       setSaving(false);
     }
@@ -1148,7 +1336,7 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      await requestApi(
+      const savedTariff = await requestApi(
         editingTariff ? `bagages/tarifs/${editingTariff.id_tarif}` : "bagages/tarifs",
         editingTariff ? "PATCH" : "POST",
         {
@@ -1157,12 +1345,32 @@ export default function CompanyWorkspace() {
           prix: Number(formData.get("prix")),
         },
       );
+      if (isBaggageTariff(savedTariff)) {
+        setTariffs((current) =>
+          editingTariff
+            ? current
+                .map((tariff) =>
+                  tariff.id_tarif === savedTariff.id_tarif ? savedTariff : tariff,
+                )
+                .sort(compareCreationDescending)
+            : [savedTariff, ...current.filter(
+                (tariff) => tariff.id_tarif !== savedTariff.id_tarif,
+              )].sort(compareCreationDescending),
+        );
+      } else {
+        console.error("Saved tariff response did not match the expected format.");
+        void requestApi("bagages/tarifs?page_size=100")
+          .then((data) => setTariffs(listFrom(data, isBaggageTariff, "tariffs")))
+          .catch((refreshError: unknown) => {
+            console.error("Could not refresh tariffs after saving", refreshError);
+            toast.error("Tarif enregistré, mais la liste n’a pas pu être actualisée.");
+          });
+      }
       setEditingTariff(null);
       form.reset();
-      await loadWorkspace(true);
       toast.success(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le tarif.");
+      toast.error(getUserFacingErrorMessage(saveError, "Impossible d’enregistrer le tarif bagage."));
     } finally {
       setSaving(false);
     }
@@ -1174,12 +1382,12 @@ export default function CompanyWorkspace() {
     try {
       await requestApi(`bagages/tarifs/${tariff.id_tarif}`, "DELETE");
       setTariffToDelete(null);
-      await loadWorkspace(true);
+      setTariffs((current) =>
+        current.filter((item) => item.id_tarif !== tariff.id_tarif),
+      );
       toast.success("Le tarif bagage a été supprimé.");
     } catch (deleteError) {
-      toast.error(
-        deleteError instanceof Error ? deleteError.message : "Impossible de supprimer ce tarif.",
-      );
+      toast.error(getUserFacingErrorMessage(deleteError, "Impossible de supprimer ce tarif bagage."));
     } finally {
       setSaving(false);
     }
@@ -1203,9 +1411,10 @@ export default function CompanyWorkspace() {
       );
     } catch (readError) {
       setError(
-        readError instanceof Error
-          ? readError.message
-          : "Impossible de marquer cette notification comme lue.",
+        getUserFacingErrorMessage(
+          readError,
+          "Impossible de marquer cette notification comme lue.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -1220,9 +1429,10 @@ export default function CompanyWorkspace() {
       setNotifications((current) => current.map((item) => ({ ...item, lue: true })));
     } catch (readError) {
       setError(
-        readError instanceof Error
-          ? readError.message
-          : "Impossible de mettre à jour les notifications.",
+        getUserFacingErrorMessage(
+          readError,
+          "Impossible de mettre à jour les notifications.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -1246,7 +1456,7 @@ export default function CompanyWorkspace() {
       setCompany(updated);
       toast.success("Les informations de votre compagnie ont été enregistrées.");
     } catch (saveError) {
-      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le profil.");
+      toast.error(getUserFacingErrorMessage(saveError, "Impossible d’enregistrer le profil."));
     } finally {
       setSaving(false);
     }
@@ -1542,14 +1752,15 @@ export default function CompanyWorkspace() {
         ) : null}
 
         {tab === "stations" && !activeTabDataLoading && !activeTabDataFailed ? (
-          <div className="company-content company-content--split">
-            <section className="company-panel">
-              <div className="company-panel-heading">
-                <div>
-                  <h2>Ajouter une gare</h2>
-                  <p>Chaque gare est associée à une ville officielle. Google Maps peut proposer son adresse et sa localisation.</p>
-                </div>
-              </div>
+          <div className="company-content">
+            <AppDialog
+              open={stationDialogOpen}
+              title="Ajouter une gare"
+              onClose={() => setStationDialogOpen(false)}
+              className="company-form-dialog"
+            >
+              <section className="company-panel">
+              <p className="company-form-dialog__description">Chaque gare est associée à une ville officielle. Google Maps peut proposer son adresse et sa localisation.</p>
               <form className="company-form" onSubmit={submitStation}>
                 <label>
                   <span>Ville</span>
@@ -1569,14 +1780,18 @@ export default function CompanyWorkspace() {
                   {saving ? "Enregistrement…" : "Ajouter la gare"}
                 </button>
               </form>
-            </section>
+              </section>
+            </AppDialog>
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading">
-                <div><h2>Vos gares</h2><p>{stations.length} gare(s), toutes villes confondues</p></div>
+                <div><h2>Vos gares</h2><p>Du plus récent au plus ancien · {stations.length} gare(s)</p></div>
+                <button type="button" className="company-button" onClick={() => setStationDialogOpen(true)}>
+                  Ajouter une gare <Plus aria-hidden="true" size={16} />
+                </button>
               </div>
               {stations.length ? (
                 <div className="company-station-list">
-                  {stations.map((station) => (
+                  {pageStations.map((station) => (
                     <article className="company-station-row" key={station.id_gare}>
                       <div>
                         <strong>{station.nom}</strong>
@@ -1609,31 +1824,27 @@ export default function CompanyWorkspace() {
               ) : (
                 <p className="company-empty">Aucune gare pour le moment. Ajoutez vos lieux de départ et d’arrivée.</p>
               )}
+              {stationPagination}
             </section>
           </div>
         ) : null}
 
         {tab === "trips" && !activeTabDataLoading && !activeTabDataFailed ? (
-          <div className="company-content company-content--split">
-            <section className="company-panel">
-              <div className="company-panel-heading">
-                <div>
-                  <h2>
-                    {editingTripHasDeparted
-                      ? "Archiver le trajet"
-                      : editingTrip
-                        ? "Modifier le trajet"
-                        : "Publier un trajet"}
-                  </h2>
-                  <p>
-                    {editingTripHasActiveReservations && !editingTripHasDeparted
-                      ? "Les modifications sont bloquées tant que des réservations actives sont liées à ce trajet."
-                      : editingTripHasDeparted
-                        ? "Le départ a été enregistré. Seul l’archivage du trajet est possible."
-                        : "Les places disponibles sont calculées par l’API."}
-                  </p>
-                </div>
-              </div>
+          <div className="company-content">
+            <AppDialog
+              open={tripDialogOpen}
+              title={editingTrip ? "Modifier un trajet" : "Publier un trajet"}
+              onClose={() => setTripDialogOpen(false)}
+              className="company-form-dialog"
+            >
+              <section className="company-panel">
+              <p className="company-form-dialog__description">
+                {editingTripHasActiveReservations && !editingTripHasDeparted
+                  ? "Les modifications sont bloquées tant que des réservations actives sont liées à ce trajet."
+                  : editingTripHasDeparted
+                    ? "Le départ a été enregistré. Seul l’archivage du trajet est possible."
+                    : "Les places disponibles sont calculées par l’API."}
+              </p>
               <form className="company-form" onSubmit={submitTrip} key={editingTrip?.id_voyage ?? "new-trip"}>
                 <label><span>Ville de départ</span><select name="ville_depart" required disabled={editingTripFieldsLocked} value={tripDepartCity} onChange={(event) => { setTripDepartCity(event.target.value); setTripDepartStation(""); }}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
                 <label><span>Gare de départ</span><select name="gare_depart_id" required={!editingTrip} disabled={editingTripFieldsLocked || !tripDepartCity} value={tripDepartStation} onChange={(event) => setTripDepartStation(event.target.value)}><option value="" disabled>Choisir une gare</option>{stations.filter((station) => station.ville === tripDepartCity && (station.active || station.id_gare === editingTrip?.gare_depart?.id_gare)).map((station) => <option key={station.id_gare} value={station.id_gare}>{station.nom} — {station.adresse}</option>)}</select></label>
@@ -1663,12 +1874,18 @@ export default function CompanyWorkspace() {
                 {editingTrip ? <label><span>Statut</span><select name="statut" disabled={editingTripHasActiveReservations && !editingTripHasDeparted} defaultValue={editingTripHasDeparted ? "ARCHIVE" : editingTrip.statut}>{editingTripHasDeparted ? <option value="ARCHIVE">Archivé</option> : <><option value="PUBLIE">Publié</option><option value="ANNULEE">Annulé</option><option value="ARCHIVE">Archivé</option></>}</select></label> : null}
                 <div className="company-form-actions">
                   <button type="submit" className="company-button" disabled={saving || (editingTripHasActiveReservations && !editingTripHasDeparted)}>{saving ? "Enregistrement…" : editingTripHasDeparted ? "Archiver le trajet" : editingTrip ? "Enregistrer" : "Publier le trajet"}</button>
-                  {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => { setEditingTrip(null); setTripDepartCity(""); setTripArrivalCity(""); setTripDepartStation(""); setTripArrivalStation(""); }}>Annuler</button> : null}
+                  {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => { setEditingTrip(null); setTripDepartCity(""); setTripArrivalCity(""); setTripDepartStation(""); setTripArrivalStation(""); setTripDialogOpen(false); }}>Annuler</button> : null}
                 </div>
               </form>
-            </section>
+              </section>
+            </AppDialog>
             <section className="company-panel company-panel--list">
-              <div className="company-panel-heading"><div><h2>Vos trajets</h2><p>{trips.length} trajet(s)</p></div></div>
+              <div className="company-panel-heading">
+                <div><h2>Vos trajets</h2><p>Du plus récent au plus ancien · {trips.length} trajet(s)</p></div>
+                <button type="button" className="company-button" onClick={startTripCreation}>
+                  Publier un trajet <Plus aria-hidden="true" size={16} />
+                </button>
+              </div>
               {trips.length ? (
                 <div className="company-trip-list">{pageTrips.map((trip) => (
                   <article className="company-trip-row" key={trip.id_voyage}>
@@ -1683,6 +1900,7 @@ export default function CompanyWorkspace() {
                           setTripArrivalCity(trip.ville_arrivee);
                           setTripDepartStation(trip.gare_depart?.id_gare ?? "");
                           setTripArrivalStation(trip.gare_arrivee?.id_gare ?? "");
+                          setTripDialogOpen(true);
                         }}
                       >
                         {trip.date_depart_effective ? "Archiver" : "Modifier"}
@@ -1712,9 +1930,15 @@ export default function CompanyWorkspace() {
         ) : null}
 
         {tab === "agents" && !activeTabDataLoading && !activeTabDataFailed ? (
-          <div className="company-content company-content--split">
-            <section className="company-panel">
-              <div className="company-panel-heading"><div><h2>Ajouter un agent</h2><p>Un e-mail lui permettra de choisir son mot de passe et d’activer son compte.</p></div></div>
+          <div className="company-content">
+            <AppDialog
+              open={agentDialogOpen}
+              title="Ajouter un agent"
+              onClose={() => setAgentDialogOpen(false)}
+              className="company-form-dialog"
+            >
+              <section className="company-panel">
+              <p className="company-form-dialog__description">Un e-mail lui permettra de choisir son mot de passe et d’activer son compte.</p>
               <form className="company-form" onSubmit={submitAgent}>
                 <label><span>Adresse e-mail</span><input name="email" type="email" required /></label>
                 <div className="company-form-grid">
@@ -1725,9 +1949,15 @@ export default function CompanyWorkspace() {
                 <fieldset className="company-permissions"><legend>Autorisations</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" name={`permission-${code}`} value={code} /><span>{label}</span></label>)}</fieldset>
                 <button type="submit" className="company-button" disabled={saving}>{saving ? "Création…" : "Créer et envoyer l’invitation"}</button>
               </form>
-            </section>
+              </section>
+            </AppDialog>
             <section className="company-panel company-panel--list">
-              <div className="company-panel-heading"><div><h2>Votre équipe</h2><p>Du plus récent au plus ancien, puis par nom et prénoms · {agents.length} agent(s)</p></div></div>
+              <div className="company-panel-heading">
+                <div><h2>Votre équipe</h2><p>Du plus récent au plus ancien · {agents.length} agent(s)</p></div>
+                <button type="button" className="company-button" onClick={() => setAgentDialogOpen(true)}>
+                  Ajouter un agent <Plus aria-hidden="true" size={16} />
+                </button>
+              </div>
               {agents.length ? <div className="company-agent-list">{pageAgents.map((agent) => (
                 <article className="company-agent-card" key={agent.id}>
                   <div className="company-agent-heading"><ProfileAvatar className="company-agent-avatar" src={agent.photo_profil} name={[agent.prenoms, agent.nom].filter(Boolean).join(" ")} size={36} /><div><strong>{agent.prenoms} {agent.nom}</strong><span>{agent.email}</span></div><span className={`company-status ${agent.is_active ? "company-status--active" : "company-status--disabled"}`}>{agent.invitation_en_attente ? "Invitation en attente" : agent.is_active ? "Actif" : "Désactivé"}</span></div>

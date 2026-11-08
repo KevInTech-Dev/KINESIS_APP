@@ -37,9 +37,10 @@ class TarifBagage(models.Model):
         decimal_places=0,
         validators=[MinValueValidator(0)],
     )
+    date_creation = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
-        ordering = ("poids_min",)
+        ordering = ("-date_creation", "poids_min")
         constraints = [
             models.CheckConstraint(
                 condition=Q(poids_min__gte=0),

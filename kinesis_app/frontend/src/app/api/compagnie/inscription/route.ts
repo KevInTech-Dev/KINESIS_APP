@@ -38,7 +38,10 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Company registration request failed", error);
     return NextResponse.json(
-      { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+      {
+        detail:
+          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+      },
       { status: 502 },
     );
   }

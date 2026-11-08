@@ -220,6 +220,7 @@ class MyCompanyView(generics.RetrieveUpdateAPIView):
 class CompanyStationListCreateView(generics.ListCreateAPIView):
     serializer_class = GareSerializer
     permission_classes = [IsActiveCompany]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         return Gare.objects.filter(

@@ -34,6 +34,10 @@ import RoleWorkspaceShell, {
   type RoleWorkspaceItem,
 } from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 const PERMISSIONS = {
   registerBaggage: "ENREGISTRER_BAGAGE",
@@ -143,6 +147,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function listFrom<T>(
   value: unknown,
   guard: (item: unknown) => item is T,
+  resource: string,
 ): T[] {
   let items: unknown[] | null = null;
   if (Array.isArray(value)) items = value;
@@ -150,7 +155,16 @@ function listFrom<T>(
     items = value.results;
   }
   if (!items || !items.every(guard)) {
-    throw new Error("Le format des données reçu de l’API est invalide.");
+    const invalidIndexes = items
+      ?.map((item, index) => (guard(item) ? -1 : index))
+      .filter((index) => index >= 0);
+    console.error("Agent API returned an unexpected list format", {
+      resource,
+      invalidIndexes,
+    });
+    throw new Error(
+      "Certaines informations sont incomplètes. Actualisez la page puis réessayez.",
+    );
   }
   return items;
 }
@@ -292,22 +306,36 @@ async function requestAgentApi(
   method = "GET",
   payload?: FormData | Record<string, unknown>,
 ): Promise<unknown> {
-  const response = await fetch(`/api/agent/${resource}`, {
-    method,
-    ...(payload instanceof FormData
-      ? { body: payload }
-      : payload
-        ? {
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }
-        : {}),
-    cache: "no-store",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api/agent/${resource}`, {
+      method,
+      ...(payload instanceof FormData
+        ? { body: payload }
+        : payload
+          ? {
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payload),
+            }
+          : {}),
+      cache: "no-store",
+    });
+  } catch (error) {
+    throw new Error(
+      getUserFacingErrorMessage(
+        error,
+        "Le service ne répond pas pour le moment. Vérifiez votre connexion puis réessayez.",
+      ),
+    );
+  }
   const data: unknown = await response.json().catch(() => null);
   if (!response.ok) {
     throw new Error(
-      apiMessage(data) ?? `La requête a échoué (${response.status}).`,
+      getUserFacingApiError(
+        data,
+        "L’action n’a pas pu aboutir. Réessayez dans quelques instants.",
+        response.status,
+      ),
     );
   }
   return data;
@@ -473,17 +501,15 @@ export default function AgentWorkspace() {
             : Promise.resolve({ results: [] }),
           requestAgentApi("notifications?page_size=100"),
         ]);
-      setTrips(listFrom(tripData, isTrip));
-      setTickets(listFrom(ticketData, isTicket));
-      setReservations(listFrom(reservationData, isReservation));
-      setBaggages(listFrom(baggageData, isBaggage));
-      setNotifications(listFrom(notificationData, isNotification));
+      setTrips(listFrom(tripData, isTrip, "trips"));
+      setTickets(listFrom(ticketData, isTicket, "tickets"));
+      setReservations(listFrom(reservationData, isReservation, "reservations"));
+      setBaggages(listFrom(baggageData, isBaggage, "baggages"));
+      setNotifications(listFrom(notificationData, isNotification, "notifications"));
     } catch (loadError) {
       console.error("Agent workspace loading failed", loadError);
       setError(
-        loadError instanceof Error
-          ? loadError.message
-          : "Impossible de charger votre espace agent.",
+        getUserFacingErrorMessage(loadError, "Impossible de charger votre espace agent."),
       );
     } finally {
       setLoading(false);
@@ -530,9 +556,7 @@ export default function AgentWorkspace() {
       setPasswordFeedback({
         kind: "error",
         message:
-          changeError instanceof Error
-            ? changeError.message
-            : "Le serveur est inaccessible.",
+          getUserFacingErrorMessage(changeError, "Impossible de mettre à jour le mot de passe."),
       });
     } finally {
       setSaving(false);
@@ -556,9 +580,7 @@ export default function AgentWorkspace() {
       toast.info("Billet valide. Vérifiez le voyageur avant de confirmer l’embarquement.");
     } catch (scanError) {
       toast.error(
-        scanError instanceof Error
-          ? scanError.message
-          : "Impossible de vérifier ce billet.",
+        getUserFacingErrorMessage(scanError, "Impossible de vérifier ce billet."),
       );
     } finally {
       setSaving(false);
@@ -591,9 +613,7 @@ export default function AgentWorkspace() {
       );
     } catch (boardingError) {
       toast.error(
-        boardingError instanceof Error
-          ? boardingError.message
-          : "Impossible de confirmer l’embarquement.",
+        getUserFacingErrorMessage(boardingError, "Impossible de confirmer l’embarquement."),
       );
     } finally {
       setSaving(false);
@@ -623,9 +643,7 @@ export default function AgentWorkspace() {
       );
     } catch (departureError) {
       toast.error(
-        departureError instanceof Error
-          ? departureError.message
-          : "Impossible d’enregistrer le départ.",
+        getUserFacingErrorMessage(departureError, "Impossible d’enregistrer le départ."),
       );
     } finally {
       setSaving(false);
@@ -667,9 +685,7 @@ export default function AgentWorkspace() {
       }
     } catch (baggageError) {
       toast.error(
-        baggageError instanceof Error
-          ? baggageError.message
-          : "Impossible d’enregistrer le bagage.",
+        getUserFacingErrorMessage(baggageError, "Impossible d’enregistrer le bagage."),
       );
     } finally {
       setSaving(false);
@@ -691,7 +707,7 @@ export default function AgentWorkspace() {
       toast.success(`Paiement des frais enregistré pour ${result.reservation_reference}.`);
     } catch (feeError) {
       toast.error(
-        feeError instanceof Error ? feeError.message : "Impossible d’enregistrer le paiement.",
+        getUserFacingErrorMessage(feeError, "Impossible d’enregistrer le paiement."),
       );
     } finally {
       setSaving(false);
@@ -713,7 +729,7 @@ export default function AgentWorkspace() {
       toast.success(`Bagage ${result.reservation_reference} restitué.`);
     } catch (returnError) {
       toast.error(
-        returnError instanceof Error ? returnError.message : "Impossible de restituer le bagage.",
+        getUserFacingErrorMessage(returnError, "Impossible de restituer le bagage."),
       );
     } finally {
       setSaving(false);
@@ -737,9 +753,10 @@ export default function AgentWorkspace() {
       );
     } catch (notificationError) {
       setError(
-        notificationError instanceof Error
-          ? notificationError.message
-          : "Impossible de marquer la notification comme lue.",
+        getUserFacingErrorMessage(
+          notificationError,
+          "Impossible de marquer la notification comme lue.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -758,9 +775,10 @@ export default function AgentWorkspace() {
       );
     } catch (notificationError) {
       setError(
-        notificationError instanceof Error
-          ? notificationError.message
-          : "Impossible de mettre à jour les notifications.",
+        getUserFacingErrorMessage(
+          notificationError,
+          "Impossible de mettre à jour les notifications.",
+        ),
       );
     } finally {
       setSaving(false);
@@ -776,7 +794,7 @@ export default function AgentWorkspace() {
     } catch (logoutError) {
       console.error("Agent logout failed", logoutError);
       toast.error(
-        logoutError instanceof Error ? logoutError.message : "Impossible de fermer la session.",
+        getUserFacingErrorMessage(logoutError, "Impossible de fermer la session."),
       );
     }
   }

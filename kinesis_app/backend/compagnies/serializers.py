@@ -151,6 +151,7 @@ class GareSerializer(serializers.ModelSerializer):
             "ville",
             "ville_nom",
             "nom",
+            "date_creation",
             "adresse",
             "latitude",
             "longitude",
@@ -158,7 +159,7 @@ class GareSerializer(serializers.ModelSerializer):
             "maps_url",
             "active",
         )
-        read_only_fields = ("id_gare", "compagnie")
+        read_only_fields = ("id_gare", "compagnie", "date_creation")
 
     def validate(self, attrs):
         if self.instance and any(key != "active" for key in attrs):
@@ -215,6 +216,10 @@ class AdminCompanyReviewSerializer(serializers.ModelSerializer):
 
 class AgentSerializer(serializers.ModelSerializer):
     id = serializers.UUIDField(source="utilisateur_id", read_only=True)
+    date_creation = serializers.DateTimeField(
+        source="utilisateur.date_creation",
+        read_only=True,
+    )
     email = serializers.EmailField(source="utilisateur.email", read_only=True)
     nom = serializers.CharField(source="utilisateur.nom", read_only=True)
     prenoms = serializers.CharField(source="utilisateur.prenoms", read_only=True)
@@ -232,6 +237,7 @@ class AgentSerializer(serializers.ModelSerializer):
         model = AgentCompagnie
         fields = (
             "id",
+            "date_creation",
             "email",
             "nom",
             "prenoms",

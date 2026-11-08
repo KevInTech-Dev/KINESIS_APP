@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
@@ -14,6 +13,7 @@ import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { CatalogTripSkeletons } from "@/components/voyage-skeletons";
+import VoyageCoverImage from "@/components/voyage-cover-image";
 import {
   ListPagination,
   type ListPageSize,
@@ -24,6 +24,8 @@ import {
   type PaginatedApiResponse,
 } from "@/lib/paginated-api";
 import { getPublicCities } from "@/lib/public-cities";
+import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
+import { cacheVoyages, isCachedVoyage } from "@/lib/voyage-cache";
 
 type Filters = {
   ville_depart: string;
@@ -62,21 +64,6 @@ function filtersFromQuery(query: string): Filters {
   return initialFilters;
 }
 
-function isVoyage(value: unknown): value is Voyage {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    "id_voyage" in value &&
-    typeof value.id_voyage === "string" &&
-    "ville_depart_nom" in value &&
-    typeof value.ville_depart_nom === "string" &&
-    "ville_arrivee_nom" in value &&
-    typeof value.ville_arrivee_nom === "string" &&
-    "places_disponibles" in value &&
-    typeof value.places_disponibles === "number"
-  );
-}
-
 function isCompanyOption(value: unknown): value is CompanyOption {
   return (
     typeof value === "object" &&
@@ -101,7 +88,7 @@ async function getCatalogPage(url: string): Promise<
 > {
   const result = await fetchPaginatedApiResponse(
     url,
-    isVoyage,
+    isCachedVoyage,
     "Le chargement des voyages a échoué.",
   );
   return {
@@ -239,7 +226,7 @@ function VoyagesCatalog() {
   const includeFacetsOnNextRequest = useRef(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState<ListPageSize>(10);
+  const [pageSize, setPageSize] = useState<ListPageSize>(5);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -251,9 +238,10 @@ function VoyagesCatalog() {
       .catch((loadError: unknown) => {
         if (active) {
           setCityError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Les villes n’ont pas pu être chargées.",
+            getUserFacingErrorMessage(
+              loadError,
+              "Les villes n’ont pas pu être chargées.",
+            ),
           );
         }
       });
@@ -275,6 +263,7 @@ function VoyagesCatalog() {
       .then((result) => {
         if (!active) return;
         setTrips(result.results);
+        cacheVoyages(result.results);
         setTripCount(result.count);
         if (result.companies) {
           setCompanies(result.companies);
@@ -284,9 +273,10 @@ function VoyagesCatalog() {
       .catch((loadError: unknown) => {
         if (active) {
           setError(
-            loadError instanceof Error
-              ? loadError.message
-              : "Les voyages n’ont pas pu être chargés.",
+            getUserFacingErrorMessage(
+              loadError,
+              "Les voyages n’ont pas pu être chargés.",
+            ),
           );
         }
       })
@@ -433,7 +423,12 @@ function VoyagesCatalog() {
                 key={trip.id_voyage}
               >
                 <div className="catalog-card__image">
-                  {trip.image ? <Image src={trip.image} alt="" fill sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw" /> : null}
+                  <VoyageCoverImage
+                    image={trip.image}
+                    voyageId={trip.id_voyage}
+                    alt=""
+                    sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw"
+                  />
                   <span>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}</span>
                 </div>
                 <div className="catalog-card__body">

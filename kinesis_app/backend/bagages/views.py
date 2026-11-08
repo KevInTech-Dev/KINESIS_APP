@@ -9,6 +9,7 @@ from rest_framework.views import APIView
 
 from compagnies.models import Compagnie
 from compagnies.permissions import IsActiveCompany
+from config.pagination import StandardResultsSetPagination
 from voyages.models import Voyage
 
 from .models import Bagage, TarifBagage
@@ -27,6 +28,7 @@ from .services import delete_tariff, record_manual_fee_payment, return_baggage
 class TarifListCreateView(generics.ListCreateAPIView):
     serializer_class = TarifBagageSerializer
     permission_classes = [IsAuthenticated, IsActiveCompany]
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         company = company_for_user(self.request.user)

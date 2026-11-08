@@ -13610,6 +13610,21 @@ select:focus-visible {
   width: min(520px, calc(100% - 32px));
 }
 
+.company-form-dialog {
+  width: min(760px, calc(100% - 32px));
+}
+
+.company-form-dialog > .company-panel {
+  margin: 16px;
+}
+
+.company-form-dialog__description {
+  margin: 0 0 16px;
+  color: #64746a;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .traveler-details-dialog > .traveler-detail-panel {
   margin: 16px;
   padding: 16px;

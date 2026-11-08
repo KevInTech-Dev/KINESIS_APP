@@ -40,7 +40,10 @@ export async function forwardBackendGet(
   } catch (error) {
     console.error(`Backend request failed for ${url.pathname}`, error);
     return Response.json(
-      { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+      {
+        detail:
+          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+      },
       { status: 502 },
     );
   }

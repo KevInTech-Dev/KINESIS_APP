@@ -41,7 +41,7 @@ class AgentVoyageListView(generics.ListAPIView):
                 "gare_depart__ville",
                 "gare_arrivee__ville",
             )
-            .order_by("date_depart", "heure_depart", "pk")
+            .order_by("-date_creation", "date_depart", "heure_depart", "pk")
         )
         return with_availability(queryset, timezone.localtime())
 
@@ -101,7 +101,13 @@ class VoyageListCreateView(generics.ListCreateAPIView):
             ).filter(compagnie__utilisateur=user)
             queryset = queryset | own_trips
         ordering = filters.get("ordering", "date_depart")
-        return queryset.order_by(ordering, "date_depart", "heure_depart", "pk")
+        return queryset.order_by(
+            "-date_creation",
+            ordering,
+            "date_depart",
+            "heure_depart",
+            "pk",
+        )
 
     def list(self, request, *args, **kwargs):
         response = super().list(request, *args, **kwargs)

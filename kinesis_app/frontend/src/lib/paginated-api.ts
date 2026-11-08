@@ -1,3 +1,5 @@
+import { getUserFacingApiError } from "@/lib/user-facing-errors";
+
 export type PaginatedApiResponse<T> = {
   count: number;
   next: string | null;
@@ -18,14 +20,14 @@ export async function fetchPaginatedApiResponse<T>(
   const response = await fetch(url, { cache: "no-store" });
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok) {
-    const detail =
-      isRecord(payload) && typeof payload.detail === "string"
-        ? payload.detail
-        : fallbackMessage;
-    throw new Error(detail);
+    throw new Error(
+      getUserFacingApiError(payload, fallbackMessage, response.status),
+    );
   }
   if (!isRecord(payload)) {
-    throw new Error("Le format de la réponse paginée est invalide.");
+    throw new Error(
+      "Les voyages reçus sont incomplets. Réessayez dans quelques instants.",
+    );
   }
 
   const { count, next, previous, results } = payload;
@@ -38,7 +40,9 @@ export async function fetchPaginatedApiResponse<T>(
     !Array.isArray(results) ||
     !results.every(isItem)
   ) {
-    throw new Error("Le format de la réponse paginée est invalide.");
+    throw new Error(
+      "Les voyages reçus sont incomplets. Réessayez dans quelques instants.",
+    );
   }
 
   return { ...payload, count, next, previous, results };

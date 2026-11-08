@@ -4,13 +4,18 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { toast } from "sonner";
+import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
 import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import ProfileAvatar from "@/components/profile-avatar";
+import VoyageCoverImage from "@/components/voyage-cover-image";
 import { HomeTripSkeletons } from "@/components/voyage-skeletons";
 import { fetchPaginatedApiResponse } from "@/lib/paginated-api";
 import { getPublicCities } from "@/lib/public-cities";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import { useListPagination } from "@/components/list-pagination";
+import { cacheVoyages } from "@/lib/voyage-cache";
 
 type IconName =
   | "arrow"
@@ -102,12 +107,6 @@ const iconPaths: Record<IconName, ReactNode> = {
   ),
   x: <path d="m6 6 12 12M18 6 6 18" />,
 };
-
-const routePhotos = [
-  "https://images.unsplash.com/photo-1613463918637-3574cd5d34c0?auto=format&fit=crop&w=1000&q=85",
-  "https://images.unsplash.com/photo-1645364512519-5efd4cfaa1c6?auto=format&fit=crop&w=1000&q=85",
-  "https://images.unsplash.com/photo-1738427436305-453325092968?auto=format&fit=crop&w=1000&q=85",
-];
 
 function isVoyage(value: unknown): value is Voyage {
   return (
@@ -201,9 +200,10 @@ function localDateString(date: Date) {
 }
 
 function getErrorMessage(error: unknown) {
-  return error instanceof Error
-    ? error.message
-    : "Une erreur inattendue s’est produite.";
+  return getUserFacingErrorMessage(
+    error,
+    "Une erreur inattendue s’est produite. Réessayez dans quelques instants.",
+  );
 }
 
 function formatPrice(price: string | number) {
@@ -224,17 +224,13 @@ function formatDate(date: string) {
 
 function TripCard({
   trip,
-  index,
   onSelect,
   onBook,
 }: {
   trip: Voyage;
-  index: number;
   onSelect?: (trip: Voyage) => void;
   onBook?: (trip: Voyage) => void;
 }) {
-  const photo = trip.image || routePhotos[index % routePhotos.length];
-
   return (
     <article className="trip-card">
       {onSelect || onBook ? (
@@ -245,10 +241,10 @@ function TripCard({
           aria-label={`${onBook ? "Consulter" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
         />
       ) : null}
-      <Image
-        src={photo}
+      <VoyageCoverImage
+        image={trip.image}
+        voyageId={trip.id_voyage}
         alt=""
-        fill
         sizes="(max-width: 700px) 90vw, (max-width: 1100px) 45vw, 33vw"
         className="trip-card__image"
       />
@@ -460,6 +456,11 @@ export default function HomePage() {
         : profile?.role === "ADMINISTRATEUR"
           ? "/espace-administration"
         : "/espace-voyageur";
+  const {
+    pageItems: pageSearchResults,
+    pagination: searchResultsPagination,
+    resetPage: resetSearchResultsPage,
+  } = useListPagination(searchResults ?? []);
 
   useEffect(() => {
     let active = true;
@@ -531,6 +532,7 @@ export default function HomePage() {
           if (!active) return;
 
           setTrips(tripPage.results);
+          cacheVoyages(tripPage.results);
           setTripCount(tripPage.count);
           setTripError("");
         } catch (error) {
@@ -602,6 +604,7 @@ export default function HomePage() {
       const suitableTrips = matchingTrips.results.filter(
         (trip) => trip.places_disponibles >= passengers,
       );
+      cacheVoyages(suitableTrips);
       if (suitableTrips.length === 1) {
         setSearchDialogOpen(false);
         router.push(
@@ -609,21 +612,26 @@ export default function HomePage() {
         );
         return;
       }
+      resetSearchResultsPage();
       setSearchResults(suitableTrips);
       setSearchResultCount(matchingTrips.count);
-      setSearchMessage(
-        suitableTrips.length === 0
-          ? "Aucun départ ne correspond à ces critères. Essayez une autre date ou un autre trajet."
-          : matchingTrips.count > suitableTrips.length
+      if (suitableTrips.length === 0) {
+        setSearchMessage("");
+        toast.info(
+            "Aucun départ ne correspond à ces critères. Essayez une autre date ou un autre trajet.",
+            { duration: 10_000 },
+        );
+      } else {
+        setSearchMessage(
+            matchingTrips.count > suitableTrips.length
             ? `${suitableTrips.length} premiers départs affichés sur ${matchingTrips.count} disponibles.`
             : `${matchingTrips.count} départ${matchingTrips.count > 1 ? "s" : ""} disponible${matchingTrips.count > 1 ? "s" : ""}.`,
-      );
+        );
+      }
       setSearchDialogOpen(false);
     } catch (error) {
       setSearchMessage(
-        error instanceof Error
-          ? error.message
-          : "La recherche a échoué. Réessayez.",
+        getUserFacingErrorMessage(error, "La recherche a échoué. Réessayez."),
       );
     } finally {
       setSearching(false);
@@ -844,28 +852,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          {searchResults !== null ? (
-            searchResults.length > 0 ? (
-              <div className="trip-grid trip-grid--results">
-                {searchResults.map((trip, index) => (
-                  <TripCard
-                    key={trip.id_voyage}
-                    trip={trip}
-                    index={index}
-                    onBook={(selectedTrip) => {
-                      router.push(
-                        `/voyages/${encodeURIComponent(selectedTrip.id_voyage)}?passagers=${passengers}`,
-                      );
-                    }}
-                  />
-                ))}
-              </div>
-            ) : (
-              <p className="empty-state">
-                Aucun voyage ne correspond à la recherche.
-              </p>
-            )
-          ) : loadingTrips ? (
+          {loadingTrips ? (
             <HomeTripSkeletons />
           ) : tripError ? (
             <p className="empty-state">
@@ -877,11 +864,10 @@ export default function HomePage() {
             </p>
           ) : (
             <div className="trip-grid">
-              {trips.slice(0, 3).map((trip, index) => (
+              {trips.slice(0, 3).map((trip) => (
                 <TripCard
                   key={trip.id_voyage}
                   trip={trip}
-                  index={index}
                   onBook={(selectedTrip) => {
                     router.push(`/voyages/${encodeURIComponent(selectedTrip.id_voyage)}`);
                   }}
@@ -889,27 +875,48 @@ export default function HomePage() {
               ))}
             </div>
           )}
-          {searchResults === null && tripCount > 3 ? (
+          {tripCount > 3 ? (
             <div className="trip-more">
               <Link className="trip-more__button" href="/voyages">
                 Voir plus de voyages <Icon name="arrow" className="icon-small" />
               </Link>
             </div>
           ) : null}
-          {searchResults && searchResultCount > 1 ? (
-            <div className="trip-more">
-              <Link
-                className="trip-more__button"
-                href={`/voyages?${new URLSearchParams({
-                  ville_depart: from,
-                  ville_arrivee: to,
-                  date_depart: date,
-                  places_min: String(passengers),
-                })}`}
-              >
-                Afficher tous les résultats <Icon name="arrow" className="icon-small" />
-              </Link>
-            </div>
+          {searchResults?.length ? (
+            <section className="home-search-results" aria-live="polite">
+              <div className="section-heading">
+                <h3>Résultats de votre recherche</h3>
+              </div>
+              <div className="trip-grid trip-grid--results">
+                {pageSearchResults.map((trip) => (
+                  <TripCard
+                    key={trip.id_voyage}
+                    trip={trip}
+                    onBook={(selectedTrip) => {
+                      router.push(
+                        `/voyages/${encodeURIComponent(selectedTrip.id_voyage)}?passagers=${passengers}`,
+                      );
+                    }}
+                  />
+                ))}
+              </div>
+              {searchResultsPagination}
+              {searchResultCount > 1 ? (
+                <div className="trip-more">
+                  <Link
+                    className="trip-more__button"
+                    href={`/voyages?${new URLSearchParams({
+                      ville_depart: from,
+                      ville_arrivee: to,
+                      date_depart: date,
+                      places_min: String(passengers),
+                    })}`}
+                  >
+                    Afficher tous les résultats <Icon name="arrow" className="icon-small" />
+                  </Link>
+                </div>
+              ) : null}
+            </section>
           ) : null}
         </section>
 

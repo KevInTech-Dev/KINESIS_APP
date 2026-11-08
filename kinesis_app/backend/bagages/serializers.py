@@ -7,8 +7,8 @@ from .services import create_tariff, register_baggage, update_tariff
 class TarifBagageSerializer(serializers.ModelSerializer):
     class Meta:
         model = TarifBagage
-        fields = ("id_tarif", "poids_min", "poids_max", "prix")
-        read_only_fields = ("id_tarif",)
+        fields = ("id_tarif", "poids_min", "poids_max", "prix", "date_creation")
+        read_only_fields = ("id_tarif", "date_creation")
 
     def create(self, validated_data):
         return create_tariff(

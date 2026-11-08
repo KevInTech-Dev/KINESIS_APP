@@ -7,6 +7,10 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, Building2 } from "lucide-react";
 import PasswordInput from "@/components/password-input";
 import { isUserProfile } from "@/lib/user-profile";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 import { toast } from "sonner";
 
 type AuthMode = "login" | "register";
@@ -96,13 +100,17 @@ export default function AuthPage() {
       const result: unknown = await response.json().catch(() => null);
 
       if (!response.ok) {
+        const fallback =
+          "La demande a échoué. Vérifiez vos informations et réessayez.";
+        const extractedMessage = getApiMessage(result);
         setFeedback({
           kind: "error",
           message:
-            (mode === "login" && response.status === 401
+            mode === "login" && response.status === 401
               ? "Adresse e-mail ou mot de passe incorrect."
-              : getApiMessage(result)) ??
-            "La demande a échoué. Vérifiez vos informations et réessayez.",
+              : extractedMessage
+                ? getUserFacingErrorMessage(extractedMessage, fallback)
+                : getUserFacingApiError(result, fallback, response.status),
         });
         return;
       }
@@ -160,7 +168,10 @@ export default function AuthPage() {
       console.error("Authentication request failed", error);
       setFeedback({
         kind: "error",
-        message: "Le serveur est inaccessible. Réessayez dans quelques instants.",
+        message: getUserFacingErrorMessage(
+          error,
+          "La connexion au service a échoué. Réessayez dans quelques instants.",
+        ),
       });
     } finally {
       setSubmitting(false);

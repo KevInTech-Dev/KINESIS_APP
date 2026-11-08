@@ -290,15 +290,20 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
     def test_public_catalog_paginates_results_and_keeps_pages_stable(self):
+        created_at = timezone.now()
+        created_trips = []
         for index in range(21):
-            Voyage.objects.create(
-                compagnie=self.company,
-                ville_depart=self.depart,
-                ville_arrivee=self.arrivee,
-                date_depart=self.future_date + timedelta(days=index + 1),
-                heure_depart=time(9, 0),
-                place_totale=20,
-                prix="5000",
+            created_trips.append(
+                Voyage.objects.create(
+                    compagnie=self.company,
+                    ville_depart=self.depart,
+                    ville_arrivee=self.arrivee,
+                    date_depart=self.future_date + timedelta(days=index + 1),
+                    heure_depart=time(9, 0),
+                    place_totale=20,
+                    prix="5000",
+                    date_creation=created_at + timedelta(seconds=index),
+                )
             )
 
         first_page = self.client.get(
@@ -313,6 +318,10 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(first_page.status_code, status.HTTP_200_OK)
         self.assertEqual(first_page.data["count"], 22)
         self.assertEqual(len(first_page.data["results"]), 5)
+        self.assertEqual(
+            first_page.data["results"][0]["id_voyage"],
+            str(created_trips[-1].pk),
+        )
         self.assertNotIn("companies", first_page.data)
         self.assertIsNotNone(first_page.data["next"])
         self.assertIsNone(first_page.data["previous"])
@@ -324,7 +333,7 @@ class VoyageApiTests(APITestCase):
         self.assertFalse(first_ids & second_ids)
 
         default_page = self.client.get(reverse("voyage-list"))
-        self.assertEqual(len(default_page.data["results"]), 20)
+        self.assertEqual(len(default_page.data["results"]), 5)
         self.assertEqual(default_page.data["count"], 22)
 
     def test_public_results_show_remaining_seats_and_hide_full_trips(self):

@@ -95,7 +95,10 @@ async function proxyAdministrationRequest(
   } catch (error) {
     console.error(`Administration API request failed for ${url.pathname}`, error);
     return NextResponse.json(
-      { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+      {
+        detail:
+          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+      },
       { status: 502 },
     );
   }
@@ -110,7 +113,10 @@ async function proxyAdministrationRequest(
         `Administration API response was not valid JSON for ${url.pathname}`,
         error,
       );
-      data = { detail: "La réponse du serveur est illisible." };
+      data = {
+        detail:
+          "Une erreur est survenue pendant le traitement. Réessayez dans quelques instants.",
+      };
       if (backendResponse.ok) {
         backendResponse = new Response(null, { status: 502 });
       }

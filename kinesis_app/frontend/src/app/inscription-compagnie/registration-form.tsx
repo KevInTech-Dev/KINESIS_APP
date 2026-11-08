@@ -5,6 +5,10 @@ import Link from "next/link";
 import PasswordInput from "@/components/password-input";
 import { useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import {
+  getUserFacingApiError,
+  getUserFacingErrorMessage,
+} from "@/lib/user-facing-errors";
 
 type Feedback = { kind: "error"; message: string };
 
@@ -49,8 +53,15 @@ export default function CompanyRegistration() {
         setFeedback({
           kind: "error",
           message:
-            apiMessage(result) ??
-            "L’inscription a échoué. Vérifiez les informations et les documents joints.",
+            getUserFacingErrorMessage(
+              apiMessage(result) ??
+                getUserFacingApiError(
+                  result,
+                  "L’inscription a échoué. Vérifiez les informations et les documents joints.",
+                  response.status,
+                ),
+              "L’inscription a échoué. Vérifiez les informations et les documents joints.",
+            ),
         });
         return;
       }
@@ -64,7 +75,10 @@ export default function CompanyRegistration() {
       console.error("Company registration failed", error);
       setFeedback({
         kind: "error",
-        message: "Le serveur est inaccessible. Réessayez dans quelques instants.",
+        message: getUserFacingErrorMessage(
+          error,
+          "Impossible de joindre le service. Réessayez dans quelques instants.",
+        ),
       });
     } finally {
       setSubmitting(false);
