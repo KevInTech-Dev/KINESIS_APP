@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import { toast } from "sonner";
 import {
   ArrowRight,
   Bell,
@@ -416,9 +417,6 @@ export default function TravelerDashboard() {
   const [activeTab, setActiveTab] = useState<TravelerTab>("overview");
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
-  const [profileMessage, setProfileMessage] = useState<string | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
-  const [paymentMessage, setPaymentMessage] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(0);
   const [nom, setNom] = useState("");
   const [prenoms, setPrenoms] = useState("");
@@ -537,17 +535,17 @@ export default function TravelerDashboard() {
             typeof payment.statut === "string"
               ? payment.statut
               : "";
-          setPaymentMessage(
-            paymentStatus === "CONFIRME"
-              ? "Paiement confirmé. Vos billets sont disponibles ci-dessous."
-              : paymentStatus === "EN_ATTENTE"
-                ? "Paiement en cours de confirmation. Vos billets apparaîtront dès validation."
-                : paymentStatus
-                  ? `État du paiement : ${paymentStatus}.`
-                  : "Le paiement a été vérifié.",
-          );
+          if (paymentStatus === "CONFIRME") {
+            toast.success("Paiement confirmé. Vos billets sont disponibles ci-dessous.");
+          } else if (paymentStatus === "EN_ATTENTE") {
+            toast.info("Paiement en cours de confirmation. Vos billets apparaîtront dès validation.");
+          } else if (paymentStatus) {
+            toast.warning(`État du paiement : ${paymentStatus}.`);
+          } else {
+            toast.info("Le paiement a été vérifié.");
+          }
         } else {
-          setPaymentMessage(await getErrorMessage(paymentResponse));
+          toast.error(await getErrorMessage(paymentResponse));
         }
         window.history.replaceState(null, "", "/espace-voyageur");
       }
@@ -650,7 +648,7 @@ export default function TravelerDashboard() {
       router.replace("/");
     } catch (signOutError) {
       console.error("Logout request failed", signOutError);
-      setError(
+      toast.error(
         signOutError instanceof Error
           ? signOutError.message
           : "La déconnexion n’a pas pu être confirmée.",
@@ -661,8 +659,6 @@ export default function TravelerDashboard() {
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProfileSaving(true);
-    setProfileMessage(null);
-    setProfileError(null);
     const formData = new FormData();
     formData.set("nom", nom.trim());
     formData.set("prenoms", prenoms.trim());
@@ -688,10 +684,10 @@ export default function TravelerDashboard() {
       setPhoto(null);
       if (photoInput.current) photoInput.current.value = "";
       setEditingProfile(false);
-      setProfileMessage("Votre profil a été mis à jour.");
+      toast.success("Votre profil a été mis à jour.");
     } catch (saveError) {
       console.error("Profile update failed", saveError);
-      setProfileError(
+      toast.error(
         saveError instanceof Error
           ? saveError.message
           : "La mise à jour du profil a échoué.",
@@ -726,7 +722,7 @@ export default function TravelerDashboard() {
       window.location.assign(paymentUrl.toString());
     } catch (payError) {
       console.error("Payment initialization failed", payError);
-      setError(
+      toast.error(
         payError instanceof Error
           ? payError.message
           : "Le paiement n’a pas pu être démarré.",
@@ -746,9 +742,10 @@ export default function TravelerDashboard() {
       );
       if (!response.ok) throw new Error(await getErrorMessage(response));
       await loadDashboard();
+      toast.success("Votre réservation a été annulée.");
     } catch (cancelError) {
       console.error("Reservation cancellation failed", cancelError);
-      setError(
+      toast.error(
         cancelError instanceof Error
           ? cancelError.message
           : "L’annulation n’a pas pu être effectuée.",
@@ -1106,11 +1103,6 @@ export default function TravelerDashboard() {
           })}
         </nav>
 
-        {paymentMessage && activeTab !== "overview" ? (
-          <p className="traveler-payment-message" role="status">
-            {paymentMessage}
-          </p>
-        ) : null}
 
         {activeTab === "overview" ? (
           <div className="traveler-overview-layout">
@@ -1165,11 +1157,6 @@ export default function TravelerDashboard() {
                 </button>
               </section>
 
-              {paymentMessage ? (
-                <p className="traveler-payment-message" role="status">
-                  {paymentMessage}
-                </p>
-              ) : null}
 
               <section className="traveler-overview-list">
                 <div className="traveler-github-section-heading">
@@ -1242,8 +1229,6 @@ export default function TravelerDashboard() {
                 className="traveler-secondary-button"
                 type="button"
                 onClick={() => {
-                  setProfileMessage(null);
-                  setProfileError(null);
                   setEditingProfile((value) => !value);
                 }}
                 aria-expanded={editingProfile}
@@ -1252,9 +1237,6 @@ export default function TravelerDashboard() {
                 {editingProfile ? "Fermer" : "Modifier mon profil"}
               </button>
             </div>
-            {profileMessage ? (
-              <p className="traveler-form-success" role="status">{profileMessage}</p>
-            ) : null}
             {editingProfile ? (
               <form className="traveler-profile-form" onSubmit={saveProfile}>
                 <label>
@@ -1294,9 +1276,6 @@ export default function TravelerDashboard() {
                     onChange={(event) => setPhoto(event.target.files?.[0] ?? null)}
                   />
                 </label>
-                {profileError ? (
-                  <p className="traveler-form-error" role="alert">{profileError}</p>
-                ) : null}
                 <button className="traveler-save-button" type="submit" disabled={profileSaving}>
                   {profileSaving ? "Enregistrement…" : "Enregistrer"}
                 </button>

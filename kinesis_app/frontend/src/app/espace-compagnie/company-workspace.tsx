@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { toast } from "sonner";
 import {
   Bell,
   BusFront,
@@ -25,7 +27,6 @@ import ConfirmationDialog from "@/components/confirmation-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
-import StationLocationInput from "@/components/station-location-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { getPublicCities } from "@/lib/public-cities";
 import { Separator } from "@/components/ui/separator";
@@ -48,6 +49,13 @@ import {
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+
+const StationLocationInput = dynamic(
+  () => import("@/components/station-location-input"),
+  {
+    loading: () => <p role="status">Chargement de la saisie d’adresse…</p>,
+  },
+);
 
 type Company = {
   email: string;
@@ -673,7 +681,6 @@ export default function CompanyWorkspace() {
   >({ locations: false, tariffs: false, notifications: false });
   const [redirecting, setRedirecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
   const [stationToDeactivate, setStationToDeactivate] = useState<Station | null>(null);
@@ -690,18 +697,19 @@ export default function CompanyWorkspace() {
     setOverviewDataFailed(false);
     setError(null);
     try {
-      const [tripsData, agentsData, reservationsData, paymentsData] =
-        await Promise.all([
-          requestApi("voyages?page_size=100"),
-          requestApi("agents?page_size=100"),
-          requestApi("reservations?page_size=100"),
-          requestApi("paiements?page_size=100"),
-        ]);
-      const loadedAgents = listFrom(agentsData, isAgent);
-      setTrips(listFrom(tripsData, isTrip).filter((trip) => trip.compagnie === companyId));
+      const dashboardData = await requestApi("tableau-de-bord");
+      if (!isRecord(dashboardData)) {
+        throw new Error("Les données du tableau de bord reçues sont invalides.");
+      }
+      const loadedAgents = listFrom(dashboardData.agents, isAgent);
+      setTrips(
+        listFrom(dashboardData.trips, isTrip).filter(
+          (trip) => trip.compagnie === companyId,
+        ),
+      );
       setAgents(loadedAgents);
-      setReservations(listFrom(reservationsData, isCompanyReservation));
-      setPayments(listFrom(paymentsData, isPayment));
+      setReservations(listFrom(dashboardData.reservations, isCompanyReservation));
+      setPayments(listFrom(dashboardData.payments, isPayment));
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
       );
@@ -918,7 +926,6 @@ export default function CompanyWorkspace() {
   function selectTab(nextTab: Tab) {
     setTab(nextTab);
     setError(null);
-    setNotice(null);
   }
 
   function startTripCreation() {
@@ -938,7 +945,7 @@ export default function CompanyWorkspace() {
       router.refresh();
     } catch (logoutError) {
       console.error("Company logout failed", logoutError);
-      setError(
+      toast.error(
         logoutError instanceof Error
           ? logoutError.message
           : "Impossible de fermer la session.",
@@ -979,7 +986,6 @@ export default function CompanyWorkspace() {
         : payload;
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(
         editingTrip ? `voyages/${editingTrip.id_voyage}` : "voyages",
@@ -993,11 +999,9 @@ export default function CompanyWorkspace() {
       setTripArrivalStation("");
       form.reset();
       await loadWorkspace(true);
-      setNotice(editingTrip ? "Le trajet a été mis à jour." : "Le trajet a été publié.");
+      toast.success(editingTrip ? "Le trajet a été mis à jour." : "Le trajet a été publié.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le trajet.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le trajet.");
     } finally {
       setSaving(false);
     }
@@ -1021,16 +1025,13 @@ export default function CompanyWorkspace() {
     };
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi("stations", "POST", payload);
       form.reset();
       await loadWorkspace(true);
-      setNotice("La gare a été ajoutée.");
+      toast.success("La gare a été ajoutée.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible d’ajouter la gare.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’ajouter la gare.");
     } finally {
       setSaving(false);
     }
@@ -1039,15 +1040,12 @@ export default function CompanyWorkspace() {
   async function toggleStation(station: Station, active: boolean) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`stations/${station.id_gare}`, "PATCH", { active });
       await loadWorkspace(true);
-      setNotice(active ? "La gare est de nouveau active." : "La gare a été désactivée.");
+      toast.success(active ? "La gare est de nouveau active." : "La gare a été désactivée.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible de modifier la gare.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible de modifier la gare.");
     } finally {
       setSaving(false);
       setStationToDeactivate(null);
@@ -1057,15 +1055,12 @@ export default function CompanyWorkspace() {
   async function updateTripStatus(trip: Trip, status: string) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`voyages/${trip.id_voyage}`, "PATCH", { statut: status });
       await loadWorkspace(true);
-      setNotice(`Le trajet est maintenant « ${statusLabel(status)} ».`);
+      toast.success(`Le trajet est maintenant « ${statusLabel(status)} ».`);
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible de modifier le statut.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible de modifier le statut.");
     } finally {
       setSaving(false);
     }
@@ -1086,16 +1081,13 @@ export default function CompanyWorkspace() {
     };
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi("agents", "POST", payload);
       form.reset();
       await loadWorkspace(true);
-      setNotice("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
+      toast.success("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible de créer l’agent.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible de créer l’agent.");
     } finally {
       setSaving(false);
     }
@@ -1104,15 +1096,12 @@ export default function CompanyWorkspace() {
   async function resendAgentInvitation(agent: Agent) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`agents/${agent.id}/resend-invitation`, "POST");
-      setNotice(`Une nouvelle invitation a été envoyée à ${agent.email}.`);
+      toast.success(`Une nouvelle invitation a été envoyée à ${agent.email}.`);
     } catch (sendError) {
-      setError(
-        sendError instanceof Error
-          ? sendError.message
-          : "Impossible de renvoyer l’invitation.",
+      toast.error(
+        sendError instanceof Error ? sendError.message : "Impossible de renvoyer l’invitation.",
       );
     } finally {
       setSaving(false);
@@ -1122,16 +1111,13 @@ export default function CompanyWorkspace() {
   async function saveAgent(agent: Agent, changes: Record<string, unknown>) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`agents/${agent.id}`, "PATCH", changes);
       await loadWorkspace(true);
-      setNotice(`Le compte de ${agent.prenoms} ${agent.nom} a été mis à jour.`);
+      toast.success(`Le compte de ${agent.prenoms} ${agent.nom} a été mis à jour.`);
       return true;
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible de mettre à jour l’agent.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible de mettre à jour l’agent.");
       return false;
     } finally {
       setSaving(false);
@@ -1141,17 +1127,14 @@ export default function CompanyWorkspace() {
   async function deleteAgent(agent: Agent) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`agents/${agent.id}`, "DELETE");
       setAgentToDelete(null);
       await loadWorkspace(true);
-      setNotice(`${agent.prenoms} ${agent.nom} a été retiré de votre équipe.`);
+      toast.success(`${agent.prenoms} ${agent.nom} a été retiré de votre équipe.`);
     } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Impossible de supprimer cet agent.",
+      toast.error(
+        deleteError instanceof Error ? deleteError.message : "Impossible de supprimer cet agent.",
       );
     } finally {
       setSaving(false);
@@ -1164,7 +1147,6 @@ export default function CompanyWorkspace() {
     const formData = new FormData(form);
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(
         editingTariff ? `bagages/tarifs/${editingTariff.id_tarif}` : "bagages/tarifs",
@@ -1178,11 +1160,9 @@ export default function CompanyWorkspace() {
       setEditingTariff(null);
       form.reset();
       await loadWorkspace(true);
-      setNotice(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
+      toast.success(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le tarif.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le tarif.");
     } finally {
       setSaving(false);
     }
@@ -1191,17 +1171,14 @@ export default function CompanyWorkspace() {
   async function deleteTariff(tariff: BaggageTariff) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestApi(`bagages/tarifs/${tariff.id_tarif}`, "DELETE");
       setTariffToDelete(null);
       await loadWorkspace(true);
-      setNotice("Le tarif bagage a été supprimé.");
+      toast.success("Le tarif bagage a été supprimé.");
     } catch (deleteError) {
-      setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Impossible de supprimer ce tarif.",
+      toast.error(
+        deleteError instanceof Error ? deleteError.message : "Impossible de supprimer ce tarif.",
       );
     } finally {
       setSaving(false);
@@ -1241,7 +1218,6 @@ export default function CompanyWorkspace() {
     try {
       await requestApi("notifications/lire-tout", "POST");
       setNotifications((current) => current.map((item) => ({ ...item, lue: true })));
-      setNotice("Toutes les notifications sont marquées comme lues.");
     } catch (readError) {
       setError(
         readError instanceof Error
@@ -1264,16 +1240,13 @@ export default function CompanyWorkspace() {
     if (logo) formData.append("logo", logo);
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const updated = await requestApi("me", "PATCH", formData);
       if (!isCompany(updated)) throw new Error("Le profil reçu après modification est invalide.");
       setCompany(updated);
-      setNotice("Les informations de votre compagnie ont été enregistrées.");
+      toast.success("Les informations de votre compagnie ont été enregistrées.");
     } catch (saveError) {
-      setError(
-        saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le profil.",
-      );
+      toast.error(saveError instanceof Error ? saveError.message : "Impossible d’enregistrer le profil.");
     } finally {
       setSaving(false);
     }
@@ -1386,7 +1359,6 @@ export default function CompanyWorkspace() {
           <main className="company-main-content">
 
         {error ? <p className="company-alert company-alert--error" role="alert">{error}</p> : null}
-        {notice ? <p className="company-alert company-alert--success" role="status">{notice}</p> : null}
 
         {tab === "overview" ? (
           <div className="company-content">

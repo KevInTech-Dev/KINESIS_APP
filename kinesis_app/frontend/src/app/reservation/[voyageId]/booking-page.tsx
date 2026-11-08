@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { ArrowUpRight, MapPin } from "lucide-react";
 import KinesisLoader from "@/components/kinesis-loader";
@@ -324,7 +325,7 @@ export default function BookingPage({
       window.location.assign(paymentUrl.toString());
     } catch (submitError) {
       console.error("Traveler reservation flow failed", submitError);
-      setError(
+      toast.error(
         submitError instanceof Error
           ? submitError.message
           : "La réservation n’a pas pu être terminée.",

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   ChartNoAxesCombined,
@@ -95,7 +96,6 @@ type UserSummary = {
   roles: Record<UserRole, number>;
   registrations: { date: string; count: number }[];
 };
-type Feedback = { kind: "success" | "error"; message: string };
 type Section = "companies" | "accounts";
 
 const USER_RANGES: { id: UserRange; label: string; days: number }[] = [
@@ -409,7 +409,6 @@ export default function AdministrationWorkspace() {
   const [redirecting, setRedirecting] = useState(false);
   const [busyCompany, setBusyCompany] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [confirmation, setConfirmation] = useState<{
     company: CompanyApplication;
@@ -592,7 +591,6 @@ export default function AdministrationWorkspace() {
   ) {
     setBusyCompany(company.id);
     setError(null);
-    setFeedback(null);
     try {
       await requestAdministrationApi(
         `compagnies/${company.id}/${action}`,
@@ -603,17 +601,15 @@ export default function AdministrationWorkspace() {
         refuse: "Dossier refusé et entreprise notifiée.",
         deactivate: "Compte compagnie désactivé.",
       };
-      setFeedback({ kind: "success", message: messages[action] });
+      toast.success(messages[action]);
       setReloadKey((current) => current + 1);
     } catch (actionError) {
       console.error("Administration company action failed", actionError);
-      setFeedback({
-        kind: "error",
-        message:
-          actionError instanceof Error
-            ? actionError.message
-            : "L’action n’a pas pu être effectuée.",
-      });
+      toast.error(
+        actionError instanceof Error
+          ? actionError.message
+          : "L’action n’a pas pu être effectuée.",
+      );
     } finally {
       setBusyCompany(null);
       setConfirmation(null);
@@ -631,13 +627,11 @@ export default function AdministrationWorkspace() {
       router.refresh();
     } catch (signOutError) {
       console.error("Administration logout failed", signOutError);
-      setFeedback({
-        kind: "error",
-        message:
-          signOutError instanceof Error
-            ? signOutError.message
-            : "Impossible de fermer la session.",
-      });
+      toast.error(
+        signOutError instanceof Error
+          ? signOutError.message
+          : "Impossible de fermer la session.",
+      );
     }
   }
 
@@ -691,7 +685,6 @@ export default function AdministrationWorkspace() {
     if (nextSection !== "companies" && nextSection !== "accounts") return;
     setSection(nextSection);
     setError(null);
-    setFeedback(null);
   }
   return (
     <RoleWorkspaceShell
@@ -745,14 +738,6 @@ export default function AdministrationWorkspace() {
               </button>
             </div>
           ) : null}
-          {feedback ? (
-            <p
-              className={`admin-feedback admin-feedback--${feedback.kind}`}
-              role={feedback.kind === "error" ? "alert" : "status"}
-            >
-              {feedback.message}
-            </p>
-          ) : null}
 
           {section === "companies" ? <section className="admin-panel" aria-label="Dossiers compagnies">
             <div className="admin-panel-heading">
@@ -783,7 +768,6 @@ export default function AdministrationWorkspace() {
                   onClick={() => {
                     setStatusFilter(filter.id);
                     setPage(1);
-                    setFeedback(null);
                     setError(null);
                   }}
                 >
@@ -984,7 +968,6 @@ export default function AdministrationWorkspace() {
                     onClick={() => {
                       setUserFilter(filter.id);
                       setUserPage(1);
-                      setFeedback(null);
                       setError(null);
                     }}
                   >

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -25,7 +26,7 @@ function getErrorMessage(value: unknown): string | null {
 export default function PasswordResetRequestForm() {
   const [email, setEmail] = useState("");
   const [feedback, setFeedback] = useState<{
-    kind: "success" | "error";
+    kind: "error";
     message: string;
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -51,12 +52,11 @@ export default function PasswordResetRequestForm() {
         });
         return;
       }
-      setFeedback({
-        kind: "success",
-        message:
-          getErrorMessage(result) ??
+      toast.info(
+        getErrorMessage(result) ??
           "Si un compte actif correspond à cette adresse, un lien de réinitialisation lui sera envoyé.",
-      });
+        { duration: 10_000 },
+      );
       setRequestSent(true);
     } catch (error) {
       console.error("Password reset request failed", error);
@@ -102,7 +102,7 @@ export default function PasswordResetRequestForm() {
           {feedback ? (
             <p
               className={`auth-feedback auth-feedback--${feedback.kind}`}
-              role="status"
+              role="alert"
             >
               {feedback.message}
             </p>

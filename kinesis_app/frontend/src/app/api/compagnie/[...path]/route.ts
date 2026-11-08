@@ -10,6 +10,7 @@ type RouteContext = { params: Promise<{ path: string[] }> };
 
 function isAllowedResource(path: string[], method: string) {
   const resource = path.join("/");
+  if (resource === "tableau-de-bord") return method === "GET";
   if (resource === "me") return ["GET", "PATCH", "PUT"].includes(method);
   if (resource === "agents") return ["GET", "POST"].includes(method);
   if (/^agents\/[0-9a-f-]{36}$/i.test(resource)) {
@@ -71,6 +72,86 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
   }
 
   const backendUrl = process.env.BACKEND_API_URL ?? "http://127.0.0.1:8000";
+  let backendBaseUrl: URL;
+  try {
+    backendBaseUrl = new URL(`${backendUrl.replace(/\/+$/, "")}/`);
+  } catch (error) {
+    console.error("BACKEND_API_URL is not a valid URL", error);
+    return NextResponse.json(
+      { detail: "L’adresse du serveur Django est mal configurée." },
+      { status: 500 },
+    );
+  }
+
+  if (path.length === 1 && path[0] === "tableau-de-bord") {
+    const resources = {
+      trips: "voyages",
+      agents: "compagnies/agents",
+      reservations: "reservations",
+      payments: "paiements",
+    } as const;
+    try {
+      const results = await Promise.all(
+        Object.entries(resources).map(async ([key, resource]) => {
+          const url = new URL(
+            `/api/v1/${resource}/`,
+            backendBaseUrl,
+          );
+          url.searchParams.set("page_size", "100");
+          const response = await fetch(url, {
+            headers: {
+              Accept: "application/json",
+              Authorization: `Bearer ${auth.session.access}`,
+            },
+            cache: "no-store",
+            signal: AbortSignal.timeout(20_000),
+          });
+          const responseText = await response.text();
+          let data: unknown = null;
+          if (responseText) {
+            try {
+              data = JSON.parse(responseText) as unknown;
+            } catch (error) {
+              console.error(`Company dashboard response was not valid JSON for ${url.pathname}`, error);
+              return {
+                key,
+                status: 502,
+                data: { detail: "La réponse du serveur est illisible." },
+              };
+            }
+          }
+          return { key, status: response.status, data };
+        }),
+      );
+      const failure = results.find(
+        (result) => result.status < 200 || result.status >= 300,
+      );
+      const response = failure
+        ? NextResponse.json(failure.data, {
+            status: failure.status,
+            headers: { "Cache-Control": "no-store" },
+          })
+        : NextResponse.json(
+            Object.fromEntries(results.map(({ key, data }) => [key, data])),
+            { headers: { "Cache-Control": "no-store" } },
+          );
+      if (auth.session.rotated) {
+        setAuthCookies(response, auth.session.access, auth.session.refresh);
+      }
+      return response;
+    } catch (error) {
+      console.error("Company dashboard request failed", error);
+      const response = NextResponse.json(
+        { detail: "L’API est temporairement indisponible. Réessayez plus tard." },
+        { status: 502, headers: { "Cache-Control": "no-store" } },
+      );
+      if (auth.session.rotated) {
+        setAuthCookies(response, auth.session.access, auth.session.refresh);
+      }
+      return response;
+    }
+  }
+
   const resource =
     path[0] === "me" || path[0] === "agents" || path[0] === "stations"
       ? `compagnies/${path.join("/")}`
@@ -79,7 +160,7 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
   try {
     url = new URL(
       `/api/v1/${resource}/`,
-      `${backendUrl.replace(/\/+$/, "")}/`,
+      backendBaseUrl,
     );
     url.search = new URL(request.url).search;
   } catch (error) {

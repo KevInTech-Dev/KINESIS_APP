@@ -4,8 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import PasswordInput from "@/components/password-input";
 import { useState, type FormEvent } from "react";
+import { toast } from "sonner";
 
-type Feedback = { kind: "success" | "error"; message: string };
+type Feedback = { kind: "error"; message: string };
 
 function apiMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -55,11 +56,10 @@ export default function CompanyRegistration() {
       }
 
       form.reset();
-      setFeedback({
-        kind: "success",
-        message:
-          "Votre demande a bien été reçue. KINESIS vérifiera vos documents. Après validation, un lien d’activation sera envoyé à votre adresse e-mail.",
-      });
+      toast.success(
+        "Votre demande a bien été reçue. KINESIS vérifiera vos documents. Après validation, un lien d’activation sera envoyé à votre adresse e-mail.",
+        { duration: 10_000 },
+      );
     } catch (error) {
       console.error("Company registration failed", error);
       setFeedback({

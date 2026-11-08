@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Bell,
   BusFront,
@@ -372,7 +373,6 @@ export default function AgentWorkspace() {
   const [redirecting, setRedirecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [scanCode, setScanCode] = useState("");
   const [baggagePhotoSlots, setBaggagePhotoSlots] = useState<(string | null)[]>([
     null,
@@ -415,7 +415,6 @@ export default function AgentWorkspace() {
     if (!item) return;
     setTab(item.id);
     setError(null);
-    setNotice(null);
   }
 
   const loadWorkspace = useCallback(async () => {
@@ -523,10 +522,7 @@ export default function AgentWorkspace() {
         return;
       }
       form.reset();
-      setPasswordFeedback({
-        kind: "success",
-        message: "Mot de passe modifié. Chargement de vos accès agent…",
-      });
+      toast.success("Mot de passe modifié. Chargement de vos accès agent…");
       setLoading(true);
       await loadWorkspace();
     } catch (changeError) {
@@ -548,7 +544,6 @@ export default function AgentWorkspace() {
     setScanCode(code);
     setSaving(true);
     setError(null);
-    setNotice(null);
     setScanResult(null);
     try {
       const result = await requestAgentApi("scan", "POST", {
@@ -558,9 +553,9 @@ export default function AgentWorkspace() {
         throw new Error("Les informations du billet scanné sont invalides.");
       }
       setScanResult(result);
-      setNotice("Billet valide. Vérifiez le voyageur avant de confirmer l’embarquement.");
+      toast.info("Billet valide. Vérifiez le voyageur avant de confirmer l’embarquement.");
     } catch (scanError) {
-      setError(
+      toast.error(
         scanError instanceof Error
           ? scanError.message
           : "Impossible de vérifier ce billet.",
@@ -578,7 +573,6 @@ export default function AgentWorkspace() {
   async function confirmBoarding() {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await requestAgentApi("embarquement", "POST", {
         code_qr: scanCode.trim(),
@@ -587,7 +581,7 @@ export default function AgentWorkspace() {
         throw new Error("La confirmation d’embarquement reçue est invalide.");
       }
       setScanResult(result);
-      setNotice(`Embarquement confirmé pour ${result.nom_passager}.`);
+      toast.success(`Embarquement confirmé pour ${result.nom_passager}.`);
       setTickets((current) =>
         current.map((ticket) =>
           ticket.id_billet === result.id_billet
@@ -596,7 +590,7 @@ export default function AgentWorkspace() {
         ),
       );
     } catch (boardingError) {
-      setError(
+      toast.error(
         boardingError instanceof Error
           ? boardingError.message
           : "Impossible de confirmer l’embarquement.",
@@ -609,7 +603,6 @@ export default function AgentWorkspace() {
   async function declareDeparture(trip: Trip) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await requestAgentApi(
         `voyages/${trip.id_voyage}/depart`,
@@ -625,11 +618,11 @@ export default function AgentWorkspace() {
             : item,
         ),
       );
-      setNotice(
+      toast.success(
         `Départ enregistré. ${typeof result.billets_non_utilises === "number" ? result.billets_non_utilises : 0} billet(s) non utilisés.`,
       );
     } catch (departureError) {
-      setError(
+      toast.error(
         departureError instanceof Error
           ? departureError.message
           : "Impossible d’enregistrer le départ.",
@@ -647,18 +640,17 @@ export default function AgentWorkspace() {
       .getAll("photos")
       .filter((item): item is File => item instanceof File && item.size > 0);
     if (photos.length < 1 || photos.length > 5) {
-      setError("Ajoutez de 1 à 5 photos pour le bagage.");
+      toast.warning("Ajoutez de 1 à 5 photos pour le bagage.");
       return;
     }
     if (photos.some((photo) => photo.size > 5 * 1024 * 1024)) {
-      setError("Chaque photo doit faire 5 Mo maximum.");
+      toast.warning("Chaque photo doit faire 5 Mo maximum.");
       return;
     }
     formData.delete("photos");
     for (const photo of photos) formData.append("photos", photo);
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await requestAgentApi("bagages", "POST", formData);
       if (!isBaggage(result)) {
@@ -666,7 +658,7 @@ export default function AgentWorkspace() {
       }
       form.reset();
       setBaggagePhotoSlots([null]);
-      setNotice(
+      toast.success(
         `Bagage enregistré pour ${result.reservation_reference}. Frais : ${formatPrice(result.frais_total)}.`,
       );
       setBaggages((current) => [result, ...current]);
@@ -674,7 +666,7 @@ export default function AgentWorkspace() {
         await loadWorkspace();
       }
     } catch (baggageError) {
-      setError(
+      toast.error(
         baggageError instanceof Error
           ? baggageError.message
           : "Impossible d’enregistrer le bagage.",
@@ -687,7 +679,6 @@ export default function AgentWorkspace() {
   async function markFeePaid(baggage: Baggage) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await requestAgentApi(
         `bagages/${baggage.id_bagage}/paiement-frais`,
@@ -697,9 +688,9 @@ export default function AgentWorkspace() {
       setBaggages((current) =>
         current.map((item) => (item.id_bagage === result.id_bagage ? result : item)),
       );
-      setNotice(`Paiement des frais enregistré pour ${result.reservation_reference}.`);
+      toast.success(`Paiement des frais enregistré pour ${result.reservation_reference}.`);
     } catch (feeError) {
-      setError(
+      toast.error(
         feeError instanceof Error ? feeError.message : "Impossible d’enregistrer le paiement.",
       );
     } finally {
@@ -710,7 +701,6 @@ export default function AgentWorkspace() {
   async function returnBaggage(baggage: Baggage) {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       const result = await requestAgentApi(
         `bagages/${baggage.id_bagage}/restitution`,
@@ -720,9 +710,9 @@ export default function AgentWorkspace() {
       setBaggages((current) =>
         current.map((item) => (item.id_bagage === result.id_bagage ? result : item)),
       );
-      setNotice(`Bagage ${result.reservation_reference} restitué.`);
+      toast.success(`Bagage ${result.reservation_reference} restitué.`);
     } catch (returnError) {
-      setError(
+      toast.error(
         returnError instanceof Error ? returnError.message : "Impossible de restituer le bagage.",
       );
     } finally {
@@ -759,7 +749,6 @@ export default function AgentWorkspace() {
   async function markAllNotificationsRead() {
     setSaving(true);
     setError(null);
-    setNotice(null);
     try {
       await requestAgentApi("notifications/lire-tout", "POST");
       setNotifications((current) =>
@@ -767,7 +756,6 @@ export default function AgentWorkspace() {
           item.lue ? item : { ...item, lue: true, date_lecture: new Date().toISOString() },
         ),
       );
-      setNotice("Toutes les notifications sont marquées comme lues.");
     } catch (notificationError) {
       setError(
         notificationError instanceof Error
@@ -787,7 +775,7 @@ export default function AgentWorkspace() {
       router.refresh();
     } catch (logoutError) {
       console.error("Agent logout failed", logoutError);
-      setError(
+      toast.error(
         logoutError instanceof Error ? logoutError.message : "Impossible de fermer la session.",
       );
     }
@@ -888,7 +876,6 @@ export default function AgentWorkspace() {
       <div className="agent-workspace-content">
 
         {error ? <p className="agent-alert agent-alert--error" role="alert">{error}</p> : null}
-        {notice ? <p className="agent-alert agent-alert--success" role="status">{notice}</p> : null}
 
         {activeTab === "overview" ? (
           <div className="agent-content agent-overview-layout">

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import PasswordInput from "@/components/password-input";
+import { toast } from "sonner";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -67,6 +68,7 @@ export default function PasswordResetConfirmForm() {
       }
       setPassword("");
       setConfirmation("");
+      toast.success("Votre mot de passe a été modifié. Vous pouvez vous connecter.");
       router.replace("/connexion");
     } catch (error) {
       console.error("Password reset confirmation failed", error);

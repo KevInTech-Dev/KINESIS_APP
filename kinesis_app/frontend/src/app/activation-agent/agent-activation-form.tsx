@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import PasswordInput from "@/components/password-input";
+import { toast } from "sonner";
 
 function getErrorMessage(value: unknown): string | null {
   if (typeof value === "string") return value;
@@ -112,6 +113,7 @@ export default function AgentActivationForm() {
       }
       setPassword("");
       setConfirmation("");
+      toast.success("Votre compte agent est activé. Bienvenue dans votre espace.");
       router.replace("/espace-agent");
     } catch (requestError) {
       console.error("Agent account activation failed", requestError);

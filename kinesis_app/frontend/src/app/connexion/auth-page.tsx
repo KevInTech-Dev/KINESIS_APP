@@ -7,9 +7,10 @@ import { useState, type FormEvent } from "react";
 import { ArrowRight, Building2 } from "lucide-react";
 import PasswordInput from "@/components/password-input";
 import { isUserProfile } from "@/lib/user-profile";
+import { toast } from "sonner";
 
 type AuthMode = "login" | "register";
-type Feedback = { kind: "success" | "error"; message: string };
+type Feedback = { kind: "error"; message: string };
 
 function getApiMessage(value: unknown): string | null {
   if (typeof value === "string") {
@@ -110,12 +111,10 @@ export default function AuthPage() {
         setPassword("");
         setPasswordConfirmation("");
         setMode("login");
-        setFeedback({
-          kind: "success",
-          message:
-            getApiMessage(result) ??
+        toast.success(
+          getApiMessage(result) ??
             "Votre compte est créé. Vous pouvez maintenant vous connecter.",
-        });
+        );
       } else {
         setPassword("");
         const requestedPath = new URLSearchParams(window.location.search).get(
