@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f8f3" />
+    <title>Connexion indisponible — Kinesis</title>
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        padding: 32px 20px;
+        display: grid;
+        place-items: center;
+        background: #f7f8f3;
+        color: #18332a;
+        font-family: Arial, sans-serif;
+      }
+
+      main {
+        width: min(100%, 460px);
+        padding: 36px;
+        border: 1px solid #e3e9e2;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 12px 36px rgb(24 51 42 / 6%);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding-bottom: 24px;
+        border-bottom: 1px solid #edf0ec;
+      }
+
+      .brand img {
+        width: 38px;
+        height: 38px;
+        object-fit: contain;
+      }
+
+      .brand-name {
+        color: #063e2e;
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+      }
+
+      .content {
+        padding-top: 32px;
+      }
+
+      .eyebrow {
+        margin: 0 0 10px;
+        color: #68776f;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        margin: 0;
+        color: #18332a;
+        font-size: clamp(25px, 6vw, 32px);
+        line-height: 1.2;
+        letter-spacing: -0.8px;
+      }
+
+      .message {
+        margin: 16px 0 24px;
+        color: #68776f;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .actions {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .retry {
+        min-height: 46px;
+        padding: 0 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 8px;
+        background: #0b6b4b;
+        color: #fff;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background 150ms ease;
+      }
+
+      .retry:hover {
+        background: #084f39;
+      }
+
+      .note {
+        margin: 22px 0 0;
+        color: #849088;
+        font-size: 12px;
+        line-height: 1.6;
+      }
+
+      @media (max-width: 480px) {
+        main {
+          padding: 26px 22px;
+        }
+
+        .content {
+          padding-top: 26px;
+        }
+      }
+    </style>
+  </head>
+
+  <body>
+    <main>
+      <header class="brand">
+        <img src="/icons/icon-192.png" alt="Logo Kinesis" />
+        <span class="brand-name">KINESIS</span>
+      </header>
+
+      <section class="content">
+        <p class="eyebrow">Connexion indisponible</p>
+        <h1>Tu es hors connexion</h1>
+        <p class="message">
+          Vérifie ta connexion internet, puis réessaie.
+        </p>
+
+        <div class="actions">
+          <a class="retry" href="/">Réessayer</a>
+        </div>
+
+        <p class="note">
+          Cette page ne conserve ni n’affiche les informations de ton compte hors ligne.
+        </p>
+      </section>
+    </main>
+
+    <script>
+      window.addEventListener("online", () => window.location.reload());
+    </script>
+  </body>
+</html>
