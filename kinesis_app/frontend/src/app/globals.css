@@ -3753,6 +3753,50 @@ select:focus-visible {
   color: #8b2f27;
 }
 
+.password-reset-success {
+  display: grid;
+}
+
+.password-reset-success__icon {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: 16px;
+  background: #eaf5ec;
+  color: var(--green);
+}
+
+.password-reset-success__icon svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 1.8;
+}
+
+.password-reset-success .auth-heading {
+  margin-top: 18px;
+}
+
+.password-reset-success .auth-heading > p:not(.auth-eyebrow) {
+  margin: 10px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.password-reset-success .auth-heading .password-reset-success__email {
+  color: var(--deep-green);
+  font-size: 15px;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.password-reset-success > .auth-submit {
+  width: 100%;
+  margin-top: 22px;
+  text-decoration: none;
+}
+
 .auth-switch {
   margin: 20px 0 0;
   color: var(--muted-foreground);

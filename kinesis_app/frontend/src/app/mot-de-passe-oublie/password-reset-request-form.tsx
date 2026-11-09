@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { toast } from "sonner";
+import { MailCheck } from "lucide-react";
 import {
   getUserFacingApiError,
   getUserFacingErrorMessage,
@@ -62,11 +62,6 @@ export default function PasswordResetRequestForm() {
         });
         return;
       }
-      toast.info(
-        getErrorMessage(result) ??
-          "Si un compte actif correspond à cette adresse, un lien de réinitialisation lui sera envoyé.",
-        { duration: 10_000 },
-      );
       setRequestSent(true);
     } catch (error) {
       console.error("Password reset request failed", error);
@@ -89,45 +84,71 @@ export default function PasswordResetRequestForm() {
         <span>KINESIS</span>
       </Link>
       <section className="auth-panel" aria-labelledby="password-reset-title">
-        <Link className="auth-back-link" href="/connexion">
-          ← Retour à la connexion
-        </Link>
-        <div className="auth-heading">
-          <p className="auth-eyebrow">SÉCURITÉ DU COMPTE</p>
-          <h1 id="password-reset-title">Mot de passe oublié ?</h1>
-          <p>
-            Saisissez l’adresse e-mail de votre compte. Si elle est reconnue,
-            vous recevrez un lien valable une heure.
-          </p>
-        </div>
-        <form className="auth-form" onSubmit={submit}>
-          <label>
-            <span>Adresse e-mail</span>
-            <input
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-              maxLength={254}
-            />
-          </label>
-          {feedback ? (
-            <p
-              className={`auth-feedback auth-feedback--${feedback.kind}`}
-              role="alert"
-            >
-              {feedback.message}
-            </p>
-          ) : null}
-          <button
-            className="auth-submit"
-            type="submit"
-            disabled={submitting || requestSent}
-          >
-            {submitting ? "Envoi en cours…" : "Recevoir le lien"}
-          </button>
-        </form>
+        {requestSent ? (
+          <div className="password-reset-success" role="status" aria-live="polite">
+            <div className="password-reset-success__icon" aria-hidden="true">
+              <MailCheck />
+            </div>
+            <div className="auth-heading">
+              <p className="auth-eyebrow">DEMANDE PRISE EN COMPTE</p>
+              <h1 id="password-reset-title">Vérifiez votre boîte mail</h1>
+              <p>
+                Si un compte actif est associé à cette adresse, un lien de
+                réinitialisation lui a été envoyé :
+              </p>
+              <p className="password-reset-success__email">{email.trim()}</p>
+              <p>
+                Le lien est valable une heure. Pensez à vérifier vos courriers
+                indésirables. Vous pouvez fermer cette page.
+              </p>
+            </div>
+            <Link className="auth-submit" href="/connexion">
+              Retour à la connexion
+            </Link>
+          </div>
+        ) : (
+          <>
+            <Link className="auth-back-link" href="/connexion">
+              ← Retour à la connexion
+            </Link>
+            <div className="auth-heading">
+              <p className="auth-eyebrow">SÉCURITÉ DU COMPTE</p>
+              <h1 id="password-reset-title">Mot de passe oublié ?</h1>
+              <p>
+                Saisissez l’adresse e-mail de votre compte. Si elle est reconnue,
+                vous recevrez un lien valable une heure.
+              </p>
+            </div>
+            <form className="auth-form" onSubmit={submit}>
+              <label>
+                <span>Adresse e-mail</span>
+                <input
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  required
+                  maxLength={254}
+                />
+              </label>
+              {feedback ? (
+                <p
+                  className={`auth-feedback auth-feedback--${feedback.kind}`}
+                  role="alert"
+                >
+                  {feedback.message}
+                </p>
+              ) : null}
+              <button
+                className="auth-submit"
+                type="submit"
+                disabled={submitting}
+              >
+                {submitting ? "Envoi en cours…" : "Recevoir le lien"}
+              </button>
+            </form>
+          </>
+        )}
       </section>
       <p className="auth-footer">Le Togo en mouvement, avec vous.</p>
     </main>
