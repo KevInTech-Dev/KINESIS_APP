@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import ProfileAvatar from "@/components/profile-avatar";
+import ProfileViewDialog from "@/components/profile-view-dialog";
 import {
   SidebarMenuButton,
   SidebarMenuItem,
@@ -79,18 +80,17 @@ export default function SidebarProfileMenu({
   }, [menuOpen]);
 
   useEffect(() => {
-    if (!editing && !viewingProfile) return;
+    if (!editing) return;
     function closeOnEscape(event: KeyboardEvent) {
       if (event.key === "Escape") {
         setEditing(false);
-        setViewingProfile(false);
         setError(null);
         triggerRef.current?.focus();
       }
     }
     document.addEventListener("keydown", closeOnEscape);
     return () => document.removeEventListener("keydown", closeOnEscape);
-  }, [editing, viewingProfile]);
+  }, [editing]);
 
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -230,83 +230,17 @@ export default function SidebarProfileMenu({
         </div>
       ) : null}
 
-      {!companyAction && viewingProfile && typeof document !== "undefined"
-        ? createPortal(
-            <div className="profile-edit-overlay">
-              <section
-                className="profile-edit-dialog profile-view-dialog"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="profile-view-title"
-              >
-                <div className="profile-edit-dialog__heading">
-                  <div>
-                    <p>MON COMPTE</p>
-                    <h2 id="profile-view-title">Profil</h2>
-                  </div>
-                  <button
-                    type="button"
-                    className="profile-edit-dialog__close"
-                    aria-label="Fermer"
-                    onClick={() => {
-                      setViewingProfile(false);
-                      triggerRef.current?.focus();
-                    }}
-                  >
-                    <X aria-hidden="true" />
-                  </button>
-                </div>
-                <div className="profile-view">
-                  <div className="profile-view__identity">
-                    <ProfileAvatar
-                      className={`${avatarClassName} profile-view__avatar`}
-                      src={profile.photo_profil}
-                      name={name}
-                      size={72}
-                      alt={`Photo de profil de ${name || "l’utilisateur"}`}
-                    />
-                    <div>
-                      <strong>{name || "Nom non renseigné"}</strong>
-                      <span className="profile-view__role">
-                        {{
-                          VOYAGEUR: "Voyageur",
-                          COMPAGNIE: "Compagnie",
-                          AGENT_COMPAGNIE: "Agent de compagnie",
-                          ADMINISTRATEUR: "Administrateur",
-                        }[profile.role] ?? profile.role}
-                      </span>
-                    </div>
-                  </div>
-                  <dl className="profile-view__details">
-                    <div>
-                      <dt>Adresse e-mail</dt>
-                      <dd>{profile.email}</dd>
-                    </div>
-                    <div>
-                      <dt>Prénom(s)</dt>
-                      <dd>{profile.prenoms || "Non renseigné"}</dd>
-                    </div>
-                    <div>
-                      <dt>Nom</dt>
-                      <dd>{profile.nom || "Non renseigné"}</dd>
-                    </div>
-                    <div>
-                      <dt>Téléphone</dt>
-                      <dd>{profile.telephone || "Non renseigné"}</dd>
-                    </div>
-                    {profile.compagnie_nom ? (
-                      <div>
-                        <dt>Compagnie de rattachement</dt>
-                        <dd>{profile.compagnie_nom}</dd>
-                      </div>
-                    ) : null}
-                  </dl>
-                </div>
-              </section>
-            </div>,
-            document.body,
-          )
-        : null}
+      {!companyAction && viewingProfile ? (
+        <ProfileViewDialog
+          profile={profile}
+          name={name}
+          avatarClassName={avatarClassName}
+          onClose={() => {
+            setViewingProfile(false);
+            triggerRef.current?.focus();
+          }}
+        />
+      ) : null}
 
       {!companyAction && editing && typeof document !== "undefined"
         ? createPortal(

@@ -25,6 +25,7 @@ import {
 import ConfirmationDialog, {
   type ConfirmationTone,
 } from "@/components/confirmation-dialog";
+import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
@@ -405,6 +406,7 @@ export default function AgentWorkspace() {
   const [baggagePhotoSlots, setBaggagePhotoSlots] = useState<(string | null)[]>([
     null,
   ]);
+  const [baggageFormOpen, setBaggageFormOpen] = useState(false);
   const [scanResult, setScanResult] = useState<ScanResult | null>(null);
   const [passwordFeedback, setPasswordFeedback] = useState<Feedback | null>(null);
   const [confirmation, setConfirmation] =
@@ -676,6 +678,7 @@ export default function AgentWorkspace() {
       }
       form.reset();
       setBaggagePhotoSlots([null]);
+      setBaggageFormOpen(false);
       toast.success(
         `Bagage enregistré pour ${result.reservation_reference}. Frais : ${formatPrice(result.frais_total)}.`,
       );
@@ -1085,11 +1088,21 @@ export default function AgentWorkspace() {
         ) : null}
 
         {activeTab === "baggage" ? (
-          <div className="agent-content agent-content--split">
+          <div className="agent-content agent-content--baggage">
             {canRegisterBaggage ? (
-              <section className="agent-panel">
-                <div className="agent-panel-heading"><div><h2>Enregistrer un bagage</h2><p>Réservation payée et au moins une photo obligatoires.</p></div></div>
-                <form className="agent-form" onSubmit={registerBaggage}>
+              <>
+                <AppDialog
+                  open={baggageFormOpen}
+                  title="Enregistrer un bagage"
+                  className="agent-baggage-dialog"
+                  onClose={() => {
+                    if (saving) return;
+                    setBaggageFormOpen(false);
+                    setBaggagePhotoSlots([null]);
+                  }}
+                >
+                  {availableReservations.length ? (
+                    <form className="agent-form" onSubmit={registerBaggage}>
                   <label><span>Réservation du voyageur</span><select name="reservation_id" required defaultValue=""><option value="" disabled>Choisir une réservation payée</option>{availableReservations.map((reservation) => <option value={reservation.id_reservation} key={reservation.id_reservation}>{reservation.reference} · {reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}</option>)}</select></label>
                   <label><span>Poids (kg)</span><input name="poids" type="number" min="0" step="1" required /></label>
                   <label><span>Description <small>(facultative)</small></span><textarea name="description" rows={3} /></label>
@@ -1170,15 +1183,45 @@ export default function AgentWorkspace() {
                     <label><span>Frais spéciaux (FCFA)</span><input name="frais_special" type="number" min="0" step="1" /></label>
                     <label><span>Motif du tarif spécial</span><input name="motif_tarif_special" maxLength={255} /></label>
                   </details>
-                  <button type="submit" className="agent-button" disabled={saving || availableReservations.length === 0}>
-                    {saving ? "Enregistrement…" : availableReservations.length ? "Enregistrer le bagage" : "Aucune réservation payée"}
-                  </button>
-                </form>
-              </section>
+                      <button type="submit" className="agent-button" disabled={saving}>
+                        {saving ? "Enregistrement…" : "Enregistrer le bagage"}
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="agent-empty agent-baggage-dialog__empty">
+                      Aucune réservation payée ne peut actuellement être associée à
+                      un bagage.
+                    </p>
+                  )}
+                  {availableReservations.length === 0 ? (
+                    <button
+                      type="button"
+                      className="agent-button agent-button--small"
+                      onClick={() => setBaggageFormOpen(false)}
+                    >
+                      Fermer
+                    </button>
+                  ) : null}
+                </AppDialog>
+              </>
             ) : null}
             {canRegisterBaggage || canConsultBaggage || canReturnBaggage ? (
               <section className="agent-panel">
-                <div className="agent-panel-heading"><div><h2>Suivi des bagages</h2><p>Bagages enregistrés pour les voyages de votre compagnie.</p></div></div>
+                <div className="agent-panel-heading agent-baggage-panel-heading">
+                  <div>
+                    <h2>Suivi des bagages</h2>
+                    <p>Bagages enregistrés pour les voyages de votre compagnie.</p>
+                  </div>
+                  {canRegisterBaggage ? (
+                    <button
+                      className="agent-button agent-button--small"
+                      type="button"
+                      onClick={() => setBaggageFormOpen(true)}
+                    >
+                      Enregistrer un bagage
+                    </button>
+                  ) : null}
+                </div>
                 {baggages.length ? (
                   <div className="agent-baggage-list">{pageBaggages.map((baggage) => (
                     <article className="agent-baggage-card" key={baggage.id_bagage}>

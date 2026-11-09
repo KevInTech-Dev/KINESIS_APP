@@ -31,6 +31,7 @@ import {
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
+import ProfileViewDialog from "@/components/profile-view-dialog";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import RoleWorkspaceShell, {
@@ -483,6 +484,8 @@ export default function TravelerDashboard() {
     useState<Reservation | null>(null);
   const [reservationDetail, setReservationDetail] = useState<Reservation | null>(null);
   const [ticketDetail, setTicketDetail] = useState<Ticket | null>(null);
+  const [baggageDetail, setBaggageDetail] = useState<Baggage | null>(null);
+  const [profileDetailOpen, setProfileDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TravelerTab>("overview");
   const [editingProfile, setEditingProfile] = useState(false);
@@ -1369,9 +1372,9 @@ export default function TravelerDashboard() {
               <button
                 type="button"
                 className="traveler-profile-action"
-                onClick={() => setActiveTab("profile")}
+                onClick={() => setProfileDetailOpen(true)}
               >
-                Modifier le profil
+                Voir mon profil
               </button>
               <p className="traveler-profile-note">
                 <BusFront aria-hidden="true" />
@@ -1731,44 +1734,14 @@ export default function TravelerDashboard() {
                       <strong>Réservation {baggage.reservation_reference}</strong>
                       <span>{baggage.poids} kg</span>
                       {baggage.description ? <p>{baggage.description}</p> : null}
-                      {baggage.photos.length ? (
-                        <div className="traveler-baggage-photos">
-                          {baggage.photos.map((photo, index) => (
-                            <a
-                              href={photo.url}
-                              target="_blank"
-                              rel="noreferrer"
-                              key={photo.id_photobagage}
-                            >
-                              Photo {index + 1}
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
                       <small>
                         Enregistré le{" "}
                         {formatDate(baggage.date_creation, {
                           day: "numeric",
-                          month: "long",
+                          month: "short",
                           year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
                         })}
                       </small>
-                      <div className="baggage-actors" aria-label="Historique de gestion">
-                        <div className="baggage-actor">
-                          <span>Enregistré par</span>
-                          <strong>{baggage.enregistre_par_nom ?? "Non renseigné"}</strong>
-                        </div>
-                        <div className="baggage-actor">
-                          <span>Paiement confirmé par</span>
-                          <strong>{baggage.paiement_enregistre_par_nom ?? "En attente"}</strong>
-                        </div>
-                        <div className="baggage-actor">
-                          <span>Restitué par</span>
-                          <strong>{baggage.restitue_par_nom ?? "Non restitué"}</strong>
-                        </div>
-                      </div>
                     </div>
                     <div className="traveler-baggage-status">
                       <span
@@ -1782,30 +1755,13 @@ export default function TravelerDashboard() {
                           ? "Frais réglés"
                           : "Frais à régler à la gare"}
                       </small>
-                      {baggage.date_paiement_frais ? (
-                        <small>
-                          Réglés le{" "}
-                          {formatDate(baggage.date_paiement_frais, {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </small>
-                      ) : null}
-                      {baggage.date_restitution ? (
-                        <small>
-                          Restitué le{" "}
-                          {formatDate(baggage.date_restitution, {
-                            day: "numeric",
-                            month: "long",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </small>
-                      ) : null}
+                      <button
+                        className="traveler-baggage-details-button"
+                        type="button"
+                        onClick={() => setBaggageDetail(baggage)}
+                      >
+                        Voir les détails
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -1865,7 +1821,16 @@ export default function TravelerDashboard() {
                         <UserRound aria-hidden="true" />
                         {ticket.nom_passager} · Siège {ticket.numero_siege}
                       </p>
-                      <div className="traveler-booking-actions">
+                      <div className="traveler-ticket-actions">
+                        <span
+                          className={`traveler-status traveler-status--${ticket.statut.toLowerCase()}`}
+                        >
+                          {ticket.statut === "EMBARQUE"
+                            ? "Embarqué"
+                            : ticket.statut === "VALIDE"
+                              ? "Valide"
+                              : ticket.statut}
+                        </span>
                         <button
                           type="button"
                           onClick={() =>
@@ -1961,6 +1926,122 @@ export default function TravelerDashboard() {
               setReservationToCancel(null);
             }}
           />
+        ) : null}
+        {profileDetailOpen ? (
+          <ProfileViewDialog
+            profile={profile}
+            name={displayName}
+            avatarClassName="traveler-github-avatar"
+            onClose={() => setProfileDetailOpen(false)}
+          />
+        ) : null}
+        {baggageDetail ? (
+          <AppDialog
+            open
+            title={`Détails du bagage · ${baggageDetail.reservation_reference}`}
+            className="traveler-details-dialog"
+            onClose={() => setBaggageDetail(null)}
+          >
+            <div className="traveler-detail-panel traveler-baggage-detail">
+              <div className="traveler-baggage-detail__summary">
+                <span
+                  className={`traveler-status traveler-status--${baggageDetail.statut.toLowerCase()}`}
+                >
+                  {baggageStatusLabels[baggageDetail.statut] ?? baggageDetail.statut}
+                </span>
+                <strong>{baggageDetail.poids} kg</strong>
+                <span>{formatPrice(baggageDetail.frais_total)}</span>
+                <small className={baggageDetail.frais_payes ? "is-paid" : "is-due"}>
+                  {baggageDetail.frais_payes
+                    ? "Frais réglés"
+                    : "Frais à régler à la gare"}
+                </small>
+              </div>
+              {baggageDetail.description ? (
+                <div className="traveler-baggage-detail__section">
+                  <h3>Description</h3>
+                  <p>{baggageDetail.description}</p>
+                </div>
+              ) : null}
+              {baggageDetail.photos.length ? (
+                <div className="traveler-baggage-detail__section">
+                  <h3>Photos du bagage</h3>
+                  <div className="traveler-baggage-photos">
+                    {baggageDetail.photos.map((photo, index) => (
+                      <a
+                        href={photo.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={photo.id_photobagage}
+                      >
+                        Photo {index + 1}
+                        <ExternalLink aria-hidden="true" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <div className="traveler-baggage-detail__section">
+                <h3>Suivi</h3>
+                <dl className="traveler-baggage-detail__fields">
+                  <div>
+                    <dt>Enregistré le</dt>
+                    <dd>
+                      {formatDate(baggageDetail.date_creation, {
+                        day: "numeric",
+                        month: "long",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </dd>
+                  </div>
+                  {baggageDetail.date_paiement_frais ? (
+                    <div>
+                      <dt>Frais réglés le</dt>
+                      <dd>
+                        {formatDate(baggageDetail.date_paiement_frais, {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </dd>
+                    </div>
+                  ) : null}
+                  {baggageDetail.date_restitution ? (
+                    <div>
+                      <dt>Restitué le</dt>
+                      <dd>
+                        {formatDate(baggageDetail.date_restitution, {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </dd>
+                    </div>
+                  ) : null}
+                  <div>
+                    <dt>Enregistré par</dt>
+                    <dd>{baggageDetail.enregistre_par_nom ?? "Non renseigné"}</dd>
+                  </div>
+                  <div>
+                    <dt>Paiement confirmé par</dt>
+                    <dd>
+                      {baggageDetail.paiement_enregistre_par_nom ?? "En attente"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Restitué par</dt>
+                    <dd>{baggageDetail.restitue_par_nom ?? "Non restitué"}</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </AppDialog>
         ) : null}
         {reservationDetail ? (
           <AppDialog

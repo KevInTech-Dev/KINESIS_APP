@@ -2802,6 +2802,54 @@ select:focus-visible {
   margin-left: auto;
 }
 
+.traveler-ticket-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px;
+  margin-top: 12px;
+}
+
+.traveler-ticket-actions .traveler-status {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  font-size: 10px;
+}
+
+.traveler-ticket-actions .traveler-status--valide {
+  border-color: #cfe7d4;
+  background: #eaf6ed;
+  color: #176345;
+}
+
+.traveler-ticket-actions .traveler-status--embarque {
+  border-color: #d7e2f4;
+  background: #eef3fb;
+  color: #355a91;
+}
+
+.traveler-ticket-actions button {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 1px solid #d5e2d7;
+  border-radius: 8px;
+  background: #f7faf7;
+  color: #176345;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.traveler-ticket-actions button:hover:not(:disabled) {
+  border-color: #aac8b2;
+  background: #edf5ee;
+}
+
+.traveler-ticket-actions button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .traveler-detail-panel {
   display: grid;
   gap: 7px;
@@ -10091,6 +10139,12 @@ select:focus-visible {
   align-items: start;
 }
 
+.agent-content--baggage {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+}
+
 .agent-welcome-card {
   position: relative;
   display: flex;
@@ -13385,54 +13439,97 @@ select:focus-visible {
 
 .traveler-workspace-content .traveler-baggage-card {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(170px, 210px);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 16px;
-  padding: 17px;
+  gap: 20px;
+  padding: 14px 16px;
   border: 1px solid #e1e9e1;
-  border-radius: 14px;
-  background: linear-gradient(145deg, #fff, #fbfdfb);
-  box-shadow: 0 5px 16px rgb(32 58 41 / 4%);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 12px rgb(32 58 41 / 3%);
 }
 
 .traveler-baggage-main,
 .traveler-baggage-status {
   display: grid;
-  justify-items: start;
-  gap: 7px;
   min-width: 0;
 }
 
-.traveler-baggage-main > strong,
-.traveler-baggage-status > strong {
+.traveler-baggage-main {
+  gap: 4px;
+}
+
+.traveler-baggage-main > strong {
   color: #26372c;
   font-size: 13px;
 }
 
-.traveler-baggage-main > span,
-.traveler-baggage-main > p,
-.traveler-baggage-main > small,
-.traveler-baggage-status > small {
-  margin: 0;
+.traveler-baggage-main > span {
+  color: #176345;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.traveler-baggage-main > p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  margin: 1px 0 0;
   color: #657369;
   font-size: 11px;
-  line-height: 1.5;
+  line-height: 1.45;
+}
+
+.traveler-baggage-main > small {
+  margin: 0;
+  color: #7a867d;
+  font-size: 10px;
 }
 
 .traveler-baggage-status {
-  justify-items: end;
-  align-self: stretch;
-  align-content: center;
-  padding-left: 16px;
-  border-left: 1px solid #e8eee8;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px 10px;
+  text-align: right;
+}
+
+.traveler-baggage-status > strong {
+  color: #26372c;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .traveler-baggage-status > small.is-paid {
   color: #176345;
+  font-size: 10px;
+  white-space: nowrap;
 }
 
 .traveler-baggage-status > small.is-due {
   color: #875a09;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.traveler-baggage-details-button {
+  min-height: 34px;
+  margin-top: 4px;
+  padding: 0 11px;
+  border: 1px solid #d5e2d7;
+  border-radius: 8px;
+  background: #f7faf7;
+  color: #176345;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.traveler-baggage-details-button:hover {
+  border-color: #aac8b2;
+  background: #edf5ee;
 }
 
 .traveler-baggage-photos {
@@ -13458,17 +13555,14 @@ select:focus-visible {
 
   .traveler-workspace-content .traveler-baggage-card {
     grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-    padding: 13px;
+    gap: 10px;
+    padding: 12px;
   }
 
   .traveler-baggage-status {
     width: 100%;
-    justify-items: start;
-    padding-top: 12px;
-    padding-left: 0;
-    border-top: 1px solid #e8eee8;
-    border-left: 0;
+    justify-content: flex-start;
+    text-align: left;
   }
 }
 
@@ -13723,6 +13817,229 @@ select:focus-visible {
   padding: 16px;
   border-radius: 12px;
   font-size: 13px;
+}
+
+.traveler-baggage-detail__fields {
+  display: grid;
+  width: 100%;
+  gap: 0;
+  margin: 0;
+}
+
+.traveler-baggage-detail__fields > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e8eee8;
+}
+
+.traveler-baggage-detail__fields > div:last-child {
+  border-bottom: 0;
+}
+
+.traveler-baggage-detail__fields dt {
+  color: #657369;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.traveler-baggage-detail__fields dd {
+  margin: 0;
+  color: #26372c;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.traveler-baggage-detail {
+  display: grid;
+  gap: 20px;
+  max-height: calc(90dvh - 80px);
+  overflow: auto;
+}
+
+.traveler-baggage-detail__summary {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px;
+  border: 1px solid #e1e9e1;
+  border-radius: 12px;
+  background: #f8fbf8;
+}
+
+.traveler-baggage-detail__summary > strong {
+  justify-self: end;
+  color: #26372c;
+  font-size: 17px;
+}
+
+.traveler-baggage-detail__summary > span:nth-of-type(2),
+.traveler-baggage-detail__summary > small {
+  grid-column: 1 / -1;
+}
+
+.traveler-baggage-detail__summary > small.is-paid {
+  color: #176345;
+}
+
+.traveler-baggage-detail__summary > small.is-due {
+  color: #875a09;
+}
+
+.traveler-baggage-detail__section {
+  display: grid;
+  gap: 10px;
+}
+
+.traveler-baggage-detail__section h3 {
+  margin: 0;
+  color: #26372c;
+  font-size: 13px;
+}
+
+.traveler-baggage-detail__section > p {
+  margin: 0;
+  color: #657369;
+  font-size: 12px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.traveler-baggage-detail .traveler-baggage-photos a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.traveler-baggage-detail .traveler-baggage-photos svg {
+  width: 13px;
+  height: 13px;
+}
+
+.agent-baggage-panel-heading {
+  align-items: flex-start;
+}
+
+.agent-baggage-panel-heading .agent-button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.agent-content--baggage .agent-panel {
+  width: 100%;
+}
+
+.agent-content--baggage .agent-baggage-list {
+  gap: 8px;
+}
+
+.agent-content--baggage .agent-baggage-card {
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+
+.agent-content--baggage .agent-baggage-heading {
+  align-items: center;
+}
+
+.agent-content--baggage .agent-baggage-heading > div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 5px 12px;
+}
+
+.agent-content--baggage .agent-baggage-heading strong {
+  font-size: 11px;
+}
+
+.agent-content--baggage .agent-baggage-heading > div > span {
+  font-size: 10px;
+}
+
+.agent-content--baggage .agent-baggage-card > p {
+  padding: 0;
+  background: transparent;
+  font-size: 10px;
+}
+
+.agent-content--baggage .agent-baggage-actors {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px 16px;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.agent-content--baggage .agent-baggage-actor {
+  display: grid;
+  justify-content: start;
+  gap: 2px;
+  padding: 0;
+}
+
+.agent-content--baggage .agent-baggage-actor + .agent-baggage-actor {
+  border-top: 0;
+}
+
+.agent-content--baggage .agent-baggage-actor > span {
+  font-size: 9px;
+}
+
+.agent-content--baggage .agent-baggage-actor > strong {
+  max-width: 100%;
+  font-size: 10px;
+  text-align: left;
+}
+
+.agent-content--baggage .agent-baggage-card > .agent-button,
+.agent-content--baggage .agent-baggage-card > .agent-fee-due,
+.agent-content--baggage .agent-baggage-card > .agent-fee-paid {
+  justify-self: start;
+}
+
+@media (max-width: 640px) {
+  .agent-content--baggage .agent-baggage-actors {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .agent-content--baggage .agent-baggage-panel-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .agent-content--baggage .agent-baggage-panel-heading .agent-button {
+    align-self: flex-start;
+  }
+
+  .agent-content--baggage .agent-baggage-actors {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.agent-baggage-dialog {
+  width: min(680px, calc(100% - 32px));
+}
+
+.agent-baggage-dialog > .agent-form {
+  padding: 20px;
+}
+
+.agent-baggage-dialog__empty {
+  margin: 20px;
+}
+
+.agent-baggage-dialog > .agent-button--small {
+  margin: 0 20px 20px;
 }
 
 .traveler-detail-panel ul {
