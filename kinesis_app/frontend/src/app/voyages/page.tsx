@@ -432,14 +432,33 @@ function VoyagesCatalog() {
                   <span>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}</span>
                 </div>
                 <div className="catalog-card__body">
-                  <p>{trip.compagnie_nom || "Compagnie"}</p>
+                  <p className="catalog-card__company">
+                    {trip.compagnie_nom || "Compagnie"}
+                  </p>
                   <h3>{trip.ville_depart_nom} <span aria-hidden="true">→</span> {trip.ville_arrivee_nom}</h3>
                   {trip.gare_depart || trip.gare_arrivee ? (
-                    <p className="catalog-card__stations">
-                      {trip.gare_depart ? `Départ : ${trip.gare_depart.nom}` : null}
-                      {trip.gare_depart && trip.gare_arrivee ? " · " : null}
-                      {trip.gare_arrivee ? `Arrivée : ${trip.gare_arrivee.nom}` : null}
-                    </p>
+                    <div
+                      className="catalog-card__stations"
+                      role="group"
+                      aria-label="Gares du voyage"
+                    >
+                      {trip.gare_depart ? (
+                        <div className="catalog-card__station">
+                          <span className="catalog-card__station-label">Départ</span>
+                          <span className="catalog-card__station-name">
+                            {trip.gare_depart.nom}
+                          </span>
+                        </div>
+                      ) : null}
+                      {trip.gare_arrivee ? (
+                        <div className="catalog-card__station">
+                          <span className="catalog-card__station-label">Arrivée</span>
+                          <span className="catalog-card__station-name">
+                            {trip.gare_arrivee.nom}
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   <div className="catalog-card__meta">
                     <span>{formatDate(trip.date_depart)}</span>
