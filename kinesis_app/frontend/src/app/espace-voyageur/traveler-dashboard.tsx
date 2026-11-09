@@ -132,6 +132,22 @@ type DashboardData = {
   notifications: Notification[];
 };
 
+type DashboardResource = {
+  status: number;
+  data: unknown;
+};
+
+type DashboardResources = Record<
+  "tickets" | "baggages" | "notifications",
+  DashboardResource
+>;
+
+type DashboardResourcesResponse = {
+  status: number;
+  resources?: DashboardResources;
+  error?: string;
+};
+
 let cachedTravelerDashboard: { userId: string; data: DashboardData } | null =
   null;
 
@@ -372,6 +388,55 @@ async function getErrorMessage(response: Response) {
   );
 }
 
+function isDashboardResources(value: unknown): value is DashboardResources {
+  if (typeof value !== "object" || value === null) return false;
+  const resources = value as Record<string, unknown>;
+  return ["tickets", "baggages", "notifications"].every((key) => {
+    const resource = resources[key];
+    return (
+      typeof resource === "object" &&
+      resource !== null &&
+      "status" in resource &&
+      typeof resource.status === "number" &&
+      "data" in resource
+    );
+  });
+}
+
+async function getDashboardResources(): Promise<DashboardResourcesResponse> {
+  const response = await fetch("/api/voyageur/tableau-de-bord", {
+    cache: "no-store",
+  });
+  if (!response.ok) {
+    return {
+      status: response.status,
+      error: await getErrorMessage(response),
+    };
+  }
+  const payload: unknown = await response.json();
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("resources" in payload) ||
+    !isDashboardResources(payload.resources)
+  ) {
+    return {
+      status: 502,
+      error: "Les informations du tableau de bord sont incomplètes.",
+    };
+  }
+  return { status: response.status, resources: payload.resources };
+}
+
+function dashboardResourceError(
+  resource: DashboardResource,
+  fallback: string,
+) {
+  return new Error(
+    getUserFacingApiError(resource.data, fallback, resource.status),
+  );
+}
+
 function formatDate(value: string, options: Intl.DateTimeFormatOptions) {
   const date = new Date(value);
   return Number.isNaN(date.getTime())
@@ -408,6 +473,8 @@ export default function TravelerDashboard() {
   const hasDashboardData = useRef(false);
   const dashboardUserId = useRef<string | null>(null);
   const dashboardRequestId = useRef(0);
+  const reservationRequestId = useRef(0);
+  const paymentDataRevision = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const [reservationsError, setReservationsError] = useState<string | null>(null);
   const [reservationsLoading, setReservationsLoading] = useState(false);
@@ -524,34 +591,42 @@ export default function TravelerDashboard() {
           ? paymentId
           : null;
 
-      const reservationsRequest = fetch(
-        "/api/reservations?page_size=100",
-        { cache: "no-store" },
-      ).then(async (response) => {
-        if (response.status === 401) {
-          router.replace("/connexion");
-        }
-        if (!response.ok) throw new Error(await getErrorMessage(response));
-        const reservationData: unknown = await response.json();
-        if (!isReservationList(reservationData)) {
-          throw new Error("La liste des réservations reçue est invalide.");
-        }
-        return reservationData.results;
-      });
-      setReservationsLoading(true);
-      void reservationsRequest
-        .then((reservations) => {
-          if (requestId !== dashboardRequestId.current) return;
+      const refreshReservations = async (showLoading: boolean) => {
+        const reservationRequest = ++reservationRequestId.current;
+        if (showLoading) setReservationsLoading(true);
+        try {
+          const response = await fetch("/api/reservations?page_size=100", {
+            cache: "no-store",
+          });
+          if (response.status === 401) {
+            router.replace("/connexion");
+            return;
+          }
+          if (!response.ok) throw new Error(await getErrorMessage(response));
+          const reservationData: unknown = await response.json();
+          if (!isReservationList(reservationData)) {
+            throw new Error("La liste des réservations reçue est invalide.");
+          }
+          if (
+            requestId !== dashboardRequestId.current ||
+            reservationRequest !== reservationRequestId.current
+          ) {
+            return;
+          }
           setReservationsError(null);
           setReservationsLoading(false);
           setData((current) =>
             current?.profile?.id === profileData.id
-              ? { ...current, reservations }
+              ? { ...current, reservations: reservationData.results }
               : current,
           );
-        })
-        .catch((reservationLoadError: unknown) => {
-          if (requestId !== dashboardRequestId.current) return;
+        } catch (reservationLoadError: unknown) {
+          if (
+            requestId !== dashboardRequestId.current ||
+            reservationRequest !== reservationRequestId.current
+          ) {
+            return;
+          }
           setReservationsLoading(false);
           console.error(
             "Traveler reservations request failed",
@@ -563,71 +638,191 @@ export default function TravelerDashboard() {
               "Vos réservations ne peuvent pas être chargées pour le moment.",
             ),
           );
-        });
-
-      const [
-        ticketsResponse,
-        baggagesResponse,
-        notificationsResponse,
-        paymentResponse,
-      ] =
-        await Promise.all([
-          fetch("/api/billets?page_size=100", { cache: "no-store" }),
-          fetch("/api/bagages", { cache: "no-store" }),
-          fetch("/api/notifications?page_size=100", { cache: "no-store" }),
-          validPaymentId
-            ? fetch(`/api/paiements/${encodeURIComponent(validPaymentId)}`, {
-                cache: "no-store",
-              })
-            : Promise.resolve(null),
-        ]);
-
-      if (paymentResponse) {
-        if (paymentResponse.ok) {
-          const payment: unknown = await paymentResponse.json();
-          const paymentStatus =
-            typeof payment === "object" &&
-            payment !== null &&
-            "statut" in payment &&
-            typeof payment.statut === "string"
-              ? payment.statut
-              : "";
-          if (paymentStatus === "CONFIRME") {
-            toast.success("Paiement confirmé. Vos billets sont disponibles ci-dessous.");
-          } else if (paymentStatus === "EN_ATTENTE") {
-            toast.info("Paiement en cours de confirmation. Vos billets apparaîtront dès validation.");
-          } else if (paymentStatus) {
-            toast.warning(`État du paiement : ${paymentStatus}.`);
-          } else {
-            toast.info("Le paiement a été vérifié.");
-          }
-        } else {
-          toast.error(await getErrorMessage(paymentResponse));
         }
+      };
+
+      setReservationsLoading(true);
+      void refreshReservations(true);
+
+      const initialPaymentDataRevision = paymentDataRevision.current;
+      if (validPaymentId) {
         window.history.replaceState(null, "", "/espace-voyageur");
+        void (async () => {
+          let paymentConfirmed = false;
+          try {
+            const response = await fetch(
+              `/api/paiements/${encodeURIComponent(validPaymentId)}`,
+              { cache: "no-store" },
+            );
+            if (!response.ok) {
+              throw new Error(await getErrorMessage(response));
+            }
+            const payment: unknown = await response.json();
+            const paymentStatus =
+              typeof payment === "object" &&
+              payment !== null &&
+              "statut" in payment &&
+              typeof payment.statut === "string"
+                ? payment.statut
+                : "";
+
+            if (requestId !== dashboardRequestId.current) return;
+            if (paymentStatus === "CONFIRME") {
+              paymentConfirmed = true;
+              toast.success(
+                "Paiement confirmé. Vos billets sont disponibles ci-dessous.",
+              );
+              const refreshRevision = ++paymentDataRevision.current;
+              ++reservationRequestId.current;
+              const [reservationsResponse, dashboard] = await Promise.all([
+                fetch("/api/reservations?page_size=100", {
+                  cache: "no-store",
+                }),
+                getDashboardResources(),
+              ]);
+              if (reservationsResponse.status === 401 || dashboard.status === 401) {
+                router.replace("/connexion");
+                return;
+              }
+              if (!reservationsResponse.ok) {
+                throw new Error(await getErrorMessage(reservationsResponse));
+              }
+              if (!dashboard.resources) {
+                throw new Error(
+                  dashboard.error ??
+                    "Les informations du paiement reçu sont incomplètes.",
+                );
+              }
+              const { tickets, notifications } = dashboard.resources;
+              if (tickets.status === 401 || notifications.status === 401) {
+                router.replace("/connexion");
+                return;
+              }
+              if (tickets.status < 200 || tickets.status >= 300) {
+                throw dashboardResourceError(
+                  tickets,
+                  "Vos billets ne peuvent pas être actualisés.",
+                );
+              }
+              if (notifications.status < 200 || notifications.status >= 300) {
+                throw dashboardResourceError(
+                  notifications,
+                  "Vos notifications ne peuvent pas être actualisées.",
+                );
+              }
+              const reservationsData: unknown = await reservationsResponse.json();
+              const ticketsData: unknown = tickets.data;
+              const notificationsData: unknown = notifications.data;
+              if (
+                !isReservationList(reservationsData) ||
+                !isTicketList(ticketsData) ||
+                !isNotificationList(notificationsData)
+              ) {
+                throw new Error(
+                  "Les informations du paiement reçu sont incomplètes.",
+                );
+              }
+              if (
+                requestId !== dashboardRequestId.current ||
+                refreshRevision !== paymentDataRevision.current
+              ) {
+                return;
+              }
+              setReservationsError(null);
+              setReservationsLoading(false);
+              setData((current) =>
+                current?.profile?.id === profileData.id
+                  ? {
+                      ...current,
+                      reservations: reservationsData.results,
+                      tickets: ticketsData.results,
+                      notifications: notificationsData.results,
+                    }
+                  : current,
+              );
+            } else if (paymentStatus === "EN_ATTENTE") {
+              toast.info(
+                "Paiement en cours de confirmation. Vos billets apparaîtront dès validation.",
+              );
+            } else if (paymentStatus) {
+              toast.warning(`État du paiement : ${paymentStatus}.`);
+            } else {
+              toast.info("Le paiement a été vérifié.");
+            }
+          } catch (paymentError: unknown) {
+            if (requestId !== dashboardRequestId.current) return;
+            console.error("Payment return status check failed", paymentError);
+            if (paymentConfirmed) {
+              setReservationsLoading(false);
+              setReservationsError(
+                "Paiement confirmé, mais les informations n’ont pas pu être actualisées. Actualisez la page pour les vérifier.",
+              );
+            }
+            toast.error(
+              getUserFacingErrorMessage(
+                paymentError,
+                "Le statut du paiement n’a pas pu être vérifié.",
+              ),
+            );
+          }
+        })();
       }
 
+      const dashboard = await getDashboardResources();
+      if (dashboard.status === 401) {
+        router.replace("/connexion");
+        return;
+      }
+      if (!dashboard.resources) {
+        throw new Error(
+          dashboard.error ?? "Les informations du tableau de bord sont invalides.",
+        );
+      }
+
+      const {
+        tickets: ticketsResource,
+        baggages: baggagesResource,
+        notifications: notificationsResource,
+      } = dashboard.resources;
       if (
-        ticketsResponse.status === 401 ||
-        baggagesResponse.status === 401 ||
-        notificationsResponse.status === 401
+        ticketsResource.status === 401 ||
+        baggagesResource.status === 401 ||
+        notificationsResource.status === 401
       ) {
         router.replace("/connexion");
         return;
       }
-      if (!ticketsResponse.ok) {
-        throw new Error(await getErrorMessage(ticketsResponse));
-      }
-      if (!baggagesResponse.ok) {
-        throw new Error(await getErrorMessage(baggagesResponse));
-      }
-      if (!notificationsResponse.ok) {
-        throw new Error(await getErrorMessage(notificationsResponse));
+      if (
+        requestId !== dashboardRequestId.current ||
+        initialPaymentDataRevision !== paymentDataRevision.current
+      ) {
+        return;
       }
 
-      const ticketsData: unknown = await ticketsResponse.json();
-      const baggagesData: unknown = await baggagesResponse.json();
-      const notificationsData: unknown = await notificationsResponse.json();
+      if (ticketsResource.status < 200 || ticketsResource.status >= 300) {
+        throw dashboardResourceError(
+          ticketsResource,
+          "Vos billets ne peuvent pas être chargés pour le moment.",
+        );
+      }
+      if (baggagesResource.status < 200 || baggagesResource.status >= 300) {
+        throw dashboardResourceError(
+          baggagesResource,
+          "Vos bagages ne peuvent pas être chargés pour le moment.",
+        );
+      }
+      if (
+        notificationsResource.status < 200 ||
+        notificationsResource.status >= 300
+      ) {
+        throw dashboardResourceError(
+          notificationsResource,
+          "Vos notifications ne peuvent pas être chargées pour le moment.",
+        );
+      }
+      const ticketsData: unknown = ticketsResource.data;
+      const baggagesData: unknown = baggagesResource.data;
+      const notificationsData: unknown = notificationsResource.data;
       if (!isTicketList(ticketsData)) {
         throw new Error("La liste des billets reçue est invalide.");
       }
@@ -637,7 +832,12 @@ export default function TravelerDashboard() {
       if (!isNotificationList(notificationsData)) {
         throw new Error("La liste des notifications reçue est invalide.");
       }
-      if (requestId !== dashboardRequestId.current) return;
+      if (
+        requestId !== dashboardRequestId.current ||
+        initialPaymentDataRevision !== paymentDataRevision.current
+      ) {
+        return;
+      }
       setData((current) => ({
         profile: profileData,
         reservations:
