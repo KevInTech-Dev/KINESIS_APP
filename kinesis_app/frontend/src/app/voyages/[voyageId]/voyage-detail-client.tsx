@@ -271,10 +271,6 @@ export default function VoyageDetailClient({
       setBookingError("Saisissez le nom complet de chaque passager.");
       return;
     }
-    if (baggageAnswer === null) {
-      setBookingError("Indiquez si vous avez des bagages.");
-      return;
-    }
     if (profile && profile.role !== "VOYAGEUR") {
       setBookingError("La réservation est réservée aux comptes voyageurs.");
       return;

@@ -19,6 +19,7 @@ import {
   Luggage,
   LogOut,
   MapPin,
+  PanelLeft,
   Search,
   Ticket,
   UserRound,
@@ -1366,6 +1367,37 @@ export default function TravelerDashboard() {
       </header>
 
       <main className="traveler-app-main">
+        <div className="traveler-app-topbar">
+          <div className="traveler-app-topbar__title">
+            <PanelLeft aria-hidden="true" />
+            <div>
+              <p>ESPACE VOYAGEUR</p>
+              <h1>{activeTitle}</h1>
+            </div>
+          </div>
+          <div className="traveler-app-topbar__actions">
+            <button
+              type="button"
+              className="traveler-app-topbar__notifications"
+              onClick={() => setActiveTab("notifications")}
+              aria-label={`Notifications${unreadNotifications ? `, ${unreadNotifications} non lues` : ""}`}
+            >
+              <Bell aria-hidden="true" />
+              {unreadNotifications > 0 ? (
+                <span>{unreadNotifications > 99 ? "99+" : unreadNotifications}</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              className="traveler-app-topbar__logout"
+              onClick={() => void signOut()}
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+            >
+              <LogOut aria-hidden="true" />
+            </button>
+          </div>
+        </div>
         <div className="traveler-workspace-content">
         {error ? (
           <div className="traveler-workspace-refresh-error" role="alert">
@@ -1403,6 +1435,10 @@ export default function TravelerDashboard() {
                 Voici le résumé de vos activités.
               </p>
             </div>
+            <Link className="traveler-overview-search" href="/voyages">
+              <Search aria-hidden="true" />
+              Rechercher un voyage
+            </Link>
           </section>
         ) : (
           <div className="traveler-page-heading">
@@ -1431,6 +1467,24 @@ export default function TravelerDashboard() {
 
         {activeTab === "overview" ? (
           <div className="traveler-overview-layout">
+            <aside className="traveler-overview-profile" aria-label="Profil voyageur">
+              <ProfileAvatar
+                className="traveler-overview-profile__avatar"
+                fallbackClassName="traveler-profile-photo--fallback"
+                src={profile.photo_profil}
+                name={displayName}
+                size={240}
+                alt={`Photo de ${displayName}`}
+              />
+              <h3>{displayName || "Voyageur KINESIS"}</h3>
+              <p>{profile.email}</p>
+              <button
+                type="button"
+                onClick={() => setProfileDetailOpen(true)}
+              >
+                Voir mon profil
+              </button>
+            </aside>
             <div className="traveler-overview-main">
               <section className="traveler-repository-grid" aria-label="Résumé du compte">
                 <button type="button" onClick={() => setActiveTab("reservations")}>

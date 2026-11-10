@@ -14330,7 +14330,7 @@ select:focus-visible {
     padding: 12px 12px 2px;
   }
 
-  .traveler-workspace-content .traveler-recent-list article:nth-child(n + 3) {
+  .traveler-workspace-content .traveler-recent-list article:nth-child(n + 4) {
     display: none;
   }
 
@@ -15503,5 +15503,585 @@ select:focus-visible {
 
   .voyage-detail__passenger-fields {
     max-height: 160px;
+  }
+}
+
+.traveler-app-topbar {
+  display: none;
+}
+
+.traveler-overview-profile {
+  display: none;
+}
+
+.traveler-overview-search {
+  display: none;
+}
+
+.booking-header__profile {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 3px 13px 3px 4px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.booking-header__avatar {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.booking-header__avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e8f2e7;
+  color: #0b6b4b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+@media (min-width: 1024px) {
+  .voyage-detail-page__content {
+    width: min(100% - 64px, 1500px);
+    margin-top: 24px;
+    margin-bottom: 32px;
+  }
+
+  .voyage-detail__cover {
+    min-height: clamp(250px, 32vh, 320px);
+    padding: 38px;
+    border-radius: 24px;
+  }
+
+  .voyage-detail__cover-copy {
+    bottom: 43px;
+    left: 42px;
+  }
+
+  .voyage-detail__cover-copy h1 {
+    font-size: clamp(48px, 5vw, 66px);
+  }
+
+  .voyage-detail__cover-date {
+    margin-top: 13px;
+  }
+
+  .voyage-detail__lower {
+    grid-template-columns: minmax(0, 1fr) minmax(355px, 410px);
+    gap: clamp(24px, 3vw, 44px);
+    margin-top: 22px;
+  }
+
+  .voyage-detail__information {
+    padding: 4px 0;
+  }
+
+  .voyage-detail__information h2 {
+    margin: 8px 0 16px;
+    font-size: clamp(25px, 2.3vw, 32px);
+  }
+
+  .voyage-detail__facts {
+    gap: 12px;
+  }
+
+  .voyage-detail__stop {
+    min-height: 160px;
+    padding: 17px;
+    border-radius: 15px;
+  }
+
+  .voyage-detail__stop-copy {
+    gap: 5px;
+    padding-bottom: 20px;
+  }
+
+  .voyage-detail__availability {
+    min-height: 44px;
+    margin-top: 10px;
+  }
+
+  .voyage-detail__booking {
+    top: 18px;
+    gap: 8px;
+    padding: 20px;
+    border-radius: 17px;
+  }
+
+  .voyage-detail__price {
+    font-size: 28px;
+  }
+
+  .voyage-detail__passenger-count {
+    margin-top: 2px;
+    padding: 6px 9px;
+  }
+
+  .voyage-detail__passenger-count .booking-passenger-stepper button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .voyage-detail__passenger-fields {
+    max-height: 132px;
+    gap: 6px;
+  }
+
+  .voyage-detail__passenger-fields input {
+    min-height: 35px;
+  }
+
+  .voyage-detail__baggage {
+    gap: 5px;
+    padding: 5px 8px 7px;
+  }
+
+  .voyage-detail__baggage > label {
+    min-height: 28px;
+  }
+
+  .voyage-detail__total {
+    padding-top: 7px;
+  }
+
+  .voyage-detail__booking .catalog-submit {
+    min-height: 44px;
+  }
+
+  .voyage-detail__help {
+    margin-top: 18px;
+    padding: 14px 18px;
+  }
+
+  .booking-header {
+    min-height: 70px;
+    padding-right: max(32px, calc((100vw - 1180px) / 2));
+    padding-left: max(32px, calc((100vw - 1180px) / 2));
+  }
+
+  .booking-header .traveler-brand img {
+    width: 38px;
+    height: 38px;
+  }
+
+  .booking-content.booking-summary-content {
+    display: grid;
+    width: min(100% - 80px, 1120px);
+    max-width: none;
+    grid-template-columns: minmax(0, 1.25fr) minmax(310px, 0.8fr);
+    align-content: start;
+    align-items: start;
+    gap: 12px 22px;
+    padding: 28px 0 36px;
+  }
+
+  .booking-summary-content > .traveler-eyebrow,
+  .booking-summary-content > h1,
+  .booking-summary-content > .traveler-state {
+    grid-column: 1 / -1;
+  }
+
+  .booking-summary-content > .traveler-eyebrow {
+    margin: 0;
+  }
+
+  .booking-summary-content > h1 {
+    margin: 0 0 5px;
+    font-size: clamp(30px, 3.2vw, 38px);
+  }
+
+  .booking-summary-content > .booking-summary-card,
+  .booking-summary-content > .booking-summary-payment {
+    margin-top: 0;
+    padding: 21px 23px;
+    border-radius: 16px;
+  }
+
+  .booking-summary-route {
+    font-size: clamp(23px, 2.4vw, 29px);
+  }
+
+  .booking-summary-passengers li {
+    padding: 8px 0;
+  }
+}
+
+@media (min-width: 1101px) {
+  .traveler-app-shell {
+    min-height: 100dvh;
+    background: #f3f6f3;
+  }
+
+  .traveler-app-header {
+    position: fixed;
+    z-index: 40;
+    top: 12px;
+    bottom: 12px;
+    left: 12px;
+    width: 290px;
+    overflow: hidden;
+    border: 1px solid #e1e9e2;
+    border-radius: 14px;
+    box-shadow: 0 4px 18px rgb(23 53 38 / 4%);
+  }
+
+  .traveler-app-header__inner {
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 26px;
+    margin: 0;
+    padding: 22px 12px 17px;
+  }
+
+  .traveler-app-brand {
+    gap: 11px;
+    padding: 0 4px;
+    font-size: 24px;
+  }
+
+  .traveler-app-brand img {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+  }
+
+  .traveler-app-nav {
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .traveler-app-nav button {
+    min-height: 48px;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 0 12px;
+    border-radius: 11px;
+    font-size: 13px;
+  }
+
+  .traveler-app-nav button.is-active {
+    background: #e8f3e8;
+  }
+
+  .traveler-app-nav button > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .traveler-app-header__actions {
+    width: 100%;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .traveler-app-header__actions .traveler-app-profile {
+    width: 100%;
+    max-width: none;
+    min-height: 54px;
+    gap: 11px;
+    padding: 5px 8px;
+    border: 0;
+    border-radius: 12px;
+    background: #f4f7f4;
+  }
+
+  .traveler-app-header__actions .traveler-app-profile__avatar {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  .traveler-app-header__actions .traveler-app-logout {
+    display: none;
+  }
+
+  .traveler-app-main {
+    min-height: 100dvh;
+    margin-left: 314px;
+  }
+
+  .traveler-app-topbar {
+    position: sticky;
+    z-index: 30;
+    top: 0;
+    display: flex;
+    min-height: 92px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: 0 clamp(28px, 3vw, 48px);
+    border-bottom: 1px solid #e6ebe6;
+    background: rgb(255 255 255 / 96%);
+    backdrop-filter: blur(12px);
+  }
+
+  .traveler-app-topbar__title {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 17px;
+  }
+
+  .traveler-app-topbar__title > svg {
+    width: 19px;
+    height: 19px;
+    color: #587261;
+  }
+
+  .traveler-app-topbar__title > div {
+    padding-left: 17px;
+    border-left: 1px solid #e2e8e2;
+  }
+
+  .traveler-app-topbar__title p {
+    margin: 0 0 4px;
+    color: #28714d;
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+  }
+
+  .traveler-app-topbar__title h1 {
+    margin: 0;
+    color: #1d3024;
+    font-size: 21px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+  }
+
+  .traveler-app-topbar__actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .traveler-app-topbar__actions button {
+    position: relative;
+    display: grid;
+    width: 46px;
+    height: 46px;
+    place-items: center;
+    border: 1px solid #e1e9e2;
+    border-radius: 13px;
+    background: #fff;
+    color: #245c40;
+  }
+
+  .traveler-app-topbar__actions button:hover {
+    border-color: #c8d9ca;
+    background: #f7faf7;
+  }
+
+  .traveler-app-topbar__actions button > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .traveler-app-topbar__notifications > span {
+    position: absolute;
+    top: -6px;
+    right: -5px;
+    display: grid;
+    min-width: 18px;
+    height: 18px;
+    place-items: center;
+    padding: 0 4px;
+    border: 2px solid #fff;
+    border-radius: 999px;
+    background: #d74438;
+    color: white;
+    font-size: 9px;
+    font-weight: 850;
+  }
+
+  .traveler-app-topbar__logout {
+    cursor: pointer;
+  }
+
+  .traveler-app-main .traveler-workspace-content {
+    width: min(100%, 1500px);
+    max-width: 1500px;
+    padding: 30px clamp(28px, 3vw, 48px) 48px;
+  }
+
+  .traveler-overview-welcome {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 24px;
+    margin-bottom: 24px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .traveler-overview-welcome__photo {
+    display: none;
+  }
+
+  .traveler-overview-welcome__copy .traveler-eyebrow {
+    margin: 0 0 8px;
+    color: #6a796f;
+  }
+
+  .traveler-overview-welcome__copy h2 {
+    margin: 0;
+    color: #1e3025;
+    font-size: clamp(28px, 2.7vw, 36px);
+    letter-spacing: -0.05em;
+  }
+
+  .traveler-overview-welcome__copy h3,
+  .traveler-overview-welcome__email {
+    display: none;
+  }
+
+  .traveler-overview-welcome__summary {
+    margin: 9px 0 0;
+    color: #758179;
+    font-size: 14px;
+  }
+
+  .traveler-overview-search {
+    display: inline-flex;
+    min-height: 46px;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    padding: 0 17px;
+    border: 1px solid #1d5b3e;
+    border-radius: 10px;
+    background: #1d5b3e;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+
+  .traveler-overview-search:hover {
+    border-color: #16482f;
+    background: #16482f;
+    color: #fff;
+  }
+
+  .traveler-overview-search svg {
+    width: 17px;
+    height: 17px;
+  }
+
+  .traveler-overview-layout {
+    grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+    gap: clamp(24px, 3vw, 42px);
+  }
+
+  .traveler-overview-profile {
+    display: grid;
+    justify-items: start;
+    align-content: start;
+    gap: 10px;
+    padding-top: 4px;
+  }
+
+  .traveler-overview-profile__avatar {
+    width: min(100%, 270px);
+    aspect-ratio: 1;
+    border: 1px solid #dfe7df;
+    border-radius: 50%;
+    background: #edf4ed;
+    object-fit: cover;
+  }
+
+  .traveler-overview-profile h3 {
+    margin: 8px 0 0;
+    color: #203328;
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    overflow-wrap: anywhere;
+  }
+
+  .traveler-overview-profile p {
+    margin: 0;
+    color: #758179;
+    font-size: 13px;
+    overflow-wrap: anywhere;
+  }
+
+  .traveler-overview-profile button {
+    min-height: 40px;
+    margin-top: 7px;
+    padding: 0 14px;
+    border: 1px solid #d6e0d7;
+    border-radius: 9px;
+    background: #fff;
+    color: #245c40;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .traveler-overview-profile button:hover {
+    border-color: #b6cbbb;
+    background: #f7faf7;
+  }
+
+  .traveler-repository-grid {
+    gap: 12px;
+  }
+
+  .traveler-repository-grid button {
+    min-height: 125px;
+    border-radius: 11px;
+    box-shadow: 0 2px 6px rgb(22 52 40 / 3%);
+  }
+
+  .traveler-overview-list {
+    margin-top: 22px;
+    border-radius: 11px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .traveler-app-topbar,
+  .traveler-overview-profile {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .booking-header__profile {
+    min-height: 36px;
+    gap: 6px;
+    padding-right: 9px;
+    font-size: 11px;
+  }
+
+  .booking-header__avatar {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
   }
 }

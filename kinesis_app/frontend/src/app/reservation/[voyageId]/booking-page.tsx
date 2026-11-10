@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Luggage, UsersRound } from "lucide-react";
+import { Luggage, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import KinesisLoader from "@/components/kinesis-loader";
 import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
@@ -18,6 +18,7 @@ import {
   reservationDraftKey,
   type ReservationDraft,
 } from "@/lib/reservation-draft";
+import ProfileAvatar from "@/components/profile-avatar";
 import type { Voyage } from "@/lib/types";
 
 async function responseMessage(response: Response) {
@@ -249,6 +250,22 @@ export default function BookingPage({
           />
           <span>KINESIS</span>
         </Link>
+        {profile ? (
+          <Link
+            className="booking-header__profile"
+            href="/espace-voyageur"
+            aria-label={`Ouvrir le profil de ${[profile.prenoms, profile.nom].filter(Boolean).join(" ")}`}
+          >
+            <ProfileAvatar
+              className="booking-header__avatar"
+              fallbackClassName="booking-header__avatar--fallback"
+              src={profile.photo_profil}
+              name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+              size={38}
+            />
+            <span>Profil</span>
+          </Link>
+        ) : null}
       </header>
 
       <section className="booking-content booking-summary-content">
