@@ -29,10 +29,10 @@ async function proxyNotificationRequest(request: Request, context: RouteContext)
     if (auth.status === 401) clearAuthCookies(response);
     return response;
   }
-  if (!isUserProfile(auth.session.profile) || auth.session.profile.role !== "VOYAGEUR") {
+  if (!isUserProfile(auth.session.profile)) {
     return NextResponse.json(
-      { detail: "Les notifications sont réservées aux comptes voyageurs." },
-      { status: 403 },
+      { detail: "Le profil utilisateur est invalide." },
+      { status: 401 },
     );
   }
 

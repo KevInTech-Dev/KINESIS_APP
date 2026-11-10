@@ -164,6 +164,21 @@ select:focus-visible {
   line-height: 1;
 }
 
+.mobile-app-nav--workspace > button {
+  overflow: hidden;
+}
+
+.mobile-app-nav--workspace > button > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-app-nav--workspace > button.is-disabled {
+  color: #aab4ad;
+  cursor: not-allowed;
+}
+
 .main-nav,
 .footer-main nav {
   display: flex;
@@ -4683,6 +4698,95 @@ select:focus-visible {
   opacity: 0.6;
 }
 
+.admin-notification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.admin-notification-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.admin-notification-card {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 16px 18px;
+  border: 1px solid #e4ebe3;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.admin-notification-card.is-unread {
+  border-color: #c8dfce;
+  background: #f7fbf7;
+}
+
+.admin-notification-card__copy {
+  min-width: 0;
+}
+
+.admin-notification-card__copy > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-notification-card__type,
+.admin-notification-card__unread {
+  color: #64746a;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.admin-notification-card__unread {
+  color: #0b6b4b;
+}
+
+.admin-notification-card h3 {
+  margin: 8px 0 5px;
+  color: #263b2d;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.admin-notification-card p {
+  margin: 0 0 8px;
+  color: #59685f;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.admin-notification-card time {
+  color: #7a887f;
+  font-size: 9px;
+}
+
+.admin-notification-card__read {
+  flex: 0 0 auto;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #cfe0d2;
+  border-radius: 8px;
+  background: #fff;
+  color: #0b6b4b;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.admin-notification-card__read:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .admin-filters {
   display: flex;
   gap: 7px;
@@ -5273,6 +5377,24 @@ select:focus-visible {
 
   .admin-panel-heading {
     align-items: flex-start;
+  }
+
+  .admin-notification-actions {
+    flex-direction: column;
+  }
+
+  .admin-notification-actions .admin-refresh {
+    width: 100%;
+  }
+
+  .admin-notification-card {
+    flex-direction: column;
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .admin-notification-card__read {
+    align-self: flex-start;
   }
 
   .admin-panel-heading h2 {
@@ -9676,6 +9798,10 @@ select:focus-visible {
     padding: 18px 14px 28px;
   }
 
+  .company-main-content {
+    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
+  }
+
   .company-alert {
     margin: 13px 14px 0;
   }
@@ -12972,7 +13098,7 @@ select:focus-visible {
   }
 
   .admin-content {
-    padding: 18px 14px 28px;
+    padding: 18px 14px calc(100px + env(safe-area-inset-bottom, 0px));
   }
 }
 
@@ -13807,6 +13933,58 @@ select:focus-visible {
 .app-dialog__header button svg {
   width: 18px;
   height: 18px;
+}
+
+.mobile-notifications {
+  display: grid;
+  gap: 10px;
+  padding: 16px 20px 20px;
+}
+
+.mobile-notifications > article {
+  padding: 13px 15px;
+  border: 1px solid #e6ece6;
+  border-radius: 11px;
+  background: #fff;
+}
+
+.mobile-notifications > article.is-unread {
+  border-color: #b8d8c4;
+  background: #f3faf5;
+}
+
+.mobile-notifications > article strong {
+  color: #23392a;
+  font-size: 13px;
+}
+
+.mobile-notifications > article p {
+  margin: 6px 0;
+  color: #59685f;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.mobile-notifications > article time {
+  color: #7a887f;
+  font-size: 10px;
+}
+
+.mobile-notifications__read-all {
+  justify-self: end;
+  padding: 8px 11px;
+  border: 1px solid #cfe0d2;
+  border-radius: 8px;
+  background: #f4faf4;
+  color: #0b6b4b;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.mobile-notifications__error {
+  color: #9c2f2f;
+  font-size: 12px;
 }
 
 .site-header--menu-open {
@@ -15040,6 +15218,12 @@ select:focus-visible {
     border-top: 1px solid #e3e9e3;
     background: #fff;
     box-shadow: 0 -4px 16px rgb(24 51 42 / 6%);
+  }
+
+  .company-sidebar--mobile-nav-clearance[data-mobile="true"],
+  .role-sidebar--mobile-nav-clearance[data-mobile="true"] {
+    bottom: calc(63px + env(safe-area-inset-bottom, 0px));
+    height: calc(100dvh - 63px - env(safe-area-inset-bottom, 0px));
   }
 
   .mobile-app-nav a,

@@ -464,6 +464,26 @@ export default function AgentWorkspace() {
       );
   }, [selectTab]);
 
+  useEffect(() => {
+    if (loading || !profile) return;
+    const url = new URL(window.location.href);
+    const requestedTab = url.searchParams.get("mobileTab");
+    if (!requestedTab || !tabs.some((item) => item.id === requestedTab)) return;
+    const timerId = window.setTimeout(
+      () => {
+        window.dispatchEvent(
+          new CustomEvent("kinesis:agent-tab-request", {
+            detail: requestedTab,
+          }),
+        );
+        url.searchParams.delete("mobileTab");
+        window.history.replaceState(window.history.state, "", url);
+      },
+      0,
+    );
+    return () => window.clearTimeout(timerId);
+  }, [loading, profile, selectTab, tabs]);
+
   const loadWorkspace = useCallback(async () => {
     setError(null);
     try {
@@ -809,6 +829,7 @@ export default function AgentWorkspace() {
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) throw new Error("La déconnexion n’a pas abouti.");
+      window.dispatchEvent(new Event("kinesis:role-mobile-reset"));
       router.push("/");
       router.refresh();
     } catch (logoutError) {

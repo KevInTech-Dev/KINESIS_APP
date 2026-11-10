@@ -12,6 +12,7 @@ from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
+from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
@@ -305,6 +306,18 @@ class CompanyApiTests(APITestCase):
             )
 
     def test_company_registration_stays_pending_and_cannot_login(self):
+        admin_user = User.objects.create_superuser(
+            email="registration-admin@example.com",
+            password=self.password,
+            nom="Admin",
+        )
+        inactive_admin = User.objects.create_user(
+            email="inactive-admin@example.com",
+            password=self.password,
+            nom="Admin inactif",
+            role=User.Role.ADMINISTRATEUR,
+            is_active=False,
+        )
         with patch(
             "compagnies.storage.AuthenticatedCompanyDocumentStorage.save",
             side_effect=[
@@ -345,6 +358,16 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(company.nif, "1234567890")
         self.assertNotIn("carte_cfe", response.data)
         self.assertNotIn("piece_identite_gerant", response.data)
+        admin_notification = Notification.objects.get(utilisateur=admin_user)
+        self.assertEqual(
+            admin_notification.type,
+            Notification.Type.ADMINISTRATION,
+        )
+        self.assertEqual(admin_notification.titre, "Nouveau dossier compagnie")
+        self.assertIn("Kinesis Transport", admin_notification.message)
+        self.assertFalse(
+            Notification.objects.filter(utilisateur=inactive_admin).exists()
+        )
 
         login_response = self.client.post(
             reverse("token-obtain-pair"),

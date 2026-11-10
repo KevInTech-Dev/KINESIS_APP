@@ -1,4 +1,8 @@
+from django.contrib.auth import get_user_model
+
 from .models import Notification
+
+User = get_user_model()
 
 
 def create_notification(*, utilisateur, type, titre, message):
@@ -7,6 +11,26 @@ def create_notification(*, utilisateur, type, titre, message):
         type=type,
         titre=titre,
         message=message,
+    )
+
+
+def notify_administrators(*, titre, message):
+    administrators = User.objects.filter(
+        role=User.Role.ADMINISTRATEUR,
+        is_active=True,
+    )
+    return len(
+        Notification.objects.bulk_create(
+            [
+                Notification(
+                    utilisateur=administrator,
+                    type=Notification.Type.ADMINISTRATION,
+                    titre=titre,
+                    message=message,
+                )
+                for administrator in administrators
+            ]
+        )
     )
 
 

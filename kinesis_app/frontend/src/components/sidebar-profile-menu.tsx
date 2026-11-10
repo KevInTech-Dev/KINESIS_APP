@@ -230,7 +230,7 @@ export default function SidebarProfileMenu({
         </div>
       ) : null}
 
-      {!companyAction && viewingProfile ? (
+      {viewingProfile ? (
         <ProfileViewDialog
           profile={profile}
           name={name}

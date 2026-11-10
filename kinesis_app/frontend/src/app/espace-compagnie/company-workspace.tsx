@@ -28,6 +28,7 @@ import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import ProfileViewDialog from "@/components/profile-view-dialog";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { getPublicCities } from "@/lib/public-cities";
 import { Separator } from "@/components/ui/separator";
@@ -557,7 +558,11 @@ function CompanySidebar({
   const account = TABS.filter((item) => item.group === "account");
 
   return (
-    <Sidebar className="company-sidebar" variant="inset" collapsible="icon">
+    <Sidebar
+      className="company-sidebar company-sidebar--mobile-nav-clearance"
+      variant="inset"
+      collapsible="icon"
+    >
       <SidebarHeader className="company-sidebar__header">
         <SidebarMenu>
           <SidebarMenuItem>
@@ -689,6 +694,7 @@ function CompanySidebar({
 export default function CompanyWorkspace() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
+  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
   const [tripDialogOpen, setTripDialogOpen] = useState(false);
   const [stationDialogOpen, setStationDialogOpen] = useState(false);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
@@ -976,6 +982,95 @@ export default function CompanyWorkspace() {
     setError(null);
   }
 
+  useEffect(() => {
+    const publishMobileState = () => {
+      window.dispatchEvent(
+        new CustomEvent("kinesis:role-mobile-state", {
+          detail: {
+            role: "COMPAGNIE",
+            activeTab: tab,
+            operations: ["trips", "reservations"]
+              .map((id) => TABS.find((item) => item.id === id))
+              .filter((item) => item !== undefined)
+              .map(({ id, label }) => ({ id, label })),
+            notificationsTabId: "notifications",
+            profileTabId: "profile",
+            unreadCount: unreadNotificationCount,
+          },
+        }),
+      );
+    };
+    publishMobileState();
+    window.addEventListener(
+      "kinesis:role-mobile-state-request",
+      publishMobileState,
+    );
+    return () =>
+      window.removeEventListener(
+        "kinesis:role-mobile-state-request",
+        publishMobileState,
+      );
+  }, [tab, unreadNotificationCount]);
+
+  useEffect(() => {
+    function handleMobileTabRequest(event: Event) {
+      const tabId = (event as CustomEvent<string>).detail;
+      const item = TABS.find((candidate) => candidate.id === tabId);
+      if (item) {
+        setTab(item.id);
+        setError(null);
+      }
+    }
+    window.addEventListener("kinesis:role-mobile-tab-request", handleMobileTabRequest);
+    return () => {
+      window.removeEventListener(
+        "kinesis:role-mobile-tab-request",
+        handleMobileTabRequest,
+      );
+    };
+  }, []);
+
+  useEffect(() => {
+    function openMobileProfile() {
+      setMobileProfileOpen(true);
+    }
+
+    window.addEventListener(
+      "kinesis:role-mobile-profile-request",
+      openMobileProfile,
+    );
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("mobileProfile") === "1") {
+      url.searchParams.delete("mobileProfile");
+      window.history.replaceState(window.history.state, "", url);
+      window.setTimeout(openMobileProfile, 0);
+    }
+    return () =>
+      window.removeEventListener(
+        "kinesis:role-mobile-profile-request",
+        openMobileProfile,
+      );
+  }, []);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const requestedTab = url.searchParams.get("mobileTab");
+    if (!requestedTab || !TABS.some((item) => item.id === requestedTab)) return;
+    const timerId = window.setTimeout(
+      () => {
+        window.dispatchEvent(
+          new CustomEvent("kinesis:role-mobile-tab-request", {
+            detail: requestedTab,
+          }),
+        );
+        url.searchParams.delete("mobileTab");
+        window.history.replaceState(window.history.state, "", url);
+      },
+      0,
+    );
+    return () => window.clearTimeout(timerId);
+  }, []);
+
   function startTripCreation() {
     setEditingTrip(null);
     setTripDepartCity("");
@@ -990,6 +1085,7 @@ export default function CompanyWorkspace() {
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) throw new Error("La déconnexion n’a pas abouti.");
+      window.dispatchEvent(new Event("kinesis:role-mobile-reset"));
       router.push("/");
       router.refresh();
     } catch (logoutError) {
@@ -2190,6 +2286,14 @@ export default function CompanyWorkspace() {
           </main>
         </SidebarInset>
       </SidebarProvider>
+      {mobileProfileOpen && profile ? (
+        <ProfileViewDialog
+          profile={profile}
+          name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+          avatarClassName="company-user-avatar"
+          onClose={() => setMobileProfileOpen(false)}
+        />
+      ) : null}
     </TooltipProvider>
   );
 }

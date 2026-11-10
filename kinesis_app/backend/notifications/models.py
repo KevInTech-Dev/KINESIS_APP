@@ -12,6 +12,7 @@ class Notification(models.Model):
         BILLET = "BILLET", "Billet"
         VOYAGE = "VOYAGE", "Voyage"
         BAGAGE = "BAGAGE", "Bagage"
+        ADMINISTRATION = "ADMINISTRATION", "Administration"
 
     id_notification = models.UUIDField(
         primary_key=True,

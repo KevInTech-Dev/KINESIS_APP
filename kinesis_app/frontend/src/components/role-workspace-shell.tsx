@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Bell, LogOut, type LucideIcon } from "lucide-react";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
+import ProfileViewDialog from "@/components/profile-view-dialog";
 import {
   Sidebar,
   SidebarContent,
@@ -62,11 +63,93 @@ export default function RoleWorkspaceShell({
   onLogout,
   children,
 }: RoleWorkspaceShellProps) {
+  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
   const groups: { id: "operations" | "account"; label: string }[] = [
     { id: "operations", label: "Navigation" },
     { id: "account", label: "Compte" },
   ];
   const groupedItems = items.filter((item) => item.id !== "profile");
+
+  useEffect(() => {
+    const publishMobileState = () => {
+      window.dispatchEvent(
+        new CustomEvent("kinesis:role-mobile-state", {
+          detail: {
+            role: profile.role,
+            activeTab: activeId,
+            operations: items
+              .filter(
+                (item) =>
+                  item.id !== "overview" &&
+                  item.id !== "notifications" &&
+                  item.id !== "profile" &&
+                  !item.href &&
+                  item.group !== "account",
+              )
+              .map(({ id, label }) => ({ id, label })),
+            notificationsTabId: items.some(
+              (item) => item.id === "notifications",
+            )
+              ? "notifications"
+              : null,
+            profileTabId: items.some((item) => item.id === "profile")
+              ? "profile"
+              : null,
+            unreadCount: notificationCount,
+          },
+        }),
+      );
+    };
+    publishMobileState();
+    window.addEventListener(
+      "kinesis:role-mobile-state-request",
+      publishMobileState,
+    );
+    return () =>
+      window.removeEventListener(
+        "kinesis:role-mobile-state-request",
+        publishMobileState,
+      );
+  }, [activeId, items, notificationCount, profile.role]);
+
+  useEffect(() => {
+    function openMobileProfile() {
+      setMobileProfileOpen(true);
+    }
+
+    window.addEventListener(
+      "kinesis:role-mobile-profile-request",
+      openMobileProfile,
+    );
+    const url = new URL(window.location.href);
+    if (url.searchParams.get("mobileProfile") === "1") {
+      url.searchParams.delete("mobileProfile");
+      window.history.replaceState(window.history.state, "", url);
+      window.setTimeout(openMobileProfile, 0);
+    }
+    return () =>
+      window.removeEventListener(
+        "kinesis:role-mobile-profile-request",
+        openMobileProfile,
+      );
+  }, []);
+
+  useEffect(() => {
+    function handleMobileTabRequest(event: Event) {
+      const tabId = (event as CustomEvent<string>).detail;
+      const item = items.find((candidate) => candidate.id === tabId);
+      if (!item || item.href) return;
+      if (item.id === "notifications" && onNotificationsClick) {
+        onNotificationsClick();
+      } else {
+        onSelect(item.id);
+      }
+    }
+    window.addEventListener("kinesis:role-mobile-tab-request", handleMobileTabRequest);
+    return () => {
+      window.removeEventListener("kinesis:role-mobile-tab-request", handleMobileTabRequest);
+    };
+  }, [items, onNotificationsClick, onSelect]);
 
   return (
     <TooltipProvider>
@@ -79,7 +162,15 @@ export default function RoleWorkspaceShell({
           } as CSSProperties
         }
       >
-        <Sidebar className="role-sidebar" variant="inset" collapsible="icon">
+        <Sidebar
+          className={
+            profile.role === "ADMINISTRATEUR"
+              ? "role-sidebar role-sidebar--mobile-nav-clearance"
+              : "role-sidebar"
+          }
+          variant="inset"
+          collapsible="icon"
+        >
           <SidebarHeader className="role-sidebar__header">
             <SidebarMenu>
               <SidebarMenuItem>
@@ -213,6 +304,14 @@ export default function RoleWorkspaceShell({
           <div className="role-workspace__content">{children}</div>
         </SidebarInset>
       </SidebarProvider>
+      {mobileProfileOpen ? (
+        <ProfileViewDialog
+          profile={profile}
+          name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
+          avatarClassName="role-sidebar__avatar"
+          onClose={() => setMobileProfileOpen(false)}
+        />
+      ) : null}
     </TooltipProvider>
   );
 }

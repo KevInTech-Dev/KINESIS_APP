@@ -7,6 +7,7 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
+from notifications.services import notify_administrators
 from utilisateurs.models import Utilisateur
 from voyages.models import Ville
 
@@ -99,7 +100,18 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             role=Utilisateur.Role.COMPAGNIE,
             is_active=False,
         )
-        return Compagnie.objects.create(utilisateur=utilisateur, **validated_data)
+        company = Compagnie.objects.create(
+            utilisateur=utilisateur,
+            **validated_data,
+        )
+        notify_administrators(
+            titre="Nouveau dossier compagnie",
+            message=(
+                f"La compagnie « {company.nom_commercial or company.raison_sociale} » "
+                "a soumis son inscription et attend votre validation."
+            ),
+        )
+        return company
 
     def to_representation(self, instance):
         return CompanyProfileSerializer(instance, context=self.context).data

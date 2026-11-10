@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   ChartNoAxesCombined,
+  Bell,
   Building2,
   ExternalLink,
   UsersRound,
@@ -100,7 +101,16 @@ type UserSummary = {
   roles: Record<UserRole, number>;
   registrations: { date: string; count: number }[];
 };
-type Section = "companies" | "accounts";
+type AdminNotification = {
+  id_notification: string;
+  type: string;
+  titre: string;
+  message: string;
+  lue: boolean;
+  date_lecture: string | null;
+  date_creation: string;
+};
+type Section = "companies" | "accounts" | "notifications";
 
 const USER_RANGES: { id: UserRange; label: string; days: number }[] = [
   { id: "7", label: "7 jours", days: 7 },
@@ -282,6 +292,20 @@ function parseUserSummary(value: unknown): UserSummary {
   };
 }
 
+function isAdminNotification(value: unknown): value is AdminNotification {
+  return (
+    isRecord(value) &&
+    typeof value.id_notification === "string" &&
+    typeof value.type === "string" &&
+    typeof value.titre === "string" &&
+    typeof value.message === "string" &&
+    typeof value.lue === "boolean" &&
+    (typeof value.date_lecture === "string" || value.date_lecture === null) &&
+    typeof value.date_creation === "string" &&
+    Number.isFinite(Date.parse(value.date_creation))
+  );
+}
+
 function getUserRegistrationBuckets(
   registrations: UserSummary["registrations"],
   range: UserRange,
@@ -400,6 +424,10 @@ export default function AdministrationWorkspace() {
   const [userRange, setUserRange] = useState<UserRange>("7");
   const [userSearchInput, setUserSearchInput] = useState("");
   const [userSearch, setUserSearch] = useState("");
+  const [notifications, setNotifications] = useState<AdminNotification[]>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
+  const [notificationsError, setNotificationsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [listLoading, setListLoading] = useState(false);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -411,6 +439,145 @@ export default function AdministrationWorkspace() {
     company: CompanyApplication;
     action: Action;
   } | null>(null);
+  const unreadNotificationCount = notifications.filter(
+    (notification) => !notification.lue,
+  ).length;
+
+  const loadNotifications = useCallback(async () => {
+    setNotificationsLoading(true);
+    setNotificationsError(null);
+    try {
+      const response = await fetch("/api/notifications?page_size=100", {
+        cache: "no-store",
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        throw new Error(
+          getUserFacingApiError(
+            payload,
+            "Impossible de charger les notifications.",
+            response.status,
+          ),
+        );
+      }
+      const results =
+        isRecord(payload) && "results" in payload ? payload.results : payload;
+      if (!Array.isArray(results) || !results.every(isAdminNotification)) {
+        throw new Error("La liste des notifications reçue est invalide.");
+      }
+      setNotifications(results);
+      window.dispatchEvent(
+        new CustomEvent("kinesis:unread-notifications", {
+          detail: results.filter((notification) => !notification.lue).length,
+        }),
+      );
+    } catch (loadError) {
+      console.error("Administration notifications loading failed", loadError);
+      setNotificationsError(
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger les notifications. Réessayez dans quelques instants.",
+        ),
+      );
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }, []);
+
+  const markNotificationRead = useCallback(async (notificationId: string) => {
+    setNotificationsSaving(true);
+    setNotificationsError(null);
+    try {
+      const response = await fetch(
+        `/api/notifications/${encodeURIComponent(notificationId)}/lire`,
+        { method: "POST" },
+      );
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok || !isAdminNotification(payload)) {
+        throw new Error(
+          getUserFacingApiError(
+            payload,
+            "La notification n’a pas pu être marquée comme lue.",
+            response.status,
+          ),
+        );
+      }
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.id_notification === payload.id_notification
+            ? payload
+            : notification,
+        ),
+      );
+      if (
+        !notifications.find(
+          (notification) =>
+            notification.id_notification === payload.id_notification,
+        )?.lue
+      ) {
+        window.dispatchEvent(
+          new CustomEvent("kinesis:unread-notifications", {
+            detail: Math.max(0, unreadNotificationCount - 1),
+          }),
+        );
+      }
+    } catch (readError) {
+      console.error("Administration notification read failed", readError);
+      setNotificationsError(
+        getUserFacingErrorMessage(
+          readError,
+          "La notification n’a pas pu être mise à jour.",
+        ),
+      );
+    } finally {
+      setNotificationsSaving(false);
+    }
+  }, [notifications, unreadNotificationCount]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    setNotificationsSaving(true);
+    setNotificationsError(null);
+    try {
+      const response = await fetch("/api/notifications/lire-tout", {
+        method: "POST",
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (
+        !response.ok ||
+        !isRecord(payload) ||
+        typeof payload.updated !== "number"
+      ) {
+        throw new Error(
+          getUserFacingApiError(
+            payload,
+            "Les notifications n’ont pas pu être mises à jour.",
+            response.status,
+          ),
+        );
+      }
+      const dateLecture = new Date().toISOString();
+      setNotifications((current) =>
+        current.map((notification) =>
+          notification.lue
+            ? notification
+            : { ...notification, lue: true, date_lecture: dateLecture },
+        ),
+      );
+      window.dispatchEvent(
+        new CustomEvent("kinesis:unread-notifications", { detail: 0 }),
+      );
+    } catch (readError) {
+      console.error("Administration mark-all-read failed", readError);
+      setNotificationsError(
+        getUserFacingErrorMessage(
+          readError,
+          "Les notifications n’ont pas pu être mises à jour.",
+        ),
+      );
+    } finally {
+      setNotificationsSaving(false);
+    }
+  }, []);
 
   const loadCompanies = useCallback(
     async (filter: StatusFilter, pageNumber: number, itemsPerPage: number) => {
@@ -586,6 +753,52 @@ export default function AdministrationWorkspace() {
     userSearch,
   ]);
 
+  useEffect(() => {
+    if (!profile || profile.role !== "ADMINISTRATEUR") return;
+    let active = true;
+    const refresh = () => {
+      if (active && document.visibilityState === "visible") {
+        void loadNotifications();
+      }
+    };
+    void Promise.resolve().then(refresh);
+    const intervalId = window.setInterval(refresh, 60_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [loadNotifications, profile]);
+
+  useEffect(() => {
+    if (!profile || profile.role !== "ADMINISTRATEUR") return;
+    const url = new URL(window.location.href);
+    const requestedTab = url.searchParams.get("mobileTab");
+    if (
+      requestedTab !== "accounts" &&
+      requestedTab !== "companies" &&
+      requestedTab !== "notifications"
+    ) {
+      return;
+    }
+    const timerId = window.setTimeout(
+      () => {
+        window.dispatchEvent(
+          new CustomEvent("kinesis:role-mobile-tab-request", {
+            detail: requestedTab,
+          }),
+        );
+        url.searchParams.delete("mobileTab");
+        window.history.replaceState(window.history.state, "", url);
+      },
+      0,
+    );
+    return () => window.clearTimeout(timerId);
+  }, [profile]);
+
   async function actOnCompany(
     company: CompanyApplication,
     action: Action,
@@ -627,6 +840,7 @@ export default function AdministrationWorkspace() {
           getUserFacingApiError(result, "La déconnexion n’a pas abouti.", response.status),
         );
       }
+      window.dispatchEvent(new Event("kinesis:role-mobile-reset"));
       router.replace("/");
       router.refresh();
     } catch (signOutError) {
@@ -679,23 +893,48 @@ export default function AdministrationWorkspace() {
   const workspaceItems: RoleWorkspaceItem[] = [
     { id: "accounts", label: "Utilisateurs", icon: UsersRound, group: "operations" },
     { id: "companies", label: "Dossiers compagnies", icon: Building2, group: "operations" },
+    {
+      id: "notifications",
+      label: "Notifications",
+      icon: Bell,
+      group: "account",
+      ...(unreadNotificationCount > 0
+        ? { badge: unreadNotificationCount }
+        : {}),
+    },
     { id: "website", label: "Voir le site", icon: ExternalLink, href: "/", group: "account" },
   ];
   function selectSection(nextSection: string) {
-    if (nextSection !== "companies" && nextSection !== "accounts") return;
+    if (
+      nextSection !== "companies" &&
+      nextSection !== "accounts" &&
+      nextSection !== "notifications"
+    ) {
+      return;
+    }
     setSection(nextSection);
     setError(null);
+    if (nextSection === "notifications") {
+      void loadNotifications();
+    }
   }
+
   return (
     <RoleWorkspaceShell
       eyebrow="ESPACE ADMINISTRATION"
       title={
-        section === "companies" ? "Dossiers compagnies" : "Utilisateurs"
+        section === "companies"
+          ? "Dossiers compagnies"
+          : section === "notifications"
+            ? "Notifications"
+            : "Utilisateurs"
       }
       profile={profile}
       activeId={section}
       items={workspaceItems}
+      notificationCount={unreadNotificationCount}
       onSelect={selectSection}
+      onNotificationsClick={() => selectSection("notifications")}
       onProfileUpdated={setProfile}
       onLogout={() => void signOut()}
     >
@@ -711,6 +950,15 @@ export default function AdministrationWorkspace() {
                     Les documents sont privés et réservés aux administrateurs
                     KINESIS. L’approbation envoie un lien d’activation à l’entreprise.
                     Les dossiers sont triés du plus récent au plus ancien, puis par statut et nom commercial.
+                  </p>
+                </>
+              ) : section === "notifications" ? (
+                <>
+                  <p className="admin-eyebrow">CENTRE DE NOTIFICATIONS</p>
+                  <h2>Suivez les événements importants de KINESIS.</h2>
+                  <p>
+                    Les nouveaux dossiers compagnie en attente de validation
+                    apparaissent ici.
                   </p>
                 </>
               ) : (
@@ -739,7 +987,104 @@ export default function AdministrationWorkspace() {
             </div>
           ) : null}
 
-          {section === "companies" ? <section className="admin-panel" aria-label="Dossiers compagnies">
+          {section === "notifications" ? (
+            <section className="admin-panel" aria-label="Notifications">
+              <div className="admin-panel-heading">
+                <div>
+                  <h2>Notifications reçues</h2>
+                  <p>
+                    {unreadNotificationCount
+                      ? `${unreadNotificationCount} non lue(s)`
+                      : "Vous êtes à jour."}
+                  </p>
+                </div>
+                <div className="admin-notification-actions">
+                  {unreadNotificationCount > 0 ? (
+                    <button
+                      className="admin-refresh"
+                      type="button"
+                      onClick={() => void markAllNotificationsRead()}
+                      disabled={notificationsSaving}
+                    >
+                      Tout marquer comme lu
+                    </button>
+                  ) : null}
+                  <button
+                    className="admin-refresh"
+                    type="button"
+                    onClick={() => void loadNotifications()}
+                    disabled={notificationsLoading}
+                  >
+                    {notificationsLoading ? "Actualisation…" : "Actualiser"}
+                  </button>
+                </div>
+              </div>
+              {notificationsError ? (
+                <div className="admin-feedback admin-feedback--error" role="alert">
+                  <span>{notificationsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => void loadNotifications()}
+                    disabled={notificationsLoading}
+                  >
+                    Réessayer
+                  </button>
+                </div>
+              ) : null}
+              {notificationsLoading && !notifications.length ? (
+                <p className="admin-empty">Chargement des notifications…</p>
+              ) : notifications.length ? (
+                <div className="admin-notification-list">
+                  {notifications.map((notification) => (
+                    <article
+                      className={`admin-notification-card${notification.lue ? " is-read" : " is-unread"}`}
+                      key={notification.id_notification}
+                    >
+                      <div className="admin-notification-card__copy">
+                        <div>
+                          <span className="admin-notification-card__type">
+                            {notification.type === "ADMINISTRATION"
+                              ? "Administration"
+                              : notification.type}
+                          </span>
+                          {!notification.lue ? (
+                            <span className="admin-notification-card__unread">
+                              Non lue
+                            </span>
+                          ) : null}
+                        </div>
+                        <h3>{notification.titre}</h3>
+                        <p>{notification.message}</p>
+                        <time dateTime={notification.date_creation}>
+                          {new Intl.DateTimeFormat("fr-FR", {
+                            dateStyle: "long",
+                            timeStyle: "short",
+                          }).format(new Date(notification.date_creation))}
+                        </time>
+                      </div>
+                      {!notification.lue ? (
+                        <button
+                          className="admin-notification-card__read"
+                          type="button"
+                          onClick={() =>
+                            void markNotificationRead(notification.id_notification)
+                          }
+                          disabled={notificationsSaving}
+                        >
+                          Marquer comme lue
+                        </button>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              ) : !notificationsError ? (
+                <div className="admin-empty">
+                  <strong>Aucune notification pour le moment</strong>
+                  <span>Les événements importants apparaîtront ici.</span>
+                </div>
+              ) : null}
+            </section>
+          ) : section === "companies" ? <section className="admin-panel" aria-label="Dossiers compagnies">
             <div className="admin-panel-heading">
               <div>
                 <h2>Demandes d’inscription</h2>
