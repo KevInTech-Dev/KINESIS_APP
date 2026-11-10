@@ -11418,6 +11418,21 @@ select:focus-visible {
   box-shadow: 0 17px 38px rgb(24 51 42 / 12%);
 }
 
+.home-trip-card {
+  position: relative;
+  min-width: 0;
+}
+
+.home-trip-card__select {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  width: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+}
+
 .catalog-card--skeleton {
   display: block;
   overflow: hidden;
@@ -14366,5 +14381,22 @@ select:focus-visible {
   .traveler-workspace-content .traveler-profile-action {
     grid-column: 1 / -1;
     grid-row: auto;
+  }
+}
+
+/* Le hero occupe le premier écran sur mobile */
+@media (max-width: 700px) {
+  .hero {
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+  }
+}
+
+/* Un peu plus d’air en haut dans l’application installée */
+@media (max-width: 700px) and (display-mode: standalone) {
+  .hero__inner {
+    padding-top: calc(180px + env(safe-area-inset-top, 0px));
+    padding-bottom: max(28px, env(safe-area-inset-bottom, 0px));
   }
 }

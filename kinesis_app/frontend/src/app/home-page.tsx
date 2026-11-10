@@ -232,50 +232,44 @@ function TripCard({
   onBook?: (trip: Voyage) => void;
 }) {
   return (
-    <article className="trip-card">
+    <article className="catalog-card home-trip-card">
       {onSelect || onBook ? (
         <button
-          className="trip-card__select"
+          className="home-trip-card__select"
           onClick={() => (onBook ?? onSelect)?.(trip)}
           type="button"
           aria-label={`${onBook ? "Consulter" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
         />
       ) : null}
-      <VoyageCoverImage
-        image={trip.image}
-        voyageId={trip.id_voyage}
-        alt=""
-        sizes="(max-width: 700px) 90vw, (max-width: 1100px) 45vw, 33vw"
-        className="trip-card__image"
-      />
-      <div className="trip-card__shade" />
-      <span className="trip-card__badge">
-        {trip.places_disponibles}{" "}
-        {trip.places_disponibles > 1 ? "places disponibles" : "place disponible"}
-      </span>
-      <div className="trip-card__content">
-        <p className="trip-card__route">
-          {trip.ville_depart_nom} <Icon name="arrow" className="icon-small" />{" "}
+      <div className="catalog-card__image">
+        <VoyageCoverImage
+          image={trip.image}
+          voyageId={trip.id_voyage}
+          alt=""
+          sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw"
+        />
+        <span>
+          {trip.places_disponibles} place
+          {trip.places_disponibles > 1 ? "s" : ""} disponible
+          {trip.places_disponibles > 1 ? "s" : ""}
+        </span>
+      </div>
+      <div className="catalog-card__body">
+        <p className="catalog-card__company">{trip.compagnie_nom || "Compagnie"}</p>
+        <h3>
+          {trip.ville_depart_nom} <span aria-hidden="true">→</span>{" "}
           {trip.ville_arrivee_nom}
-        </p>
-        <div className="trip-card__heading">
-          <div>
-            <h3>{trip.compagnie_nom || "Compagnie"}</h3>
-          </div>
-          <span className="trip-card__arrow" aria-hidden="true">
-            <Icon name="arrow" />
-          </span>
+        </h3>
+        <div className="catalog-card__meta">
+          <span>{formatDate(trip.date_depart)}</span>
+          <span>{trip.heure_depart.slice(0, 5)}</span>
         </div>
-        <div className="trip-card__details">
-          <span>
-            <Icon name="calendar" className="icon-small" />
-            {formatDate(trip.date_depart)}
-          </span>
-          <span>
-            <Icon name="clock" className="icon-small" />
-            {trip.heure_depart.slice(0, 5)}
-          </span>
+        <div className="catalog-card__footer">
           <strong>{formatPrice(trip.prix)}</strong>
+          <span>
+            {onSelect ? "Choisir ce voyage" : "Voir le voyage"}{" "}
+            <span aria-hidden="true">→</span>
+          </span>
         </div>
       </div>
     </article>
