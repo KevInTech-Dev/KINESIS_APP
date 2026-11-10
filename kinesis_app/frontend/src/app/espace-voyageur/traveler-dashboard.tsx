@@ -15,7 +15,7 @@ import {
   CreditCard,
   Download,
   ExternalLink,
-  LayoutDashboard,
+  House,
   Luggage,
   LogOut,
   MapPin,
@@ -165,22 +165,13 @@ const travelerTabs: {
   label: string;
   icon: LucideIcon;
 }[] = [
-  { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
+  { id: "overview", label: "Vue d’ensemble", icon: House },
   { id: "reservations", label: "Réservations", icon: CalendarDays },
   { id: "baggages", label: "Mes bagages", icon: Luggage },
   { id: "tickets", label: "Mes billets", icon: Ticket },
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "profile", label: "Mon profil", icon: UserRound },
 ];
-
-const travelerMobileTabLabels: Record<TravelerTab, string> = {
-  overview: "Accueil",
-  reservations: "Réserv.",
-  baggages: "Bagages",
-  tickets: "Billets",
-  notifications: "Alertes",
-  profile: "Profil",
-};
 
 const statusLabels: Record<string, string> = {
   EN_ATTENTE_PAIEMENT: "En attente de paiement",
@@ -517,6 +508,32 @@ export default function TravelerDashboard() {
   useEffect(() => {
     const timer = window.setInterval(() => setCurrentTime(Date.now()), 1000);
     return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    const queryTimer =
+      requestedTab === "notifications"
+        ? window.setTimeout(() => {
+            setActiveTab("notifications");
+            window.dispatchEvent(
+              new CustomEvent<TravelerTab>("kinesis:traveler-tab", {
+                detail: "notifications",
+              }),
+            );
+          }, 0)
+        : undefined;
+
+    function handleTravelerTab(event: Event) {
+      const tab = (event as CustomEvent<TravelerTab>).detail;
+      if (tab === "overview" || tab === "notifications") setActiveTab(tab);
+    }
+
+    window.addEventListener("kinesis:traveler-tab", handleTravelerTab);
+    return () => {
+      if (queryTimer !== undefined) window.clearTimeout(queryTimer);
+      window.removeEventListener("kinesis:traveler-tab", handleTravelerTab);
+    };
   }, []);
 
   const loadDashboard = useCallback(async () => {
@@ -1244,6 +1261,14 @@ export default function TravelerDashboard() {
   const activeTitle =
     travelerTabs.find((tab) => tab.id === activeTab)?.label ?? "Vue d’ensemble";
 
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent<number>("kinesis:unread-notifications", {
+        detail: unreadNotifications,
+      }),
+    );
+  }, [unreadNotifications]);
+
   if (loading) {
     return <KinesisLoader message="Chargement de votre espace voyageur…" />;
   }
@@ -1281,7 +1306,7 @@ export default function TravelerDashboard() {
           </Link>
 
           <nav className="traveler-app-nav" aria-label="Navigation de l’espace voyageur">
-            {travelerTabs.map((tab) => {
+            {travelerTabs.filter((tab) => tab.id !== "profile").map((tab) => {
               const Icon = tab.icon;
               const badge =
                 tab.id === "notifications"
@@ -1300,7 +1325,9 @@ export default function TravelerDashboard() {
                   <Icon aria-hidden="true" />
                   <span>{tab.label}</span>
                   {badge > 0 ? (
-                    <span className="traveler-app-nav__badge">
+                    <span
+                      className={`traveler-app-nav__badge${tab.id === "notifications" ? " traveler-app-nav__badge--notification" : ""}`}
+                    >
                       {badge > 99 ? "99+" : badge}
                     </span>
                   ) : null}
@@ -1348,51 +1375,17 @@ export default function TravelerDashboard() {
             </button>
           </div>
         ) : null}
-        <div className="traveler-page-heading">
-          <div>
-            <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
-            <h2>
-              {activeTab === "overview"
-                ? `Salut ${profile.prenoms || profile.nom}`
-                : activeTitle}
-            </h2>
-            <p>
-              {activeTab === "overview"
-                ? "Voici le résumé de vos réservations et de vos prochains départs."
-                : activeTab === "reservations"
-                  ? "Consultez et gérez vos réservations de voyage."
-                  : activeTab === "tickets"
-                    ? "Retrouvez vos billets et leurs codes de vérification."
-                    : activeTab === "notifications"
-                      ? "Suivez les informations concernant vos réservations et vos voyages."
-                      : "Consultez et mettez à jour les informations de votre compte."}
-            </p>
-          </div>
-          {activeTab !== "profile" ? (
-            <Link className="traveler-primary-link" href="/voyages">
-              <Search aria-hidden="true" />
-              Rechercher un voyage
-            </Link>
-          ) : null}
-        </div>
-
-
         {activeTab === "overview" ? (
-          <div className="traveler-overview-layout">
-            <aside className="traveler-github-profile">
+          <section className="traveler-overview-welcome" aria-label="Bienvenue">
+            <div className="traveler-overview-welcome__photo">
               <ProfileAvatar
                 className="traveler-github-avatar"
                 fallbackClassName="traveler-profile-photo--fallback"
                 src={profile.photo_profil}
                 name={displayName}
-                size={112}
+                size={104}
                 alt={`Photo de ${displayName}`}
               />
-              <h3>{displayName || "Voyageur KINESIS"}</h3>
-              <p className="traveler-github-handle">{profile.email}</p>
-              {profile.telephone ? (
-                <p className="traveler-profile-phone">{profile.telephone}</p>
-              ) : null}
               <button
                 type="button"
                 className="traveler-profile-action"
@@ -1400,12 +1393,44 @@ export default function TravelerDashboard() {
               >
                 Voir mon profil
               </button>
-              <p className="traveler-profile-note">
-                <BusFront aria-hidden="true" />
-                Voyageur KINESIS
+            </div>
+            <div className="traveler-overview-welcome__copy">
+              <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
+              <h2>Bienvenue {profile.prenoms || profile.nom}</h2>
+              <h3>{displayName || "Voyageur KINESIS"}</h3>
+              <p className="traveler-overview-welcome__email">{profile.email}</p>
+              <p className="traveler-overview-welcome__summary">
+                Voici le résumé de vos réservations et de vos prochains départs.
               </p>
-            </aside>
+            </div>
+          </section>
+        ) : (
+          <div className="traveler-page-heading">
+            <div>
+              <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
+              <h2>{activeTitle}</h2>
+              <p>
+                {activeTab === "reservations"
+                  ? "Consultez et gérez vos réservations de voyage."
+                  : activeTab === "tickets"
+                    ? "Retrouvez vos billets et leurs codes de vérification."
+                    : activeTab === "notifications"
+                      ? "Suivez les informations concernant vos réservations et vos voyages."
+                      : "Consultez et mettez à jour les informations de votre compte."}
+              </p>
+            </div>
+            {activeTab !== "profile" ? (
+              <Link className="traveler-primary-link" href="/voyages">
+                <Search aria-hidden="true" />
+                Rechercher un voyage
+              </Link>
+            ) : null}
+          </div>
+        )}
 
+
+        {activeTab === "overview" ? (
+          <div className="traveler-overview-layout">
             <div className="traveler-overview-main">
               <section className="traveler-repository-grid" aria-label="Résumé du compte">
                 <button type="button" onClick={() => setActiveTab("reservations")}>
@@ -2209,36 +2234,6 @@ export default function TravelerDashboard() {
         </div>
       </main>
 
-      <nav className="traveler-app-bottom-nav" aria-label="Navigation mobile de l’espace voyageur">
-        {travelerTabs.map((tab) => {
-          const Icon = tab.icon;
-          const badge =
-            tab.id === "notifications"
-              ? unreadNotifications
-              : tab.id === "reservations"
-                ? pendingReservations
-                : 0;
-          return (
-            <button
-              type="button"
-              key={tab.id}
-              className={activeTab === tab.id ? "is-active" : ""}
-              aria-current={activeTab === tab.id ? "page" : undefined}
-              onClick={() => setActiveTab(tab.id)}
-            >
-              <span className="traveler-app-bottom-nav__icon">
-                <Icon aria-hidden="true" />
-                {badge > 0 ? (
-                  <span className="traveler-app-bottom-nav__badge">
-                    {badge > 99 ? "99+" : badge}
-                  </span>
-                ) : null}
-              </span>
-              <span>{travelerMobileTabLabels[tab.id]}</span>
-            </button>
-          );
-        })}
-      </nav>
     </div>
   );
 }

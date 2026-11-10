@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import "./globals.css";
 import { Manrope } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
+import MobileAppNav from "@/components/mobile-app-nav";
 import { ServiceWorkerRegistration } from "./service-worker-registration";
 
 const manrope = Manrope({
@@ -51,6 +53,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body>
         <ServiceWorkerRegistration />
         {children}
+        <Suspense fallback={null}>
+          <MobileAppNav />
+        </Suspense>
         <Toaster />
       </body>
     </html>

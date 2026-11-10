@@ -557,6 +557,24 @@ export default function HomePage() {
     return () => window.removeEventListener("scroll", updateHeaderOnScroll);
   }, []);
 
+  useEffect(() => {
+    function openSearchDialog() {
+      setSearchDialogOpen(true);
+    }
+
+    window.addEventListener("kinesis:open-search", openSearchDialog);
+    let queryTimer: number | undefined;
+    if (new URLSearchParams(window.location.search).get("openSearch") === "1") {
+      queryTimer = window.setTimeout(openSearchDialog, 0);
+      window.history.replaceState(window.history.state, "", "/");
+    }
+
+    return () => {
+      if (queryTimer !== undefined) window.clearTimeout(queryTimer);
+      window.removeEventListener("kinesis:open-search", openSearchDialog);
+    };
+  }, []);
+
   function swapCities() {
     setFrom(to);
     setTo(from);
