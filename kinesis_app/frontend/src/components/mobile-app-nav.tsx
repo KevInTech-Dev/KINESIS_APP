@@ -2,7 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, BusFront, House, Search, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  Bell,
+  BusFront,
+  House,
+  Search,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 type TravelerTabRequest = "overview" | "notifications";
@@ -40,6 +47,65 @@ export default function MobileAppNav() {
       );
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    async function refreshUnreadCount() {
+      try {
+        const response = await fetch("/api/notifications?page_size=100", {
+          cache: "no-store",
+        });
+        if (response.status === 401 || response.status === 403) {
+          if (active) setUnreadCount(0);
+          return;
+        }
+        if (!response.ok) {
+          throw new Error(`Les alertes n’ont pas pu être chargées (${response.status}).`);
+        }
+
+        const payload: unknown = await response.json();
+        const notifications =
+          typeof payload === "object" &&
+          payload !== null &&
+          "results" in payload
+            ? payload.results
+            : payload;
+        if (
+          !Array.isArray(notifications) ||
+          !notifications.every(
+            (notification) =>
+              typeof notification === "object" &&
+              notification !== null &&
+              "lue" in notification &&
+              typeof notification.lue === "boolean",
+          )
+        ) {
+          throw new Error("La liste des alertes reçue est invalide.");
+        }
+        if (active) {
+          setUnreadCount(
+            notifications.filter((notification) => !notification.lue).length,
+          );
+        }
+      } catch (error) {
+        if (active) console.error("Could not load mobile unread alerts", error);
+      }
+    }
+
+    void refreshUnreadCount();
+    return () => {
+      active = false;
+    };
+  }, [pathname]);
+
+  function goBack() {
+    if (window.history.length > 1) {
+      router.back();
+      return;
+    }
+    router.push("/");
+  }
+
   function openTravelerTab(tab: TravelerTabRequest) {
     setSelectedTab(tab);
     if (isTravelerSpace) {
@@ -68,7 +134,20 @@ export default function MobileAppNav() {
   }
 
   return (
-    <nav className="mobile-app-nav" aria-label="Navigation principale mobile">
+    <>
+      {pathname !== "/" ? (
+        <button
+          type="button"
+          className="app-back-button"
+          onClick={goBack}
+          aria-label="Revenir à la page précédente"
+          title="Retour"
+        >
+          <ArrowLeft aria-hidden="true" />
+          <span>Retour</span>
+        </button>
+      ) : null}
+      <nav className="mobile-app-nav" aria-label="Navigation principale mobile">
       <Link
         href="/"
         className={pathname === "/" ? "is-active" : ""}
@@ -91,9 +170,7 @@ export default function MobileAppNav() {
       </button>
       <button
         type="button"
-        className={
-          isTravelerSpace && selectedTab === "notifications" ? "is-active" : ""
-        }
+        className={isTravelerSpace && selectedTab === "notifications" ? "is-active" : ""}
         aria-current={
           isTravelerSpace && selectedTab === "notifications" ? "page" : undefined
         }
@@ -101,7 +178,7 @@ export default function MobileAppNav() {
       >
         <span className="mobile-app-nav__icon">
           <Bell aria-hidden="true" />
-          {isTravelerSpace && unreadCount > 0 ? (
+          {unreadCount > 0 ? (
             <span className="mobile-app-nav__badge">
               {unreadCount > 99 ? "99+" : unreadCount}
             </span>
@@ -111,9 +188,7 @@ export default function MobileAppNav() {
       </button>
       <button
         type="button"
-        className={
-          isTravelerSpace && selectedTab === "overview" ? "is-active" : ""
-        }
+        className={isTravelerSpace && selectedTab === "overview" ? "is-active" : ""}
         aria-current={
           isTravelerSpace && selectedTab === "overview" ? "page" : undefined
         }
@@ -122,6 +197,7 @@ export default function MobileAppNav() {
         <UserRound aria-hidden="true" />
         <span>Profil</span>
       </button>
-    </nav>
+      </nav>
+    </>
   );
 }

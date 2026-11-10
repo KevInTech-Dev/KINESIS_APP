@@ -1,17 +1,39 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowUpRight, MapPin, UsersRound } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  ArrowUpRight,
+  MapPin,
+  Minus,
+  Plus,
+  UsersRound,
+} from "lucide-react";
 import type { Voyage } from "@/lib/types";
 import KinesisLoader from "@/components/kinesis-loader";
 import VoyageCoverImage from "@/components/voyage-cover-image";
 import VoyagesPageHeader from "@/components/voyages-page-header";
 import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
 import { cacheVoyages, getCachedVoyage, isCachedVoyage } from "@/lib/voyage-cache";
+import { isUserProfile, type UserProfile } from "@/lib/user-profile";
+import {
+  isReservationDraft,
+  reservationDraftKey,
+} from "@/lib/reservation-draft";
+
+type BaggageTariff = {
+  id_tarif: string;
+  poids_min: string | number;
+  poids_max: string | number;
+  prix: string | number;
+};
 
 function formatPrice(price: string | number) {
-  return `${new Intl.NumberFormat("fr-FR").format(Number(price))} FCFA`;
+  const amount = Number(price);
+  return Number.isFinite(amount)
+    ? `${new Intl.NumberFormat("fr-FR").format(amount)} FCFA`
+    : "Prix indisponible";
 }
 
 function formatDate(date: string) {
@@ -20,6 +42,7 @@ function formatDate(date: string) {
     day: "numeric",
     month: "long",
     year: "numeric",
+    timeZone: "UTC",
   }).format(new Date(`${date}T12:00:00`));
 }
 
@@ -30,16 +53,68 @@ export default function VoyageDetailClient({
   voyageId: string;
   passengerCount: number;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const cachedTrip = getCachedVoyage(voyageId);
   const [trip, setTrip] = useState<Voyage | null>(() => cachedTrip);
   const [loading, setLoading] = useState(() => !cachedTrip);
   const [error, setError] = useState("");
-  const passengers =
+  const initialPassengerCount =
     Number.isFinite(passengerCount) && passengerCount > 0 ? passengerCount : 1;
+  const [passengers, setPassengers] = useState(initialPassengerCount);
+  const [passengerNames, setPassengerNames] = useState<string[]>(() =>
+    Array.from({ length: initialPassengerCount }, () => ""),
+  );
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+  const [profileError, setProfileError] = useState("");
+  const [baggageAnswer, setBaggageAnswer] = useState<boolean | null>(null);
+  const [baggageTariffs, setBaggageTariffs] = useState<BaggageTariff[] | null>(
+    null,
+  );
+  const [loadingBaggageTariffs, setLoadingBaggageTariffs] = useState(false);
+  const [baggageTariffError, setBaggageTariffError] = useState("");
+  const [bookingError, setBookingError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const total = useMemo(
+    () => (trip ? Number(trip.prix) * passengers : 0),
+    [trip, passengers],
+  );
+
+  useEffect(() => {
+    if (pathname !== `/voyages/${voyageId}`) return;
+    const resetTimer = window.setTimeout(() => setSubmitting(false), 0);
+    return () => window.clearTimeout(resetTimer);
+  }, [pathname, voyageId]);
 
   useEffect(() => {
     let active = true;
     const cachedVoyage = getCachedVoyage(voyageId);
+    const restoreDraftTimer = window.setTimeout(() => {
+      try {
+        const storedValue = window.sessionStorage.getItem(
+          reservationDraftKey(voyageId),
+        );
+        if (!storedValue) return;
+        const parsedDraft: unknown = JSON.parse(storedValue);
+        if (!isReservationDraft(parsedDraft)) {
+          throw new Error("Les informations de réservation sauvegardées sont invalides.");
+        }
+        if (!active) return;
+        setPassengers(parsedDraft.passengers.length);
+        setPassengerNames(parsedDraft.passengers);
+        setBaggageAnswer(parsedDraft.hasBaggage);
+      } catch (draftError: unknown) {
+        if (active) {
+          setBookingError(
+            getUserFacingErrorMessage(
+              draftError,
+              "Les informations de réservation sauvegardées sont invalides.",
+            ),
+          );
+        }
+      }
+    }, 0);
 
     async function loadTrip() {
       setError("");
@@ -75,15 +150,165 @@ export default function VoyageDetailClient({
       }
     }
     if (voyageId) void loadTrip();
+
+    void fetch("/api/auth/session", { cache: "no-store" })
+      .then(async (response) => {
+        if (response.status === 401) return null;
+        if (!response.ok) {
+          throw new Error(`Le profil n’a pas pu être chargé (${response.status}).`);
+        }
+        const result: unknown = await response.json();
+        if (!isUserProfile(result)) {
+          throw new Error("Le profil reçu du serveur est invalide.");
+        }
+        return result;
+      })
+      .then((result) => {
+        if (!active || !result) return;
+        setProfile(result);
+        const fullName = [result.prenoms, result.nom].filter(Boolean).join(" ");
+        setPassengerNames((current) =>
+          current.map((name, index) => (index === 0 && !name ? fullName : name)),
+        );
+      })
+      .catch((profileLoadError: unknown) => {
+        if (active) {
+          setProfileError(
+            getUserFacingErrorMessage(
+              profileLoadError,
+              "La session ne peut pas être vérifiée.",
+            ),
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoadingProfile(false);
+      });
+
     return () => {
       active = false;
+      window.clearTimeout(restoreDraftTimer);
     };
   }, [voyageId]);
 
+  async function answerBaggageQuestion(answer: boolean) {
+    setBaggageAnswer(answer);
+    setBaggageTariffError("");
+    if (!answer || baggageTariffs !== null || !trip) return;
+
+    setLoadingBaggageTariffs(true);
+    try {
+      const response = await fetch(
+        `/api/voyages/${encodeURIComponent(trip.id_voyage)}/tarifs-bagages`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        throw new Error(`Les tarifs de bagages n’ont pas pu être chargés (${response.status}).`);
+      }
+      const payload: unknown = await response.json();
+      const items =
+        typeof payload === "object" &&
+        payload !== null &&
+        "results" in payload
+          ? payload.results
+          : payload;
+      if (
+        !Array.isArray(items) ||
+        !items.every(
+          (item): item is BaggageTariff =>
+            typeof item === "object" &&
+            item !== null &&
+            "id_tarif" in item &&
+            typeof item.id_tarif === "string" &&
+            "poids_min" in item &&
+            (typeof item.poids_min === "string" ||
+              typeof item.poids_min === "number") &&
+            "poids_max" in item &&
+            (typeof item.poids_max === "string" ||
+              typeof item.poids_max === "number") &&
+            "prix" in item &&
+            (typeof item.prix === "string" || typeof item.prix === "number"),
+        )
+      ) {
+        throw new Error("Les tarifs de bagages reçus sont invalides.");
+      }
+      setBaggageTariffs(items);
+    } catch (loadError: unknown) {
+      setBaggageTariffError(
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger les tarifs des bagages.",
+        ),
+      );
+    } finally {
+      setLoadingBaggageTariffs(false);
+    }
+  }
+
+  function updatePassengerCount(nextCount: number) {
+    const next = Math.min(Math.max(nextCount, 1), 100);
+    setPassengers(next);
+    setPassengerNames((current) =>
+      Array.from({ length: next }, (_, index) => current[index] ?? ""),
+    );
+    setBookingError("");
+  }
+
+  function continueToReservation(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!trip) return;
+    if (profileError) {
+      setBookingError(profileError);
+      return;
+    }
+    if (trip.places_disponibles < passengers) {
+      setBookingError(
+        `Il ne reste que ${trip.places_disponibles} place${trip.places_disponibles > 1 ? "s" : ""} disponible${trip.places_disponibles > 1 ? "s" : ""}.`,
+      );
+      return;
+    }
+    if (passengerNames.length !== passengers || passengerNames.some((name) => !name.trim())) {
+      setBookingError("Saisissez le nom complet de chaque passager.");
+      return;
+    }
+    if (baggageAnswer === null) {
+      setBookingError("Indiquez si vous avez des bagages.");
+      return;
+    }
+    if (profile && profile.role !== "VOYAGEUR") {
+      setBookingError("La réservation est réservée aux comptes voyageurs.");
+      return;
+    }
+
+    const reservationPath =
+      `/reservation/${encodeURIComponent(trip.id_voyage)}?passagers=${passengers}`;
+    try {
+      const draft = { passengers: passengerNames, hasBaggage: baggageAnswer };
+      if (!isReservationDraft(draft)) {
+        throw new Error("Les informations des passagers sont invalides.");
+      }
+      window.sessionStorage.setItem(
+        reservationDraftKey(trip.id_voyage),
+        JSON.stringify(draft),
+      );
+      setSubmitting(true);
+      if (!profile) {
+        router.push(`/connexion?next=${encodeURIComponent(reservationPath)}`);
+        return;
+      }
+      router.push(reservationPath);
+    } catch (saveError: unknown) {
+      setBookingError(
+        getUserFacingErrorMessage(
+          saveError,
+          "Les informations de réservation n’ont pas pu être conservées.",
+        ),
+      );
+      setSubmitting(false);
+    }
+  }
+
   const enoughSeats = trip !== null && trip.places_disponibles >= passengers;
-  const bookingHref = trip
-    ? `/reservation/${encodeURIComponent(trip.id_voyage)}?passagers=${passengers}`
-    : "#";
 
   if (loading) {
     return <KinesisLoader message="Chargement du voyage…" />;
@@ -194,25 +419,167 @@ export default function VoyageDetailClient({
               </div>
             </section>
 
-            <aside className="voyage-detail__booking">
+            <form
+              className="voyage-detail__booking"
+              onSubmit={continueToReservation}
+            >
               <p className="voyage-detail__section-label">RÉSERVATION</p>
               <span className="voyage-detail__price-caption">Prix par passager</span>
               <strong className="voyage-detail__price">{formatPrice(trip.prix)}</strong>
-              {enoughSeats ? (
-                <Link className="catalog-submit" href={bookingHref}>
-                  Réserver {passengers > 1 ? `pour ${passengers} passagers` : "ma place"}
-                  <span aria-hidden="true">→</span>
-                </Link>
-              ) : (
-                <p className="detail-seats-warning">
-                  Il ne reste que {trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} pour {passengers} passager{passengers > 1 ? "s" : ""}.
+              <div className="voyage-detail__passenger-count">
+                <span>Nombre de passagers</span>
+                <div className="booking-passenger-stepper">
+                  <button
+                    type="button"
+                    aria-label="Retirer un passager"
+                    onClick={() => updatePassengerCount(passengers - 1)}
+                    disabled={passengers <= 1}
+                  >
+                    <Minus aria-hidden="true" />
+                  </button>
+                  <strong aria-live="polite">{passengers}</strong>
+                  <button
+                    type="button"
+                    aria-label="Ajouter un passager"
+                    onClick={() => updatePassengerCount(passengers + 1)}
+                    disabled={
+                      passengers >= 100 ||
+                      passengers >= trip.places_disponibles
+                    }
+                  >
+                    <Plus aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+              <small className="voyage-detail__seat-hint">
+                {trip.places_disponibles} place
+                {trip.places_disponibles > 1 ? "s" : ""} disponible
+                {trip.places_disponibles > 1 ? "s" : ""}
+              </small>
+              <div className="voyage-detail__passenger-fields">
+                {passengerNames.map((name, index) => (
+                  <label key={index}>
+                    <span>Nom complet du passager {index + 1}</span>
+                    <input
+                      autoComplete={index === 0 ? "name" : "off"}
+                      maxLength={150}
+                      placeholder="Ex. Kévin ADJAKLI"
+                      required
+                      value={name}
+                      onChange={(event) =>
+                        setPassengerNames((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? event.target.value
+                              : item,
+                          ),
+                        )
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <fieldset className="voyage-detail__baggage">
+                <legend>Avez-vous des bagages ?</legend>
+                <label>
+                  <input
+                    type="radio"
+                    name="has-baggage"
+                    checked={baggageAnswer === true}
+                    onChange={() => void answerBaggageQuestion(true)}
+                  />
+                  Oui
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="has-baggage"
+                    checked={baggageAnswer === false}
+                    onChange={() => void answerBaggageQuestion(false)}
+                  />
+                  Non
+                </label>
+                {baggageAnswer === true ? (
+                  loadingBaggageTariffs ? (
+                    <p role="status">Chargement des tarifs de bagages…</p>
+                  ) : baggageTariffError ? (
+                    <div className="booking-baggage-tariff-error" role="alert">
+                      <span>{baggageTariffError}</span>
+                      <button
+                        type="button"
+                        onClick={() => void answerBaggageQuestion(true)}
+                      >
+                        Réessayer
+                      </button>
+                    </div>
+                  ) : baggageTariffs?.length ? (
+                    <div className="booking-baggage-tariff-table-wrap">
+                      <table className="booking-baggage-tariff-table">
+                        <thead>
+                          <tr>
+                            <th scope="col">Poids</th>
+                            <th scope="col">Frais de bagage</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {baggageTariffs.map((tariff) => (
+                            <tr key={tariff.id_tarif}>
+                              <td>
+                                De {tariff.poids_min} kg à moins de{" "}
+                                {tariff.poids_max} kg
+                              </td>
+                              <td>{formatPrice(tariff.prix)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p>
+                        Les frais de bagage sont réglés à la gare après pesée.
+                      </p>
+                    </div>
+                  ) : (
+                    <p>
+                      Les frais de bagage seront confirmés à la gare.
+                    </p>
+                  )
+                ) : null}
+              </fieldset>
+              <div className="voyage-detail__total">
+                <span>Total du voyage</span>
+                <strong>{formatPrice(total)}</strong>
+              </div>
+              {profileError || bookingError ? (
+                <p className="detail-seats-warning" role="alert">
+                  {bookingError || profileError}
                 </p>
-              )}
+              ) : null}
+              {!enoughSeats ? (
+                <p className="detail-seats-warning" role="alert">
+                  Il ne reste que {trip.places_disponibles} place
+                  {trip.places_disponibles > 1 ? "s" : ""} disponible
+                  {trip.places_disponibles > 1 ? "s" : ""}.
+                </p>
+              ) : null}
+              <button
+                className="catalog-submit"
+                type="submit"
+                disabled={
+                  submitting ||
+                  loadingProfile ||
+                  !enoughSeats ||
+                  Boolean(profileError)
+                }
+              >
+                {submitting
+                  ? "Préparation de votre réservation…"
+                  : "Réserver ma place"}
+                <span aria-hidden="true">→</span>
+              </button>
               <p className="voyage-detail__secure">
                 <span aria-hidden="true">✓</span>
                 Paiement sécurisé · Places bloquées pendant 10 minutes
               </p>
-            </aside>
+            </form>
           </div>
           <div className="voyage-detail__help">
             <p>Un voyage, sans stress. Réservez en ligne et retrouvez votre billet dans votre espace voyageur.</p>

@@ -1400,7 +1400,7 @@ export default function TravelerDashboard() {
               <h3>{displayName || "Voyageur KINESIS"}</h3>
               <p className="traveler-overview-welcome__email">{profile.email}</p>
               <p className="traveler-overview-welcome__summary">
-                Voici le résumé de vos réservations et de vos prochains départs.
+                Voici le résumé de vos activités.
               </p>
             </div>
           </section>
