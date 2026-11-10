@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
@@ -16,10 +17,12 @@ import {
   ExternalLink,
   LayoutDashboard,
   Luggage,
+  LogOut,
   MapPin,
   Search,
   Ticket,
   UserRound,
+  type LucideIcon,
 } from "lucide-react";
 import {
   useCallback,
@@ -34,9 +37,6 @@ import KinesisLoader from "@/components/kinesis-loader";
 import ProfileViewDialog from "@/components/profile-view-dialog";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
-import RoleWorkspaceShell, {
-  type RoleWorkspaceItem,
-} from "@/components/role-workspace-shell";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 import {
   getUserFacingApiError,
@@ -163,7 +163,7 @@ type TravelerTab =
 const travelerTabs: {
   id: TravelerTab;
   label: string;
-  icon: RoleWorkspaceItem["icon"];
+  icon: LucideIcon;
 }[] = [
   { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard },
   { id: "reservations", label: "Réservations", icon: CalendarDays },
@@ -172,6 +172,15 @@ const travelerTabs: {
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "profile", label: "Mon profil", icon: UserRound },
 ];
+
+const travelerMobileTabLabels: Record<TravelerTab, string> = {
+  overview: "Accueil",
+  reservations: "Réserv.",
+  baggages: "Bagages",
+  tickets: "Billets",
+  notifications: "Alertes",
+  profile: "Profil",
+};
 
 const statusLabels: Record<string, string> = {
   EN_ATTENTE_PAIEMENT: "En attente de paiement",
@@ -1232,23 +1241,8 @@ export default function TravelerDashboard() {
     ).length ?? 0;
   const unreadNotifications =
     data?.notifications.filter((notification) => !notification.lue).length ?? 0;
-  const workspaceItems: RoleWorkspaceItem[] = travelerTabs.map((tab) => ({
-    ...tab,
-    group: tab.id === "profile" ? "account" : "operations",
-    badge:
-      tab.id === "notifications"
-        ? unreadNotifications
-        : tab.id === "reservations"
-          ? pendingReservations
-          : undefined,
-  }));
   const activeTitle =
     travelerTabs.find((tab) => tab.id === activeTab)?.label ?? "Vue d’ensemble";
-
-  function selectTab(id: string) {
-    const tab = travelerTabs.find((item) => item.id === id);
-    if (tab) setActiveTab(tab.id);
-  }
 
   if (loading) {
     return <KinesisLoader message="Chargement de votre espace voyageur…" />;
@@ -1278,23 +1272,74 @@ export default function TravelerDashboard() {
   }
 
   return (
-    <RoleWorkspaceShell
-      eyebrow="ESPACE VOYAGEUR"
-      title={activeTitle}
-      profile={profile}
-      activeId={activeTab}
-      items={workspaceItems}
-      notificationCount={unreadNotifications}
-      onSelect={selectTab}
-      onNotificationsClick={() => setActiveTab("notifications")}
-      onProfileUpdated={(updatedProfile) =>
-        setData((current) =>
-          current ? { ...current, profile: updatedProfile } : current,
-        )
-      }
-      onLogout={() => void signOut()}
-    >
-      <div className="traveler-workspace-content">
+    <div className="traveler-app-shell">
+      <header className="traveler-app-header">
+        <div className="traveler-app-header__inner">
+          <Link className="traveler-app-brand" href="/" aria-label="Kinesis, accueil">
+            <Image src="/kinesis-mark.png" width={38} height={38} alt="" priority />
+            <span>KINESIS</span>
+          </Link>
+
+          <nav className="traveler-app-nav" aria-label="Navigation de l’espace voyageur">
+            {travelerTabs.map((tab) => {
+              const Icon = tab.icon;
+              const badge =
+                tab.id === "notifications"
+                  ? unreadNotifications
+                  : tab.id === "reservations"
+                    ? pendingReservations
+                    : 0;
+              return (
+                <button
+                  type="button"
+                  key={tab.id}
+                  className={activeTab === tab.id ? "is-active" : ""}
+                  aria-current={activeTab === tab.id ? "page" : undefined}
+                  onClick={() => setActiveTab(tab.id)}
+                >
+                  <Icon aria-hidden="true" />
+                  <span>{tab.label}</span>
+                  {badge > 0 ? (
+                    <span className="traveler-app-nav__badge">
+                      {badge > 99 ? "99+" : badge}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="traveler-app-header__actions">
+            <button
+              type="button"
+              className="traveler-app-profile"
+              onClick={() => setActiveTab("profile")}
+              aria-label={`Ouvrir le profil de ${displayName || "votre compte"}`}
+            >
+              <ProfileAvatar
+                className="traveler-app-profile__avatar"
+                fallbackClassName="traveler-app-profile__avatar--fallback"
+                src={profile.photo_profil}
+                name={displayName}
+                size={36}
+              />
+              <span>{displayName || "Mon profil"}</span>
+            </button>
+            <button
+              type="button"
+              className="traveler-app-logout"
+              onClick={() => void signOut()}
+              aria-label="Se déconnecter"
+              title="Se déconnecter"
+            >
+              <LogOut aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main className="traveler-app-main">
+        <div className="traveler-workspace-content">
         {error ? (
           <div className="traveler-workspace-refresh-error" role="alert">
             <span>{error}</span>
@@ -1330,27 +1375,6 @@ export default function TravelerDashboard() {
             </Link>
           ) : null}
         </div>
-
-        <nav className="traveler-view-tabs" aria-label="Sections de l’espace voyageur">
-          {travelerTabs.map((tab) => {
-            const Icon = tab.icon;
-            return (
-              <button
-                type="button"
-                key={tab.id}
-                className={activeTab === tab.id ? "is-active" : ""}
-                aria-current={activeTab === tab.id ? "page" : undefined}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                <Icon aria-hidden="true" />
-                {tab.label}
-                {tab.id === "notifications" && unreadNotifications > 0 ? (
-                  <span>{unreadNotifications}</span>
-                ) : null}
-              </button>
-            );
-          })}
-        </nav>
 
 
         {activeTab === "overview" ? (
@@ -2182,7 +2206,39 @@ export default function TravelerDashboard() {
             </article>
           </AppDialog>
         ) : null}
-      </div>
-    </RoleWorkspaceShell>
+        </div>
+      </main>
+
+      <nav className="traveler-app-bottom-nav" aria-label="Navigation mobile de l’espace voyageur">
+        {travelerTabs.map((tab) => {
+          const Icon = tab.icon;
+          const badge =
+            tab.id === "notifications"
+              ? unreadNotifications
+              : tab.id === "reservations"
+                ? pendingReservations
+                : 0;
+          return (
+            <button
+              type="button"
+              key={tab.id}
+              className={activeTab === tab.id ? "is-active" : ""}
+              aria-current={activeTab === tab.id ? "page" : undefined}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="traveler-app-bottom-nav__icon">
+                <Icon aria-hidden="true" />
+                {badge > 0 ? (
+                  <span className="traveler-app-bottom-nav__badge">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
+              </span>
+              <span>{travelerMobileTabLabels[tab.id]}</span>
+            </button>
+          );
+        })}
+      </nav>
+    </div>
   );
 }
