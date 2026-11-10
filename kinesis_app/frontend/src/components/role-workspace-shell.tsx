@@ -40,6 +40,7 @@ type RoleWorkspaceShellProps = {
   activeId: string;
   items: RoleWorkspaceItem[];
   notificationCount?: number;
+  workspaceClassName?: string;
   onSelect: (id: string) => void;
   onNotificationsClick?: () => void;
   onProfileUpdated: (profile: UserProfile) => void;
@@ -54,6 +55,7 @@ export default function RoleWorkspaceShell({
   activeId,
   items,
   notificationCount = 0,
+  workspaceClassName,
   onSelect,
   onNotificationsClick,
   onProfileUpdated,
@@ -69,7 +71,7 @@ export default function RoleWorkspaceShell({
   return (
     <TooltipProvider>
       <SidebarProvider
-        className="role-workspace"
+        className={`role-workspace${workspaceClassName ? ` ${workspaceClassName}` : ""}`}
         style={
           {
             "--sidebar-width": "16rem",

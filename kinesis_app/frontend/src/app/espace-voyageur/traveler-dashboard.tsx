@@ -1351,7 +1351,10 @@ export default function TravelerDashboard() {
                 name={displayName}
                 size={36}
               />
-              <span>{displayName || "Mon profil"}</span>
+              <span className="traveler-app-profile__copy">
+                <strong>{displayName || "Mon profil"}</strong>
+                <small>{profile.email}</small>
+              </span>
             </button>
             <button
               type="button"

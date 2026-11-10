@@ -440,12 +440,29 @@ export default function AgentWorkspace() {
     [canBoard, canConsultBaggage, canRegisterBaggage, canReturnBaggage, canScan],
   );
   const activeTab = tabs.some((item) => item.id === tab) ? tab : "overview";
-  function selectTab(nextTab: string) {
-    const item = tabs.find((candidate) => candidate.id === nextTab);
-    if (!item) return;
-    setTab(item.id);
-    setError(null);
-  }
+  const selectTab = useCallback(
+    (nextTab: string) => {
+      const item = tabs.find((candidate) => candidate.id === nextTab);
+      if (!item) return;
+      setTab(item.id);
+      setError(null);
+    },
+    [tabs],
+  );
+
+  useEffect(() => {
+    function handleMobileTabRequest(event: Event) {
+      const requestedTab = (event as CustomEvent<string>).detail;
+      if (typeof requestedTab === "string") selectTab(requestedTab);
+    }
+
+    window.addEventListener("kinesis:agent-tab-request", handleMobileTabRequest);
+    return () =>
+      window.removeEventListener(
+        "kinesis:agent-tab-request",
+        handleMobileTabRequest,
+      );
+  }, [selectTab]);
 
   const loadWorkspace = useCallback(async () => {
     setError(null);
@@ -804,6 +821,18 @@ export default function AgentWorkspace() {
 
   const unreadCount = notifications.filter((notification) => !notification.lue).length;
   const availableReservations = reservations.filter((reservation) => reservation.statut === "PAYEE");
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("kinesis:agent-tab-state", {
+        detail: {
+          tab: activeTab,
+          tabs: tabs.map((item) => ({ id: item.id, label: item.label })),
+          unreadCount,
+        },
+      }),
+    );
+  }, [activeTab, tabs, unreadCount]);
+
   const workspaceItems: RoleWorkspaceItem[] = [
     ...tabs.map((item) => ({
       id: item.id,
@@ -883,6 +912,7 @@ export default function AgentWorkspace() {
 
   return (
     <RoleWorkspaceShell
+      workspaceClassName="agent-role-workspace"
       eyebrow="ESPACE AGENT"
       title={tabs.find((item) => item.id === activeTab)?.label ?? "Accueil"}
       profile={profile}

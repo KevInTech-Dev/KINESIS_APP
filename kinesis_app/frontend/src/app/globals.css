@@ -16072,6 +16072,37 @@ select:focus-visible {
 }
 
 @media (max-width: 760px) {
+  .agent-role-workspace .role-workspace__trigger {
+    display: none;
+  }
+
+  .agent-role-workspace .agent-workspace-content {
+    padding-bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .agent-role-workspace .role-workspace__content {
+    min-height: calc(100dvh - 68px);
+  }
+
+  .mobile-app-nav--agent {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .mobile-app-nav--agent > button {
+    overflow: hidden;
+    color: #64736a;
+  }
+
+  .mobile-app-nav--agent > button.is-active {
+    color: #0b6b4b;
+  }
+
+  .mobile-app-nav--agent > button > span:last-child {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .booking-header__profile {
     min-height: 36px;
     gap: 6px;
@@ -16083,5 +16114,289 @@ select:focus-visible {
     width: 30px;
     height: 30px;
     flex-basis: 30px;
+  }
+}
+
+@media (min-width: 1101px) {
+  .traveler-app-header {
+    z-index: 45;
+    top: 10px;
+    bottom: 10px;
+    left: 10px;
+    width: 258px;
+    border: 1px solid #e5ebe4;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 10px 30px rgb(22 52 40 / 5%);
+    color: #18332a;
+  }
+
+  .traveler-app-header__inner {
+    gap: 20px;
+    padding: 18px 12px 14px;
+  }
+
+  .traveler-app-brand {
+    gap: 9px;
+    padding: 0 8px;
+    color: #123d2e;
+    font-size: 23px;
+  }
+
+  .traveler-app-brand img {
+    width: 40px;
+    height: 40px;
+    padding: 6px;
+    background: #07543d;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+
+  .traveler-app-nav {
+    position: relative;
+    align-items: stretch;
+    gap: 5px;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .traveler-app-nav::before {
+    padding: 0 10px 6px;
+    color: #849087;
+    content: "NAVIGATION";
+    font-size: 9px;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+  }
+
+  .traveler-app-nav button {
+    min-height: 43px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 10px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    color: #53645a;
+    font-size: 11px;
+  }
+
+  .traveler-app-nav button:hover {
+    border-color: transparent;
+    background: #eaf4e9;
+    color: #07543d;
+    transform: none;
+  }
+
+  .traveler-app-nav button.is-active {
+    border-color: transparent;
+    background: #eaf4e9;
+    color: #07543d;
+    box-shadow: none;
+  }
+
+  .traveler-app-nav button.is-active > svg {
+    color: #07543d;
+  }
+
+  .traveler-app-nav__badge,
+  .traveler-app-nav__badge--notification {
+    margin-left: auto;
+    background: #dceee0;
+    color: #07543d;
+  }
+
+  .traveler-app-header__actions {
+    align-items: stretch;
+    gap: 6px;
+    padding: 8px 5px 0;
+    border-top: 1px solid #e5ebe4;
+  }
+
+  .traveler-app-header__actions .traveler-app-profile {
+    min-width: 0;
+    min-height: 54px;
+    flex: 1;
+    gap: 9px;
+    padding: 5px;
+    border-color: transparent;
+    border-radius: 9px;
+    background: #fff;
+    color: #233d31;
+    text-align: left;
+  }
+
+  .traveler-app-header__actions .traveler-app-profile:hover {
+    border-color: #e1e9e2;
+    background: #f7faf7;
+  }
+
+  .traveler-app-header__actions .traveler-app-profile__avatar {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+    border: 1px solid #dce8df;
+    border-radius: 10px;
+    background: #eaf4e9;
+  }
+
+  .traveler-app-profile__copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+  }
+
+  .traveler-app-profile__copy strong,
+  .traveler-app-profile__copy small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .traveler-app-profile__copy strong {
+    color: #233d31;
+    font-size: 11px;
+    font-weight: 800;
+  }
+
+  .traveler-app-profile__copy small {
+    color: #7a8980;
+    font-size: 9px;
+  }
+
+  .traveler-app-header__actions .traveler-app-logout {
+    display: grid;
+    width: 39px;
+    height: 39px;
+    flex-basis: 39px;
+    border-color: #e1e9e2;
+    border-radius: 9px;
+    background: #fff;
+    color: #53645a;
+  }
+
+  .traveler-app-header__actions .traveler-app-logout:hover {
+    border-color: #c9ddcd;
+    background: #f3f8f2;
+    color: #07543d;
+  }
+
+  .traveler-app-main {
+    margin-left: 278px;
+    background: #f5f7f4;
+  }
+
+  .traveler-app-topbar {
+    min-height: 90px;
+    padding: 0 clamp(26px, 3vw, 40px);
+    box-shadow: 0 4px 14px rgb(22 52 40 / 4%);
+  }
+
+  .traveler-app-topbar__title > svg {
+    color: #496052;
+  }
+
+  .traveler-app-topbar__title h1 {
+    font-size: 18px;
+  }
+
+  .traveler-app-topbar__actions button {
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+  }
+
+  .traveler-app-main .traveler-workspace-content {
+    padding: 26px clamp(24px, 3vw, 40px) 42px;
+  }
+
+  .traveler-overview-welcome {
+    display: none;
+  }
+
+  .traveler-overview-layout {
+    grid-template-columns: minmax(220px, 290px) minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(24px, 3vw, 40px);
+  }
+
+  .traveler-overview-profile {
+    gap: 0;
+    padding-top: 2px;
+  }
+
+  .traveler-overview-profile__avatar {
+    width: min(100%, 270px);
+    border-color: #dfe6df;
+    background: #eaf4e9;
+  }
+
+  .traveler-overview-profile h3 {
+    margin: 18px 0 2px;
+    color: #1d2b22;
+    font-size: 23px;
+    font-weight: 750;
+    letter-spacing: -0.035em;
+  }
+
+  .traveler-overview-profile p {
+    color: #6f7a72;
+    font-size: 13px;
+  }
+
+  .traveler-overview-profile button {
+    width: min(100%, 270px);
+    min-height: 38px;
+    margin-top: 16px;
+    border-color: #d4ddd5;
+    border-radius: 7px;
+    background: #f6f8f6;
+    color: #263a2c;
+    font-size: 12px;
+    font-weight: 650;
+  }
+
+  .traveler-overview-profile button:hover {
+    border-color: #b6cbbb;
+    background: #edf4ed;
+  }
+
+  .traveler-overview-main {
+    display: grid;
+    gap: 18px;
+  }
+
+  .traveler-overview-main .traveler-repository-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .traveler-overview-main .traveler-repository-grid button {
+    min-height: 118px;
+    gap: 9px;
+    padding: 16px 17px;
+    border-color: #dce4dc;
+    border-radius: 9px;
+    box-shadow: none;
+  }
+
+  .traveler-repository-grid button > span {
+    font-size: 12px;
+  }
+
+  .traveler-repository-grid button > strong {
+    font-size: 25px;
+  }
+
+  .traveler-repository-grid button > small {
+    color: #78837b;
+    font-size: 10px;
+  }
+
+  .traveler-overview-list {
+    margin-top: 0;
+    padding: 17px 18px 4px;
+    border-color: #dce4dc;
+    border-radius: 9px;
+    box-shadow: none;
   }
 }

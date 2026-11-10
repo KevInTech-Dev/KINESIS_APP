@@ -7,20 +7,37 @@ import {
   Bell,
   BusFront,
   House,
+  Luggage,
+  ScanLine,
   Search,
   UserRound,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 type TravelerTabRequest = "overview" | "notifications";
+type AgentTabId = "overview" | "scan" | "boarding" | "baggage" | "notifications";
+type AgentTab = { id: AgentTabId; label: string };
+const AGENT_TABS: AgentTab[] = [
+  { id: "overview", label: "Accueil" },
+  { id: "scan", label: "Billets" },
+  { id: "boarding", label: "Embarquement" },
+  { id: "baggage", label: "Bagages" },
+  { id: "notifications", label: "Notifi..." },
+];
 
 export default function MobileAppNav() {
   const pathname = usePathname();
   const router = useRouter();
   const [selectedTab, setSelectedTab] =
     useState<TravelerTabRequest>("overview");
+  const [selectedAgentTab, setSelectedAgentTab] =
+    useState<AgentTabId>("overview");
+  const [agentTabs, setAgentTabs] = useState<AgentTab[]>(AGENT_TABS);
+  const [agentUnreadCount, setAgentUnreadCount] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
   const isTravelerSpace = pathname === "/espace-voyageur";
+  const isAgentSpace = pathname === "/espace-agent";
+  const isUserWorkspace = pathname.startsWith("/espace-");
 
   useEffect(() => {
     function syncTravelerTab(event: Event) {
@@ -31,6 +48,37 @@ export default function MobileAppNav() {
     window.addEventListener("kinesis:traveler-tab", syncTravelerTab);
     return () =>
       window.removeEventListener("kinesis:traveler-tab", syncTravelerTab);
+  }, []);
+
+  useEffect(() => {
+    function syncAgentState(event: Event) {
+      const state = (event as CustomEvent<{
+        tab: AgentTabId;
+        tabs: AgentTab[];
+        unreadCount: number;
+      }>).detail;
+      if (!state || !Array.isArray(state.tabs)) return;
+      if (
+        state.tabs.every(
+          (tab) =>
+            typeof tab.id === "string" &&
+            AGENT_TABS.some((knownTab) => knownTab.id === tab.id) &&
+            typeof tab.label === "string",
+        )
+      ) {
+        setAgentTabs(state.tabs);
+      }
+      if (AGENT_TABS.some((tab) => tab.id === state.tab)) {
+        setSelectedAgentTab(state.tab);
+      }
+      if (Number.isInteger(state.unreadCount) && state.unreadCount >= 0) {
+        setAgentUnreadCount(state.unreadCount);
+      }
+    }
+
+    window.addEventListener("kinesis:agent-tab-state", syncAgentState);
+    return () =>
+      window.removeEventListener("kinesis:agent-tab-state", syncAgentState);
   }, []);
 
   useEffect(() => {
@@ -133,9 +181,18 @@ export default function MobileAppNav() {
     router.push("/?openSearch=1");
   }
 
+  function openAgentTab(tab: AgentTabId) {
+    setSelectedAgentTab(tab);
+    window.dispatchEvent(
+      new CustomEvent<AgentTabId>("kinesis:agent-tab-request", {
+        detail: tab,
+      }),
+    );
+  }
+
   return (
     <>
-      {pathname !== "/" ? (
+      {pathname !== "/" && !isUserWorkspace ? (
         <button
           type="button"
           className="app-back-button"
@@ -147,7 +204,46 @@ export default function MobileAppNav() {
           <span>Retour</span>
         </button>
       ) : null}
-      <nav className="mobile-app-nav" aria-label="Navigation principale mobile">
+      <nav
+        className={`mobile-app-nav${isAgentSpace ? " mobile-app-nav--agent" : ""}`}
+        aria-label={isAgentSpace ? "Navigation espace agent" : "Navigation principale mobile"}
+      >
+      {isAgentSpace ? (
+        agentTabs.map((tab) => {
+          const Icon =
+            tab.id === "overview"
+              ? House
+              : tab.id === "scan"
+                ? ScanLine
+                : tab.id === "boarding"
+                  ? BusFront
+                  : tab.id === "baggage"
+                    ? Luggage
+                    : Bell;
+          const isActive = selectedAgentTab === tab.id;
+          const badge = tab.id === "notifications" ? agentUnreadCount : 0;
+          return (
+            <button
+              type="button"
+              key={tab.id}
+              className={isActive ? "is-active" : ""}
+              aria-current={isActive ? "page" : undefined}
+              onClick={() => openAgentTab(tab.id)}
+            >
+              <span className="mobile-app-nav__icon">
+                <Icon aria-hidden="true" />
+                {badge > 0 ? (
+                  <span className="mobile-app-nav__badge">
+                    {badge > 99 ? "99+" : badge}
+                  </span>
+                ) : null}
+              </span>
+              <span>{tab.id === "notifications" ? "Notifi..." : tab.label}</span>
+            </button>
+          );
+        })
+      ) : (
+        <>
       <Link
         href="/"
         className={pathname === "/" ? "is-active" : ""}
@@ -184,7 +280,7 @@ export default function MobileAppNav() {
             </span>
           ) : null}
         </span>
-        <span>Alerte</span>
+        <span>Notifi...</span>
       </button>
       <button
         type="button"
@@ -197,6 +293,8 @@ export default function MobileAppNav() {
         <UserRound aria-hidden="true" />
         <span>Profil</span>
       </button>
+        </>
+      )}
       </nav>
     </>
   );
