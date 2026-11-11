@@ -819,10 +819,9 @@ export default function CompanyWorkspace() {
 
   const loadWorkspace = useCallback(async (refreshAll = false) => {
     try {
-      const [sessionResponse, companyData] = await Promise.all([
-        fetch("/api/auth/session", { cache: "no-store" }),
-        requestApi("me"),
-      ]);
+      const sessionResponse = await fetch("/api/auth/session", {
+        cache: "no-store",
+      });
       const sessionBody: unknown = await sessionResponse.json().catch(() => null);
       if (!sessionResponse.ok || !isUserProfile(sessionBody)) {
         setRedirecting(true);
@@ -831,9 +830,16 @@ export default function CompanyWorkspace() {
       }
       if (sessionBody.role !== "COMPAGNIE") {
         setRedirecting(true);
-        router.replace("/espace-voyageur");
+        router.replace(
+          sessionBody.role === "AGENT_COMPAGNIE"
+            ? "/espace-agent"
+            : sessionBody.role === "ADMINISTRATEUR"
+              ? "/espace-administration"
+              : "/espace-voyageur",
+        );
         return;
       }
+      const companyData = await requestApi("me");
       if (!isCompany(companyData)) {
         throw new Error("Le profil de la compagnie reçu est invalide.");
       }
