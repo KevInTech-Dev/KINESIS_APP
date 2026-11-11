@@ -17,7 +17,7 @@ import {
   TicketCheck,
   UserRound,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppDialog from "@/components/app-dialog";
 
 type TravelerTabRequest = "overview" | "notifications";
@@ -85,6 +85,7 @@ export default function MobileAppNav() {
   const [mobileNotifications, setMobileNotifications] = useState<MobileNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [notificationsError, setNotificationsError] = useState("");
+  const travelerTabRevision = useRef(0);
   const isTravelerSpace = pathname === "/espace-voyageur";
   const isAgentSpace = pathname === "/espace-agent";
   const isCompanySpace = pathname === "/espace-compagnie";
@@ -121,13 +122,30 @@ export default function MobileAppNav() {
   useEffect(() => {
     function syncTravelerTab(event: Event) {
       const tab = (event as CustomEvent<TravelerTabRequest>).detail;
-      if (tab === "overview" || tab === "notifications") setSelectedTab(tab);
+      if (tab === "overview" || tab === "notifications") {
+        travelerTabRevision.current += 1;
+        setSelectedTab(tab);
+      }
     }
 
     window.addEventListener("kinesis:traveler-tab", syncTravelerTab);
     return () =>
       window.removeEventListener("kinesis:traveler-tab", syncTravelerTab);
   }, []);
+
+  useEffect(() => {
+    const tab =
+      isTravelerSpace &&
+      new URLSearchParams(window.location.search).get("tab") ===
+        "notifications"
+        ? "notifications"
+        : "overview";
+    const revision = travelerTabRevision.current;
+    const timer = window.setTimeout(() => {
+      if (travelerTabRevision.current === revision) setSelectedTab(tab);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [isTravelerSpace, pathname]);
 
   useEffect(() => {
     function syncAgentState(event: Event) {
@@ -284,6 +302,13 @@ export default function MobileAppNav() {
   function openTravelerTab(tab: TravelerTabRequest) {
     setSelectedTab(tab);
     if (isTravelerSpace) {
+      const url = new URL(window.location.href);
+      if (tab !== "overview") {
+        url.searchParams.set("tab", tab);
+      } else {
+        url.searchParams.delete("tab");
+      }
+      window.history.replaceState(window.history.state, "", url);
       window.dispatchEvent(
         new CustomEvent<TravelerTabRequest>("kinesis:traveler-tab", {
           detail: tab,
@@ -327,11 +352,15 @@ export default function MobileAppNav() {
   }
 
   function openRoleProfile() {
-    if (pathname === "/" && roleWorkspacePath) {
-      router.push(`${roleWorkspacePath}?mobileProfile=1`);
+    if (isAdminSpace || activeRoleState?.role === "ADMINISTRATEUR") {
+      if (pathname === "/" && roleWorkspacePath) {
+        router.push(`${roleWorkspacePath}?mobileProfile=1`);
+      } else {
+        window.dispatchEvent(new Event("kinesis:role-profile-view-request"));
+      }
       return;
     }
-    window.dispatchEvent(new Event("kinesis:role-mobile-profile-request"));
+    openRoleTab("overview");
   }
 
   async function showAdminNotifications() {
@@ -500,15 +529,17 @@ export default function MobileAppNav() {
             const isActive =
               index === 0
                 ? pathname === "/"
+                : isProfile
+                  ? pathname !== "/" &&
+                    activeRoleState?.activeTab === "overview"
                 : isNotifications
                   ? activeRoleState?.notificationsTabId
                     ? activeRoleState.activeTab === activeRoleState.notificationsTabId
                     : notificationsOpen ||
                       (roleIsAgent && selectedAgentTab === "notifications")
-                  : !isProfile &&
-                    (activeRoleState
-                      ? activeRoleState.activeTab === tab.id
-                      : roleIsAgent && selectedAgentTab === tab.id);
+                  : activeRoleState
+                    ? activeRoleState.activeTab === tab.id
+                    : roleIsAgent && selectedAgentTab === tab.id;
             const badge = isNotifications ? unread : 0;
           return (
             <button

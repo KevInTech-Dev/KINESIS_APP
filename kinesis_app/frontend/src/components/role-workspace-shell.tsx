@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { Bell, LogOut, type LucideIcon } from "lucide-react";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
+import ProfileEditDialog from "@/components/profile-edit-dialog";
 import ProfileViewDialog from "@/components/profile-view-dialog";
 import {
   Sidebar,
@@ -63,7 +64,9 @@ export default function RoleWorkspaceShell({
   onLogout,
   children,
 }: RoleWorkspaceShellProps) {
-  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+  const [profileDialog, setProfileDialog] = useState<"view" | "edit" | null>(
+    null,
+  );
   const groups: { id: "operations" | "account"; label: string }[] = [
     { id: "operations", label: "Navigation" },
     { id: "account", label: "Compte" },
@@ -113,26 +116,26 @@ export default function RoleWorkspaceShell({
   }, [activeId, items, notificationCount, profile.role]);
 
   useEffect(() => {
-    function openMobileProfile() {
-      setMobileProfileOpen(true);
-    }
-
-    window.addEventListener(
-      "kinesis:role-mobile-profile-request",
-      openMobileProfile,
-    );
+    const openProfileView = () => setProfileDialog("view");
+    const openProfileEdit = () => setProfileDialog("edit");
+    window.addEventListener("kinesis:role-profile-view-request", openProfileView);
+    window.addEventListener("kinesis:role-profile-edit-request", openProfileEdit);
     const url = new URL(window.location.href);
-    if (url.searchParams.get("mobileProfile") === "1") {
+    let profileTimer: number | undefined;
+    if (
+      profile.role === "ADMINISTRATEUR" &&
+      url.searchParams.get("mobileProfile") === "1"
+    ) {
       url.searchParams.delete("mobileProfile");
       window.history.replaceState(window.history.state, "", url);
-      window.setTimeout(openMobileProfile, 0);
+      profileTimer = window.setTimeout(() => setProfileDialog("view"), 0);
     }
-    return () =>
-      window.removeEventListener(
-        "kinesis:role-mobile-profile-request",
-        openMobileProfile,
-      );
-  }, []);
+    return () => {
+      if (profileTimer !== undefined) window.clearTimeout(profileTimer);
+      window.removeEventListener("kinesis:role-profile-view-request", openProfileView);
+      window.removeEventListener("kinesis:role-profile-edit-request", openProfileEdit);
+    };
+  }, [profile.role]);
 
   useEffect(() => {
     function handleMobileTabRequest(event: Event) {
@@ -304,12 +307,24 @@ export default function RoleWorkspaceShell({
           <div className="role-workspace__content">{children}</div>
         </SidebarInset>
       </SidebarProvider>
-      {mobileProfileOpen ? (
+      {profileDialog === "view" ? (
         <ProfileViewDialog
           profile={profile}
           name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
           avatarClassName="role-sidebar__avatar"
-          onClose={() => setMobileProfileOpen(false)}
+          onClose={() => setProfileDialog(null)}
+          onEdit={
+            profile.role === "ADMINISTRATEUR"
+              ? () => setProfileDialog("edit")
+              : undefined
+          }
+        />
+      ) : null}
+      {profileDialog === "edit" ? (
+        <ProfileEditDialog
+          profile={profile}
+          onProfileUpdated={onProfileUpdated}
+          onClose={() => setProfileDialog(null)}
         />
       ) : null}
     </TooltipProvider>

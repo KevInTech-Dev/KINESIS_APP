@@ -14,6 +14,7 @@ import {
   Clock3,
   CreditCard,
   Download,
+  Eye,
   ExternalLink,
   House,
   Luggage,
@@ -23,6 +24,7 @@ import {
   Search,
   Ticket,
   UserRound,
+  UserRoundPen,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -513,21 +515,20 @@ export default function TravelerDashboard() {
 
   useEffect(() => {
     const requestedTab = new URLSearchParams(window.location.search).get("tab");
+    let userSelectedTab = false;
     const queryTimer =
       requestedTab === "notifications"
         ? window.setTimeout(() => {
-            setActiveTab("notifications");
-            window.dispatchEvent(
-              new CustomEvent<TravelerTab>("kinesis:traveler-tab", {
-                detail: "notifications",
-              }),
-            );
+            if (!userSelectedTab) setActiveTab(requestedTab);
           }, 0)
         : undefined;
 
     function handleTravelerTab(event: Event) {
       const tab = (event as CustomEvent<TravelerTab>).detail;
-      if (tab === "overview" || tab === "notifications") setActiveTab(tab);
+      if (tab === "overview" || tab === "notifications") {
+        userSelectedTab = true;
+        setActiveTab(tab);
+      }
     }
 
     window.addEventListener("kinesis:traveler-tab", handleTravelerTab);
@@ -1421,22 +1422,31 @@ export default function TravelerDashboard() {
                 size={104}
                 alt={`Photo de ${displayName}`}
               />
-              <button
-                type="button"
-                className="traveler-profile-action"
-                onClick={() => setProfileDetailOpen(true)}
-              >
-                Voir mon profil
-              </button>
+              <div className="traveler-profile-actions">
+                <button
+                  type="button"
+                  className="traveler-profile-action"
+                  onClick={() => setProfileDetailOpen(true)}
+                >
+                  Voir mon profil
+                </button>
+                <button
+                  type="button"
+                  className="traveler-profile-action traveler-profile-action--edit"
+                  onClick={() => {
+                    setActiveTab("profile");
+                    setEditingProfile(true);
+                  }}
+                >
+                  Modifier mon profil
+                </button>
+              </div>
             </div>
             <div className="traveler-overview-welcome__copy">
               <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
               <h2>Bienvenue {profile.prenoms || profile.nom}</h2>
               <h3>{displayName || "Voyageur KINESIS"}</h3>
               <p className="traveler-overview-welcome__email">{profile.email}</p>
-              <p className="traveler-overview-welcome__summary">
-                Voici le résumé de vos activités.
-              </p>
             </div>
             <Link className="traveler-overview-search" href="/voyages">
               <Search aria-hidden="true" />
@@ -1580,17 +1590,25 @@ export default function TravelerDashboard() {
                 <p>{profile.email}</p>
                 {profile.telephone ? <p>{profile.telephone}</p> : null}
               </div>
-              <button
-                className="traveler-secondary-button"
-                type="button"
-                onClick={() => {
-                  setEditingProfile((value) => !value);
-                }}
-                aria-expanded={editingProfile}
-              >
-                <UserRound aria-hidden="true" />
-                {editingProfile ? "Fermer" : "Modifier mon profil"}
-              </button>
+              <div className="traveler-profile-summary__actions">
+                <button
+                  className="traveler-secondary-button traveler-profile-summary__view"
+                  type="button"
+                  onClick={() => setProfileDetailOpen(true)}
+                >
+                  <Eye aria-hidden="true" />
+                  Voir mon profil
+                </button>
+                <button
+                  className="traveler-secondary-button"
+                  type="button"
+                  onClick={() => setEditingProfile((value) => !value)}
+                  aria-expanded={editingProfile}
+                >
+                  <UserRoundPen aria-hidden="true" />
+                  {editingProfile ? "Fermer" : "Modifier mon profil"}
+                </button>
+              </div>
             </div>
             {editingProfile ? (
               <form className="traveler-profile-form" onSubmit={saveProfile}>

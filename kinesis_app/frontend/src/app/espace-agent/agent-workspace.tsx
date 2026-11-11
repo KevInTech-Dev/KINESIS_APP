@@ -7,12 +7,14 @@ import { toast } from "sonner";
 import {
   Bell,
   BusFront,
+  Eye,
   ExternalLink,
   ImagePlus,
   LayoutDashboard,
   Luggage,
   Plus,
   ScanLine,
+  UserRoundPen,
   type LucideIcon,
 } from "lucide-react";
 import {
@@ -965,6 +967,30 @@ export default function AgentWorkspace() {
               {profile.compagnie_nom ? (
                 <p className="agent-overview-company">{profile.compagnie_nom}</p>
               ) : null}
+              <div className="agent-overview-profile-actions">
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new Event("kinesis:role-profile-view-request"),
+                    )
+                  }
+                >
+                  <Eye aria-hidden="true" />
+                  Voir mon profil
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new Event("kinesis:role-profile-edit-request"),
+                    )
+                  }
+                >
+                  <UserRoundPen aria-hidden="true" />
+                  Modifier mon profil
+                </button>
+              </div>
               {canScan ? (
                 <button
                   type="button"

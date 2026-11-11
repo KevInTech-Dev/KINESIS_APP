@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import ProfileAvatar from "@/components/profile-avatar";
 import type { UserProfile } from "@/lib/user-profile";
 
@@ -11,6 +11,7 @@ type ProfileViewDialogProps = {
   name: string;
   avatarClassName: string;
   onClose: () => void;
+  onEdit?: () => void;
 };
 
 const roleLabels: Record<string, string> = {
@@ -25,6 +26,7 @@ export default function ProfileViewDialog({
   name,
   avatarClassName,
   onClose,
+  onEdit,
 }: ProfileViewDialogProps) {
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -105,6 +107,18 @@ export default function ProfileViewDialog({
             ) : null}
           </dl>
         </div>
+        {onEdit ? (
+          <div className="profile-edit-form__actions">
+            <button
+              type="button"
+              className="profile-edit-form__save"
+              onClick={onEdit}
+            >
+              <Pencil aria-hidden="true" />
+              Modifier mon profil
+            </button>
+          </div>
+        ) : null}
       </section>
     </div>,
     document.body,

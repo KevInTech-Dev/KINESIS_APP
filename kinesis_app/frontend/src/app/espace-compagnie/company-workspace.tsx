@@ -9,7 +9,6 @@ import { toast } from "sonner";
 import {
   Bell,
   BusFront,
-  Building2,
   ChartNoAxesCombined,
   ChevronRight,
   CreditCard,
@@ -28,6 +27,7 @@ import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import ProfileEditDialog from "@/components/profile-edit-dialog";
 import ProfileViewDialog from "@/components/profile-view-dialog";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { getPublicCities } from "@/lib/public-cities";
@@ -200,7 +200,6 @@ const TABS: { id: Tab; label: string; icon: LucideIcon; group: "operations" | "a
   { id: "tariffs", label: "Tarifs bagages", icon: Luggage, group: "operations" },
   { id: "payments", label: "Paiements", icon: CreditCard, group: "operations" },
   { id: "notifications", label: "Notifications", icon: Bell, group: "account" },
-  { id: "profile", label: "Ma compagnie", icon: Building2, group: "account" },
 ];
 
 const PAYMENT_RANGES: { id: PaymentRange; label: string; days: number }[] = [
@@ -694,7 +693,9 @@ function CompanySidebar({
 export default function CompanyWorkspace() {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("overview");
-  const [mobileProfileOpen, setMobileProfileOpen] = useState(false);
+  const [profileDialog, setProfileDialog] = useState<"view" | "edit" | null>(
+    null,
+  );
   const [tripDialogOpen, setTripDialogOpen] = useState(false);
   const [stationDialogOpen, setStationDialogOpen] = useState(false);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
@@ -841,6 +842,7 @@ export default function CompanyWorkspace() {
       setProfile(sessionBody);
       if (!refreshAll) {
         void loadOverviewData(sessionBody.id);
+        void loadDeferredData("notifications");
         return;
       }
 
@@ -892,7 +894,7 @@ export default function CompanyWorkspace() {
     } finally {
       setLoading(false);
     }
-  }, [loadOverviewData, router]);
+  }, [loadDeferredData, loadOverviewData, router]);
 
   useEffect(() => {
     void Promise.resolve().then(() => loadWorkspace());
@@ -1031,25 +1033,26 @@ export default function CompanyWorkspace() {
   }, []);
 
   useEffect(() => {
-    function openMobileProfile() {
-      setMobileProfileOpen(true);
-    }
-
+    const openProfileView = () => setProfileDialog("view");
+    const openProfileEdit = () => setProfileDialog("edit");
     window.addEventListener(
-      "kinesis:role-mobile-profile-request",
-      openMobileProfile,
+      "kinesis:company-profile-view-request",
+      openProfileView,
     );
-    const url = new URL(window.location.href);
-    if (url.searchParams.get("mobileProfile") === "1") {
-      url.searchParams.delete("mobileProfile");
-      window.history.replaceState(window.history.state, "", url);
-      window.setTimeout(openMobileProfile, 0);
-    }
-    return () =>
+    window.addEventListener(
+      "kinesis:company-profile-edit-request",
+      openProfileEdit,
+    );
+    return () => {
       window.removeEventListener(
-        "kinesis:role-mobile-profile-request",
-        openMobileProfile,
+        "kinesis:company-profile-view-request",
+        openProfileView,
       );
+      window.removeEventListener(
+        "kinesis:company-profile-edit-request",
+        openProfileEdit,
+      );
+    };
   }, []);
 
   useEffect(() => {
@@ -2200,7 +2203,7 @@ export default function CompanyWorkspace() {
         {tab === "profile" ? (
           <div className="company-content">
             <section className="company-panel company-profile-panel">
-              <div className="company-panel-heading">              <div><h2>Informations de la compagnie</h2><p>Les coordonnées légales restent en lecture seule après validation. Vous pouvez modifier l’adresse, la description et le logo, qui sert aussi de photo de profil.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
+              <div className="company-panel-heading">              <div><h2>Informations de la compagnie</h2><p>Les coordonnées légales restent en lecture seule après validation. Vous pouvez modifier l’adresse, la description et le logo.</p></div><span className="company-status company-status--active">{statusLabel(company.statut)}</span></div>
               <div className="company-profile-identity">
               <ProfileAvatar
                 className="company-profile-identity__logo"
@@ -2286,12 +2289,19 @@ export default function CompanyWorkspace() {
           </main>
         </SidebarInset>
       </SidebarProvider>
-      {mobileProfileOpen && profile ? (
+      {profile && profileDialog === "view" ? (
         <ProfileViewDialog
           profile={profile}
           name={[profile.prenoms, profile.nom].filter(Boolean).join(" ")}
           avatarClassName="company-user-avatar"
-          onClose={() => setMobileProfileOpen(false)}
+          onClose={() => setProfileDialog(null)}
+        />
+      ) : null}
+      {profile && profileDialog === "edit" ? (
+        <ProfileEditDialog
+          profile={profile}
+          onProfileUpdated={setProfile}
+          onClose={() => setProfileDialog(null)}
         />
       ) : null}
     </TooltipProvider>
