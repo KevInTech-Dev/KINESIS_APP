@@ -16013,7 +16013,7 @@ select:focus-visible {
     width: 100%;
     height: 100%;
     min-height: 0;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(0, 1fr) auto;
     align-items: start;
     gap: 26px;
@@ -16431,6 +16431,7 @@ select:focus-visible {
 
   .traveler-app-header__inner {
     gap: 20px;
+    grid-template-columns: minmax(0, 1fr);
     padding: 18px 12px 14px;
   }
 
