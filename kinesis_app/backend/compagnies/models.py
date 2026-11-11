@@ -21,6 +21,10 @@ rccm_validator = RegexValidator(
 
 class Compagnie(models.Model):
     class Statut(models.TextChoices):
+        EN_ATTENTE_VERIFICATION_EMAIL = (
+            "EN_ATTENTE_VERIFICATION_EMAIL",
+            "En attente de vérification de l’e-mail",
+        )
         EN_ATTENTE_VALIDATION = "EN_ATTENTE_VALIDATION", "En attente de validation"
         EN_ATTENTE_ACTIVATION = "EN_ATTENTE_ACTIVATION", "En attente d’activation"
         ACTIVE = "ACTIVE", "Active"

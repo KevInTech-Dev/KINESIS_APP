@@ -7,6 +7,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.template.loader import render_to_string
 from django.utils import timezone
+from notifications.services import notify_administrators
 from rest_framework.exceptions import ValidationError
 
 from reservations.models import Reservation
@@ -20,6 +21,39 @@ ACTIVATION_TOKEN_SALT = "compagnies.activation"
 
 def _sender_address():
     return formataddr((settings.DEFAULT_FROM_NAME, settings.DEFAULT_FROM_EMAIL))
+
+
+@transaction.atomic
+def submit_verified_company_for_review(*, user):
+    try:
+        company = (
+            Compagnie.objects.select_for_update()
+            .select_related("utilisateur")
+            .get(utilisateur=user)
+        )
+    except Compagnie.DoesNotExist:
+        raise ValidationError(
+            {"email": "Aucun dossier compagnie n’est associé à ce compte."}
+        )
+
+    if (
+        not user.email_verified
+        or company.statut != Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL
+    ):
+        raise ValidationError(
+            {"email": "Ce dossier ne peut pas être soumis à validation."}
+        )
+
+    company.statut = Compagnie.Statut.EN_ATTENTE_VALIDATION
+    company.save(update_fields=("statut",))
+    notify_administrators(
+        titre="Nouveau dossier compagnie",
+        message=(
+            f"La compagnie « {company.nom_commercial or company.raison_sociale} » "
+            "a vérifié son adresse e-mail et soumis son inscription à validation."
+        ),
+    )
+    return company
 
 
 @transaction.atomic

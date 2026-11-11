@@ -3,13 +3,11 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.contrib.auth.forms import PasswordResetForm
-from django.contrib.auth.password_validation import validate_password
-from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db.models import Count, Q
 from django.db.models.functions import Lower, TruncDate
 from django.utils import timezone
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -20,11 +18,16 @@ from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from config.pagination import StandardResultsSetPagination
+from compagnies.models import Compagnie
+from compagnies.services import submit_verified_company_for_review
 
+from .email_verification import send_verification_code, verify_email_code
 from .models import Utilisateur
 from .permissions import IsKinesisAdministrator, PasswordChangeComplete
 from .serializers import (
 	AdminUserListSerializer,
+	EmailVerificationConfirmSerializer,
+	EmailVerificationRequestSerializer,
 	LogoutRequestSerializer,
 	PasswordChangeRequestSerializer,
 	PasswordResetConfirmSerializer,
@@ -38,6 +41,119 @@ class UserRegistrationView(generics.CreateAPIView):
 	queryset = Utilisateur.objects.all()
 	serializer_class = UserRegistrationSerializer
 	permission_classes = [AllowAny]
+	throttle_classes = [ScopedRateThrottle]
+	throttle_scope = "traveler_registration"
+
+	def create(self, request, *args, **kwargs):
+		serializer = self.get_serializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		email = serializer.validated_data["email"]
+		password = serializer.validated_data["password"]
+		user = Utilisateur.objects.filter(email__iexact=email).first()
+		if user:
+			if not user.check_password(password):
+				raise ValidationError(
+					{"email": "Cette adresse email est déjà utilisée."}
+				)
+		else:
+			user = serializer.save(is_active=False, email_verified=False)
+		code_sent = send_verification_code(user, reuse_valid=True)
+		return Response(
+			{
+				"detail": (
+					"Un code de vérification a été envoyé à votre adresse e-mail."
+					if code_sent
+					else (
+						"Votre compte est déjà en attente. Utilisez le code encore "
+						"valide reçu précédemment, ou demandez un nouveau code."
+					)
+				)
+			},
+			status=status.HTTP_202_ACCEPTED,
+		)
+
+
+class EmailVerificationResendView(APIView):
+	permission_classes = (AllowAny,)
+	authentication_classes = ()
+	throttle_classes = (ScopedRateThrottle,)
+	throttle_scope = "email_verification_resend"
+
+	@extend_schema(request=EmailVerificationRequestSerializer, responses={200: None})
+	def post(self, request):
+		serializer = EmailVerificationRequestSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		user = Utilisateur.objects.filter(
+			Q(
+				email__iexact=serializer.validated_data["email"],
+				role=Utilisateur.Role.VOYAGEUR,
+				email_verified=False,
+				is_active=False,
+			)
+			| Q(
+				email__iexact=serializer.validated_data["email"],
+				role=Utilisateur.Role.COMPAGNIE,
+				email_verified=False,
+				is_active=False,
+				profil_compagnie__statut=Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL,
+			)
+		).first()
+		if user:
+			send_verification_code(user)
+		return Response(
+			{
+				"detail": (
+					"Si un compte en attente correspond à cette adresse, "
+					"un code lui a été envoyé."
+				)
+			}
+		)
+
+
+class EmailVerificationConfirmView(APIView):
+	permission_classes = (AllowAny,)
+	authentication_classes = ()
+	throttle_classes = (ScopedRateThrottle,)
+	throttle_scope = "email_verification_confirm"
+
+	@extend_schema(
+		request=EmailVerificationConfirmSerializer,
+		responses={200: serializers.DictField()},
+	)
+	def post(self, request):
+		serializer = EmailVerificationConfirmSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		email = serializer.validated_data["email"]
+		if Utilisateur.objects.filter(
+			email__iexact=email,
+			role=Utilisateur.Role.COMPAGNIE,
+			email_verified=True,
+			profil_compagnie__statut=Compagnie.Statut.EN_ATTENTE_VALIDATION,
+		).exists():
+			return Response(
+				{
+					"detail": (
+						"Adresse e-mail vérifiée. Votre demande a été transmise "
+						"à l’équipe KINESIS pour examen."
+					)
+				}
+			)
+		user = verify_email_code(
+			email,
+			serializer.validated_data["code"],
+			on_company_verified=submit_verified_company_for_review,
+		)
+		if user.role == Utilisateur.Role.COMPAGNIE:
+			return Response(
+				{
+					"detail": (
+						"Adresse e-mail vérifiée. Votre demande a été transmise "
+						"à l’équipe KINESIS pour examen."
+					)
+				}
+			)
+		refresh = RefreshToken.for_user(user)
+		return Response({"access": str(refresh.access_token), "refresh": str(refresh)})
 
 
 class AdminUserListView(generics.ListAPIView):
@@ -149,9 +265,9 @@ class LogoutView(APIView):
 
 	@extend_schema(request=LogoutRequestSerializer, responses={205: None})
 	def post(self, request):
-		refresh_token = request.data.get("refresh")
-		if not refresh_token:
-			raise ValidationError({"refresh": "Ce champ est obligatoire."})
+		serializer = LogoutRequestSerializer(data=request.data)
+		serializer.is_valid(raise_exception=True)
+		refresh_token = serializer.validated_data["refresh"]
 
 		try:
 			token = RefreshToken(refresh_token)
@@ -173,23 +289,12 @@ class ChangePasswordView(APIView):
 	@extend_schema(request=PasswordChangeRequestSerializer, responses={204: None})
 	def post(self, request):
 		user = request.user
-		old_password = request.data.get("old_password")
-		new_password = request.data.get("new_password")
-		confirmation = request.data.get("password_confirmation")
-
-		if not old_password or not new_password or not confirmation:
-			raise ValidationError({"detail": "Tous les champs sont obligatoires."})
-		if not user.check_password(old_password):
-			raise ValidationError({"old_password": "Mot de passe actuel incorrect."})
-		if new_password != confirmation:
-			raise ValidationError(
-				{"password_confirmation": "Les mots de passe ne correspondent pas."}
-			)
-
-		try:
-			validate_password(new_password, user)
-		except DjangoValidationError as error:
-			raise ValidationError({"new_password": error.messages})
+		serializer = PasswordChangeRequestSerializer(
+			data=request.data,
+			context={"request": request},
+		)
+		serializer.is_valid(raise_exception=True)
+		new_password = serializer.validated_data["new_password"]
 		user.set_password(new_password)
 		user.must_change_password = False
 		user.save(update_fields=("password", "must_change_password"))

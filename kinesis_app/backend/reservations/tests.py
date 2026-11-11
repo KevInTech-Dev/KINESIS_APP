@@ -2,8 +2,8 @@ from datetime import time, timedelta
 
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection, transaction
-from django.test.utils import CaptureQueriesContext
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -188,6 +188,21 @@ class ReservationApiTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertEqual(Reservation.objects.count(), 1)
+
+    def test_reservation_rejects_more_passengers_than_the_api_limit(self):
+        response = self.reserve(["Passager"] * 101)
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(Reservation.objects.count(), 0)
+        self.assertFalse(Notification.objects.filter(utilisateur=self.traveler).exists())
+
+    def test_reservation_rejects_blank_or_oversized_passenger_names(self):
+        for passengers in (["   "], ["P" * 151]):
+            with self.subTest(passengers=passengers):
+                response = self.reserve(passengers)
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertEqual(Reservation.objects.count(), 0)
 
     def test_cancellation_releases_the_seat(self):
         agent_user = User.objects.create_user(

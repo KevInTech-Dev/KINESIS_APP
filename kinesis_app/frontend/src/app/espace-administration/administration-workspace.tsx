@@ -8,6 +8,7 @@ import {
   ChartNoAxesCombined,
   Bell,
   Building2,
+  CircleUserRound,
   ExternalLink,
   UsersRound,
 } from "lucide-react";
@@ -1411,7 +1412,7 @@ function CompanyCard({
             // eslint-disable-next-line @next/next/no-img-element
             <img src={logoUrl} alt="" />
           ) : (
-            <span>{title.slice(0, 1).toUpperCase()}</span>
+            <CircleUserRound aria-label="Logo non renseigné" size={28} />
           )}
         </div>
         <div className="admin-company-title">

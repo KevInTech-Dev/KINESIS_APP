@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="fr">
+  <body style="margin:0;padding:32px 12px;background:#f3f6f2;font-family:Arial,Helvetica,sans-serif;color:#24372c;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e3ebe2;border-radius:16px;overflow:hidden;">
+      <tr>
+        <td style="padding:25px 32px;background:#07543d;color:#ffffff;">
+          <div style="font-size:23px;font-weight:800;letter-spacing:1px;">KINESIS</div>
+          <div style="margin-top:5px;color:#d8ff68;font-size:12px;">Voyagez au Togo</div>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:34px 32px 28px;">
+          <p style="margin:0 0 12px;color:#64746a;font-size:13px;font-weight:700;">VÉRIFICATION DE VOTRE COMPTE</p>
+          <h1 style="margin:0 0 18px;font-size:25px;line-height:1.25;color:#173b2b;">Confirmez votre adresse e-mail</h1>
+          <p style="margin:0 0 20px;font-size:15px;line-height:1.7;">Bonjour <strong>{{ user_name }}</strong>,</p>
+          <p style="margin:0 0 20px;color:#53645a;font-size:15px;line-height:1.7;">Saisissez ce code dans KINESIS pour vérifier votre adresse et activer votre compte voyageur.</p>
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 22px;background:#f3f8f2;border:1px solid #dfeadd;border-radius:12px;">
+            <tr>
+              <td align="center" style="padding:21px 12px;color:#07543d;font-size:32px;font-weight:800;letter-spacing:8px;">{{ verification_code }}</td>
+            </tr>
+          </table>
+          <p style="margin:0 0 14px;color:#64746a;font-size:13px;line-height:1.7;">Ce code est valable pendant <strong>{{ expiration_minutes }} minutes</strong>. Ne le partagez avec personne.</p>
+          <p style="margin:0;color:#7b887f;font-size:12px;line-height:1.7;">Si vous n’êtes pas à l’origine de cette demande, ignorez cet e-mail. Votre adresse ne sera pas vérifiée.</p>
+        </td>
+      </tr>
+      <tr>
+        <td style="padding:17px 32px;border-top:1px solid #edf1ec;background:#fafcf9;color:#7b887f;font-size:12px;">L’équipe KINESIS · Le Togo en mouvement, avec vous.</td>
+      </tr>
+    </table>
+  </body>
+</html>

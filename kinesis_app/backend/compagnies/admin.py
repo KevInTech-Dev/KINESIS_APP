@@ -64,6 +64,9 @@ class CompagnieAdmin(admin.ModelAdmin):
     def has_add_permission(self, request):
         return False
 
+    def get_queryset(self, request):
+        return super().get_queryset(request).filter(utilisateur__email_verified=True)
+
     def save_model(self, request, obj, form, change):
         super().save_model(request, obj, form, change)
         obj.utilisateur.telephone = form.cleaned_data["telephone_principal"]

@@ -40,11 +40,13 @@ import KinesisLoader from "@/components/kinesis-loader";
 import ProfileViewDialog from "@/components/profile-view-dialog";
 import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
+import TogoPhoneInput from "@/components/togo-phone-input";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 import {
   getUserFacingApiError,
   getUserFacingErrorMessage,
 } from "@/lib/user-facing-errors";
+import { formatTogoPhoneInput } from "@/lib/togo-phone";
 
 type Reservation = {
   id_reservation: string;
@@ -576,7 +578,7 @@ export default function TravelerDashboard() {
         setData(cachedData);
         setNom(profileData.nom);
         setPrenoms(profileData.prenoms);
-        setTelephone(profileData.telephone ?? "");
+        setTelephone(formatTogoPhoneInput(profileData.telephone ?? ""));
         setLoading(false);
       } else if (
         hasDashboardData.current &&
@@ -881,7 +883,7 @@ export default function TravelerDashboard() {
       }));
       setNom(profileData.nom);
       setPrenoms(profileData.prenoms);
-      setTelephone(profileData.telephone ?? "");
+      setTelephone(formatTogoPhoneInput(profileData.telephone ?? ""));
     } catch (loadError) {
       if (requestId !== dashboardRequestId.current) return;
       console.error("Traveler dashboard request failed", loadError);
@@ -965,7 +967,7 @@ export default function TravelerDashboard() {
       );
       setNom(updatedProfile.nom);
       setPrenoms(updatedProfile.prenoms);
-      setTelephone(updatedProfile.telephone ?? "");
+      setTelephone(formatTogoPhoneInput(updatedProfile.telephone ?? ""));
       setPhoto(null);
       if (photoInput.current) photoInput.current.value = "";
       setEditingProfile(false);
@@ -1633,11 +1635,11 @@ export default function TravelerDashboard() {
                 </label>
                 <label>
                   <span>Téléphone</span>
-                  <input
-                    autoComplete="tel"
-                    maxLength={30}
+                  <TogoPhoneInput
                     value={telephone}
-                    onChange={(event) => setTelephone(event.target.value)}
+                    onChange={(value) =>
+                      setTelephone(formatTogoPhoneInput(value))
+                    }
                   />
                 </label>
                 <label className="traveler-photo-field">

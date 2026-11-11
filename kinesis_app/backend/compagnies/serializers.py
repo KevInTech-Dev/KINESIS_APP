@@ -7,19 +7,47 @@ from django.db import transaction
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
-from notifications.services import notify_administrators
+from config.fields import LimitedImageField
 from utilisateurs.models import Utilisateur
+from utilisateurs.validators import normalize_togo_phone, validate_person_name
 from voyages.models import Ville
 
 from .agent_invitations import get_agent_from_invitation
 from .models import AgentCompagnie, Compagnie, Gare, PermissionAgent
 
 
-class OptionalImageField(serializers.ImageField):
+class OptionalImageField(LimitedImageField):
     def to_internal_value(self, data):
         if data == "":
             return None
         return super().to_internal_value(data)
+
+
+def validate_phone_number(value):
+    if not value:
+        return value
+    try:
+        return normalize_togo_phone(value)
+    except DjangoValidationError as error:
+        raise serializers.ValidationError(error.messages)
+
+
+def validate_personal_name(value):
+    try:
+        return validate_person_name(value)
+    except DjangoValidationError as error:
+        raise serializers.ValidationError(error.messages)
+
+
+def normalize_rccm(value):
+    value = value.strip()
+    if not value.upper().startswith("TG-"):
+        value = f"TG-{value}"
+    if re.fullmatch(r"TG-[A-Za-z0-9-]+", value, re.IGNORECASE | re.ASCII) is None:
+        raise serializers.ValidationError(
+            "Le RCCM doit contenir uniquement des lettres, chiffres et tirets après le préfixe TG-."
+        )
+    return value.upper()
 
 
 class CompanyRegistrationSerializer(serializers.Serializer):
@@ -45,21 +73,14 @@ class CompanyRegistrationSerializer(serializers.Serializer):
     )
     rccm = serializers.CharField(
         max_length=50,
-        validators=[
-            UniqueValidator(
-                queryset=Compagnie.objects.all(),
-                lookup="iexact",
-                message="Une compagnie utilise déjà ce RCCM.",
-            )
-        ],
     )
     logo = OptionalImageField(
         required=False,
         allow_null=True,
         help_text="Facultatif. Peut être omis lors de l’inscription.",
     )
-    carte_cfe = serializers.ImageField()
-    piece_identite_gerant = serializers.ImageField()
+    carte_cfe = LimitedImageField()
+    piece_identite_gerant = LimitedImageField()
     description = serializers.CharField(required=False, allow_blank=True)
     adresse = serializers.CharField(max_length=255, required=False, allow_blank=True)
     password = serializers.CharField(write_only=True, validators=[validate_password])
@@ -70,12 +91,23 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Cette adresse email est déjà utilisée.")
         return value
 
+    def validate_telephone(self, value):
+        return validate_phone_number(value)
+
+    def validate_telephone_secondaire(self, value):
+        return validate_phone_number(value)
+
     def validate_rccm(self, value):
-        if re.fullmatch(r"TG-[A-Za-z0-9-]+", value, re.IGNORECASE | re.ASCII) is None:
+        normalized = normalize_rccm(value)
+        if len(normalized) > 50:
             raise serializers.ValidationError(
-                "Le RCCM doit commencer par TG- et contenir uniquement des lettres, chiffres et tirets."
+                "Le RCCM ne peut pas dépasser 50 caractères, préfixe TG- compris."
             )
-        return value.upper()
+        if Compagnie.objects.filter(rccm__iexact=normalized).exists():
+            raise serializers.ValidationError(
+                "Une compagnie utilise déjà ce RCCM."
+            )
+        return normalized
 
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirmation"]:
@@ -99,17 +131,12 @@ class CompanyRegistrationSerializer(serializers.Serializer):
             telephone=telephone,
             role=Utilisateur.Role.COMPAGNIE,
             is_active=False,
+            email_verified=False,
         )
         company = Compagnie.objects.create(
             utilisateur=utilisateur,
+            statut=Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL,
             **validated_data,
-        )
-        notify_administrators(
-            titre="Nouveau dossier compagnie",
-            message=(
-                f"La compagnie « {company.nom_commercial or company.raison_sociale} » "
-                "a soumis son inscription et attend votre validation."
-            ),
         )
         return company
 
@@ -120,6 +147,7 @@ class CompanyRegistrationSerializer(serializers.Serializer):
 class CompanyProfileSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(source="utilisateur.email", read_only=True)
     telephone = serializers.CharField(source="utilisateur.telephone", read_only=True)
+    logo = OptionalImageField(required=False, allow_null=True)
 
     class Meta:
         model = Compagnie
@@ -291,6 +319,15 @@ class AgentCreateSerializer(serializers.Serializer):
             raise serializers.ValidationError("Cette adresse email est déjà utilisée.")
         return value.lower()
 
+    def validate_nom(self, value):
+        return validate_personal_name(value)
+
+    def validate_prenoms(self, value):
+        return validate_personal_name(value) if value else value
+
+    def validate_telephone(self, value):
+        return validate_phone_number(value)
+
     def validate_permissions(self, value):
         if len(value) != len(set(value)):
             raise serializers.ValidationError("Une permission ne peut être répétée.")
@@ -378,6 +415,15 @@ class AgentUpdateSerializer(serializers.Serializer):
         required=False,
         allow_empty=True,
     )
+
+    def validate_nom(self, value):
+        return validate_personal_name(value)
+
+    def validate_prenoms(self, value):
+        return validate_personal_name(value) if value else value
+
+    def validate_telephone(self, value):
+        return validate_phone_number(value)
 
     def validate_permissions(self, value):
         if len(value) != len(set(value)):

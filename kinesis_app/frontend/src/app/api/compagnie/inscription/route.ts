@@ -33,14 +33,14 @@ export async function POST(request: Request) {
       headers: { Accept: "application/json" },
       body: formData,
       cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch (error) {
     console.error("Company registration request failed", error);
     return NextResponse.json(
       {
         detail:
-          "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
+          "Le délai de réponse est dépassé. Votre dossier a peut-être été reçu. Vous pouvez réessayer avec les mêmes informations : si la demande est déjà enregistrée, le système le confirmera sans créer de doublon.",
       },
       { status: 502 },
     );

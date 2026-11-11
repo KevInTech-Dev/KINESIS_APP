@@ -1,10 +1,12 @@
 from datetime import timedelta
 from io import BytesIO
+import re
 from tempfile import TemporaryDirectory
 from urllib.parse import parse_qs, urlparse
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.tokens import default_token_generator
+from django.core.cache import cache
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
@@ -22,9 +24,23 @@ from compagnies.models import AgentCompagnie, Compagnie
 User = get_user_model()
 
 
+@override_settings(
+	CACHES={
+		"default": {
+			"BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+		}
+	}
+)
 class UserAuthenticationTests(APITestCase):
 	password = "Qx7!mR4#vN8p"
 
+	def setUp(self):
+		super().setUp()
+		cache.clear()
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
 	def test_registration_allows_missing_first_names(self):
 		response = self.client.post(
 			reverse("user-register"),
@@ -37,12 +53,15 @@ class UserAuthenticationTests(APITestCase):
 			format="json",
 		)
 
-		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-		self.assertEqual(
-			User.objects.get(email="sans-prenoms@example.com").prenoms,
-			"",
-		)
+		self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+		user = User.objects.get(email="sans-prenoms@example.com")
+		self.assertEqual(user.prenoms, "")
+		self.assertFalse(user.email_verified)
+		self.assertFalse(user.is_active)
 
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
 	def test_registration_creates_a_traveler_and_hashes_password(self):
 		response = self.client.post(
 			reverse("user-register"),
@@ -57,11 +76,207 @@ class UserAuthenticationTests(APITestCase):
 			format="json",
 		)
 
-		self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+		self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
 		user = User.objects.get(email="voyageur@example.com")
 		self.assertEqual(user.role, User.Role.VOYAGEUR)
 		self.assertTrue(user.check_password(self.password))
+		self.assertFalse(user.email_verified)
+		self.assertFalse(user.is_active)
 		self.assertNotIn("password", response.data)
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_email_verification_activates_account_and_allows_login(self):
+		payload = {
+			"email": "verification@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		registration = self.client.post(
+			reverse("user-register"), payload, format="json"
+		)
+		self.assertEqual(registration.status_code, status.HTTP_202_ACCEPTED)
+		self.assertIn("KINESIS", mail.outbox[0].from_email)
+		self.assertIn("code de vérification", mail.outbox[0].body)
+		self.assertEqual(len(mail.outbox[0].alternatives), 1)
+		self.assertIn("Confirmez votre adresse e-mail", mail.outbox[0].alternatives[0][0])
+		user = User.objects.get(email=payload["email"])
+
+		login_before_verification = self.client.post(
+			reverse("token-obtain-pair"),
+			{"email": payload["email"], "password": self.password},
+			format="json",
+		)
+		self.assertEqual(
+			login_before_verification.status_code,
+			status.HTTP_401_UNAUTHORIZED,
+		)
+
+		code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
+		verification = self.client.post(
+			reverse("email-verification-confirm"),
+			{"email": payload["email"], "code": code},
+			format="json",
+		)
+		self.assertEqual(verification.status_code, status.HTTP_200_OK)
+		self.assertIn("access", verification.data)
+		self.assertIn("refresh", verification.data)
+		user.refresh_from_db()
+		self.assertTrue(user.email_verified)
+		self.assertTrue(user.is_active)
+
+		login_after_verification = self.client.post(
+			reverse("token-obtain-pair"),
+			{"email": payload["email"], "password": self.password},
+			format="json",
+		)
+		self.assertEqual(login_after_verification.status_code, status.HTTP_200_OK)
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_email_verification_locks_code_after_five_attempts(self):
+		payload = {
+			"email": "attempts@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		self.client.post(reverse("user-register"), payload, format="json")
+		code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
+
+		for _ in range(5):
+			response = self.client.post(
+				reverse("email-verification-confirm"),
+				{
+					"email": payload["email"],
+					"code": "000000" if code != "000000" else "000001",
+				},
+				format="json",
+			)
+			self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+		verification = self.client.post(
+			reverse("email-verification-confirm"),
+			{"email": payload["email"], "code": code},
+			format="json",
+		)
+		self.assertEqual(verification.status_code, status.HTTP_400_BAD_REQUEST)
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_resending_code_invalidates_previous_code(self):
+		payload = {
+			"email": "resend@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		self.client.post(reverse("user-register"), payload, format="json")
+		old_code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
+		resend = self.client.post(
+			reverse("email-verification-resend"),
+			{"email": payload["email"]},
+			format="json",
+		)
+		self.assertEqual(resend.status_code, status.HTTP_200_OK)
+		self.assertEqual(len(mail.outbox), 2)
+
+		old_code_response = self.client.post(
+			reverse("email-verification-confirm"),
+			{"email": payload["email"], "code": old_code},
+			format="json",
+		)
+		self.assertEqual(old_code_response.status_code, status.HTTP_400_BAD_REQUEST)
+		new_code = re.search(r"\b(\d{6})\b", mail.outbox[1].body).group(1)
+		new_code_response = self.client.post(
+			reverse("email-verification-confirm"),
+			{"email": payload["email"], "code": new_code},
+			format="json",
+		)
+		self.assertEqual(new_code_response.status_code, status.HTTP_200_OK)
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_verification_code_sends_are_limited_to_five_per_fifteen_minutes(self):
+		payload = {
+			"email": "send-limit@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		registration = self.client.post(
+			reverse("user-register"), payload, format="json"
+		)
+		self.assertEqual(registration.status_code, status.HTTP_202_ACCEPTED)
+
+		for _ in range(4):
+			resend = self.client.post(
+				reverse("email-verification-resend"),
+				{"email": payload["email"]},
+				format="json",
+			)
+			self.assertEqual(resend.status_code, status.HTTP_200_OK)
+
+		self.assertEqual(len(mail.outbox), 5)
+		limited = self.client.post(
+			reverse("email-verification-resend"),
+			{"email": payload["email"]},
+			format="json",
+		)
+		self.assertEqual(limited.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+		self.assertIn("5 codes en 15 minutes", str(limited.data["detail"]))
+
+	@override_settings(
+		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+	)
+	def test_pending_registration_can_be_retried_after_lost_response(self):
+		payload = {
+			"email": "retry@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		first = self.client.post(reverse("user-register"), payload, format="json")
+		original_code = re.search(r"\b(\d{6})\b", mail.outbox[0].body).group(1)
+		retry = self.client.post(reverse("user-register"), payload, format="json")
+
+		self.assertEqual(first.status_code, status.HTTP_202_ACCEPTED)
+		self.assertEqual(retry.status_code, status.HTTP_202_ACCEPTED, retry.data)
+		self.assertIn("Utilisez le code encore valide", retry.data["detail"])
+		self.assertEqual(User.objects.filter(email=payload["email"]).count(), 1)
+		self.assertEqual(len(mail.outbox), 1)
+
+		verification = self.client.post(
+			reverse("email-verification-confirm"),
+			{"email": payload["email"], "code": original_code},
+			format="json",
+		)
+		self.assertEqual(verification.status_code, status.HTTP_200_OK)
+
+	def test_registration_validates_names_phone_and_password_composition(self):
+		base_payload = {
+			"email": "invalid-data@example.com",
+			"nom": "Doe",
+			"password": self.password,
+			"password_confirmation": self.password,
+		}
+		for updates in (
+			{"nom": "Doe123"},
+			{"telephone": "80000000"},
+			{"password": "alllowercase1!", "password_confirmation": "alllowercase1!"},
+		):
+			with self.subTest(updates=updates):
+				response = self.client.post(
+					reverse("user-register"),
+					{**base_payload, **updates},
+					format="json",
+				)
+				self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 	def test_password_confirmation_must_match(self):
 		response = self.client.post(
@@ -78,6 +293,27 @@ class UserAuthenticationTests(APITestCase):
 
 		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 		self.assertFalse(User.objects.filter(email="voyageur@example.com").exists())
+
+	def test_registration_rejects_email_already_used_with_different_case(self):
+		User.objects.create_user(
+			email="voyageur@example.com",
+			password=self.password,
+			nom="Doe",
+		)
+
+		response = self.client.post(
+			reverse("user-register"),
+			{
+				"email": "VOYAGEUR@EXAMPLE.COM",
+				"nom": "Dupont",
+				"password": self.password,
+				"password_confirmation": self.password,
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertEqual(User.objects.filter(email__iexact="voyageur@example.com").count(), 1)
 
 	def test_login_returns_tokens_and_profile_requires_authentication(self):
 		user = User.objects.create_user(
@@ -213,6 +449,31 @@ class UserAuthenticationTests(APITestCase):
 				f"http://testserver{company.logo.url}",
 			)
 
+	def test_profile_rejects_photo_larger_than_five_megabytes(self):
+		user = User.objects.create_user(
+			email="large-photo@example.com",
+			password=self.password,
+			nom="Voyageur",
+		)
+		self.client.force_authenticate(user=user)
+
+		response = self.client.patch(
+			reverse("current-user"),
+			{
+				"photo_profil": SimpleUploadedFile(
+					"large.png",
+					b"x" * (5 * 1024 * 1024 + 1),
+					content_type="image/png",
+				)
+			},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertIn("photo_profil", response.data)
+		user.refresh_from_db()
+		self.assertFalse(user.photo_profil)
+
 	def test_logout_revokes_the_refresh_token(self):
 		user = User.objects.create_user(
 			email="voyageur@example.com",
@@ -242,6 +503,69 @@ class UserAuthenticationTests(APITestCase):
 			format="json",
 		)
 		self.assertEqual(refresh_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+	def test_logout_rejects_non_string_refresh_token(self):
+		user = User.objects.create_user(
+			email="logout-invalid@example.com",
+			password=self.password,
+			nom="Doe",
+		)
+		self.client.force_authenticate(user=user)
+
+		response = self.client.post(
+			reverse("user-logout"),
+			{"refresh": {"token": "not-a-token"}},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertIn("refresh", response.data)
+
+	def test_password_change_rejects_non_string_fields_without_changing_password(self):
+		user = User.objects.create_user(
+			email="password-invalid@example.com",
+			password=self.password,
+			nom="Doe",
+		)
+		self.client.force_authenticate(user=user)
+
+		response = self.client.post(
+			reverse("user-change-password"),
+			{
+				"old_password": {"value": self.password},
+				"new_password": "New-Strong-Pass#29",
+				"password_confirmation": "New-Strong-Pass#29",
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+		self.assertIn("old_password", response.data)
+		user.refresh_from_db()
+		self.assertTrue(user.check_password(self.password))
+
+	def test_password_change_validates_and_updates_password(self):
+		user = User.objects.create_user(
+			email="password-change@example.com",
+			password=self.password,
+			nom="Doe",
+		)
+		self.client.force_authenticate(user=user)
+		new_password = "New-Strong-Pass#29"
+
+		response = self.client.post(
+			reverse("user-change-password"),
+			{
+				"old_password": self.password,
+				"new_password": new_password,
+				"password_confirmation": new_password,
+			},
+			format="json",
+		)
+
+		self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+		user.refresh_from_db()
+		self.assertTrue(user.check_password(new_password))
 
 	@override_settings(
 		EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",

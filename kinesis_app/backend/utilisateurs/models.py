@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.contrib.auth.base_user import AbstractBaseUser, BaseUserManager
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
@@ -72,6 +73,7 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
 
     # Champs nécessaires au fonctionnement de l'authentification Django.
     is_active = models.BooleanField(default=True)
+    email_verified = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     must_change_password = models.BooleanField(default=False)
     agent_invitation_id = models.UUIDField(blank=True, null=True, editable=False)
@@ -85,3 +87,20 @@ class Utilisateur(AbstractBaseUser, PermissionsMixin):
         if self.role == self.Role.VOYAGEUR:
             return f"Voyageur {self.pk}"
         return self.email
+
+
+class EmailVerification(models.Model):
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="email_verification",
+    )
+    code_hash = models.CharField(max_length=128)
+    expires_at = models.DateTimeField()
+    attempts = models.PositiveSmallIntegerField(default=0)
+    window_started_at = models.DateTimeField(default=timezone.now)
+    sends_in_window = models.PositiveSmallIntegerField(default=0)
+    last_sent_at = models.DateTimeField(default=timezone.now)
+
+    def __str__(self):
+        return f"Vérification e-mail pour {self.user_id}"

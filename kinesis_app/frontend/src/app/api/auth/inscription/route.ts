@@ -64,7 +64,10 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { detail: "Compte créé. Vous pouvez maintenant vous connecter." },
+    {
+      detail:
+        "Un code de vérification a été envoyé à votre adresse e-mail. Il est valable 10 minutes.",
+    },
     { status: result.status },
   );
 }

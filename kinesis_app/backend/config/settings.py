@@ -35,10 +35,13 @@ REST_FRAMEWORK = {
         "rest_framework.permissions.IsAuthenticated",
     ],
     "DEFAULT_THROTTLE_RATES": {
+        "traveler_registration": "5/minute",
         "agent_activation": "10/hour",
         "agent_invitation_resend": "10/hour",
         "password_reset_request": "5/hour",
         "password_reset_confirm": "10/hour",
+        "email_verification_resend": "10/minute",
+        "email_verification_confirm": "10/hour",
     },
 }
 
@@ -187,7 +190,15 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
+    {
+        "NAME": "utilisateurs.validators.PasswordCompositionValidator",
+    },
 ]
+
+EMAIL_VERIFICATION_CODE_TTL = 10 * 60
+EMAIL_VERIFICATION_MAX_ATTEMPTS = 5
+EMAIL_VERIFICATION_SEND_WINDOW = 15 * 60
+EMAIL_VERIFICATION_MAX_SENDS_PER_WINDOW = 5
 
 
 # Internationalization

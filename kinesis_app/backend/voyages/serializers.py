@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework import serializers
 
 from compagnies.models import Gare
+from config.fields import LimitedImageField
 
 from .models import Ville, Voyage
 
@@ -60,6 +61,7 @@ class GarePublicSerializer(serializers.ModelSerializer):
 
 
 class VoyageSerializer(serializers.ModelSerializer):
+    image = LimitedImageField(required=False, allow_null=True)
     heure_depart = serializers.TimeField(format="%H:%M")
     compagnie = serializers.UUIDField(source="compagnie_id", read_only=True)
     compagnie_nom = serializers.CharField(

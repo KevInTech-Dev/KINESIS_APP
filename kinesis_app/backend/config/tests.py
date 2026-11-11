@@ -1,9 +1,12 @@
 import uuid
 
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 from drf_spectacular.generators import SchemaGenerator
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.test import APITestCase
+
+from .fields import LimitedImageField
 
 
 class ApiRouteSmokeTests(APITestCase):
@@ -25,6 +28,20 @@ class ApiRouteSmokeTests(APITestCase):
             with self.subTest(route=route_name):
                 response = self.client.get(reverse(route_name, kwargs=kwargs))
                 self.assertEqual(response.status_code, expected_status)
+
+    def test_image_uploads_over_five_megabytes_are_rejected(self):
+        image = SimpleUploadedFile(
+            "large.png",
+            b"x" * (5 * 1024 * 1024 + 1),
+            content_type="image/png",
+        )
+        field = LimitedImageField()
+
+        with self.assertRaisesMessage(
+            serializers.ValidationError,
+            "L’image ne doit pas dépasser 5 Mo.",
+        ):
+            field.run_validation(image)
 
     def test_authentication_routes_are_reachable(self):
         response = self.client.post(reverse("user-register"), data={}, format="json")

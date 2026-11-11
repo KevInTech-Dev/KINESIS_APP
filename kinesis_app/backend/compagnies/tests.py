@@ -1,3 +1,4 @@
+import re
 from datetime import time, timedelta
 from io import BytesIO
 from tempfile import TemporaryDirectory
@@ -6,22 +7,23 @@ from urllib.parse import parse_qs, urlparse
 
 from django.contrib import admin
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, transaction
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
-from notifications.models import Notification
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import AccessToken
 
+from notifications.models import Notification
 from reservations.models import Reservation
 from voyages.models import Ville, Voyage
 
 from .models import AgentCompagnie, Compagnie, Gare, PermissionAgent
-from .serializers import CompanyRegistrationSerializer
+from .serializers import CompanyRegistrationSerializer, normalize_rccm
 from .storage import AuthenticatedCompanyDocumentStorage
 
 User = get_user_model()
@@ -305,7 +307,57 @@ class CompanyApiTests(APITestCase):
                 response.data["logo"],
             )
 
-    def test_company_registration_stays_pending_and_cannot_login(self):
+    def test_company_profile_rejects_logo_larger_than_five_megabytes(self):
+        user, company = self.create_active_company("large-logo@example.com")
+        self.client.force_authenticate(user=user)
+
+        response = self.client.patch(
+            reverse("my-company"),
+            {
+                "logo": SimpleUploadedFile(
+                    "large.png",
+                    b"x" * (5 * 1024 * 1024 + 1),
+                    content_type="image/png",
+                )
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("logo", response.data)
+        company.refresh_from_db()
+        self.assertFalse(company.logo)
+
+    def test_company_registration_rejects_oversized_documents(self):
+        response = self.client.post(
+            reverse("company-register"),
+            {
+                "email": "oversized-docs@example.com",
+                "raison_sociale": "Transport Togo SARL",
+                "nom_commercial": "Kinesis Transport",
+                "telephone": "+22890000000",
+                "nif": "1234567890",
+                "rccm": "TG-LFW-01-2023-B13-01282",
+                "carte_cfe": SimpleUploadedFile(
+                    "large.png",
+                    b"x" * (5 * 1024 * 1024 + 1),
+                    content_type="image/png",
+                ),
+                "piece_identite_gerant": make_test_image("identity.png"),
+                "password": self.password,
+                "password_confirmation": self.password,
+            },
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("carte_cfe", response.data)
+        self.assertFalse(
+            User.objects.filter(email="oversized-docs@example.com").exists()
+        )
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_company_registration_requires_email_verification_before_review(self):
         admin_user = User.objects.create_superuser(
             email="registration-admin@example.com",
             password=self.password,
@@ -346,18 +398,48 @@ class CompanyApiTests(APITestCase):
                 format="multipart",
             )
 
-        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
         company = Compagnie.objects.get(
             utilisateur__email="nouvelle-compagnie@example.com"
         )
-        self.assertEqual(company.statut, Compagnie.Statut.EN_ATTENTE_VALIDATION)
+        self.assertEqual(
+            company.statut,
+            Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL,
+        )
         self.assertFalse(company.utilisateur.is_active)
+        self.assertFalse(company.utilisateur.email_verified)
         self.assertEqual(company.utilisateur.prenoms, "")
         self.assertEqual(company.utilisateur.nom, "Transport Togo SARL")
         self.assertEqual(company.rccm, "TG-LFW-01-2023-B13-01282")
         self.assertEqual(company.nif, "1234567890")
         self.assertNotIn("carte_cfe", response.data)
         self.assertNotIn("piece_identite_gerant", response.data)
+        self.assertFalse(Notification.objects.filter(utilisateur=admin_user).exists())
+        self.assertFalse(
+            Notification.objects.filter(utilisateur=inactive_admin).exists()
+        )
+
+        resend = self.client.post(
+            reverse("email-verification-resend"),
+            {"email": company.utilisateur.email},
+            format="json",
+        )
+        self.assertEqual(resend.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(mail.outbox), 2)
+        code = re.search(r"\b(\d{6})\b", mail.outbox[1].body).group(1)
+        verification = self.client.post(
+            reverse("email-verification-confirm"),
+            {"email": company.utilisateur.email, "code": code},
+            format="json",
+        )
+        self.assertEqual(verification.status_code, status.HTTP_200_OK)
+        self.assertNotIn("access", verification.data)
+        company.refresh_from_db()
+        company.utilisateur.refresh_from_db()
+        self.assertEqual(company.statut, Compagnie.Statut.EN_ATTENTE_VALIDATION)
+        self.assertTrue(company.utilisateur.email_verified)
+        self.assertFalse(company.utilisateur.is_active)
+
         admin_notification = Notification.objects.get(utilisateur=admin_user)
         self.assertEqual(
             admin_notification.type,
@@ -365,16 +447,95 @@ class CompanyApiTests(APITestCase):
         )
         self.assertEqual(admin_notification.titre, "Nouveau dossier compagnie")
         self.assertIn("Kinesis Transport", admin_notification.message)
-        self.assertFalse(
-            Notification.objects.filter(utilisateur=inactive_admin).exists()
+        retry_verification = self.client.post(
+            reverse("email-verification-confirm"),
+            {"email": company.utilisateur.email, "code": code},
+            format="json",
         )
-
+        self.assertEqual(retry_verification.status_code, status.HTTP_200_OK)
+        self.assertEqual(Notification.objects.filter(utilisateur=admin_user).count(), 1)
         login_response = self.client.post(
             reverse("token-obtain-pair"),
             {"email": company.utilisateur.email, "password": self.password},
             format="json",
         )
         self.assertEqual(login_response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    def test_company_registration_retry_reuses_valid_code_without_duplicate(self):
+        registration_data = {
+            "email": "retry-company@example.com",
+            "raison_sociale": "Transport Togo SARL",
+            "nom_commercial": "Kinesis Transport",
+            "telephone": "90 00 00 00",
+            "telephone_secondaire": "",
+            "nif": "1234567890",
+            "rccm": "LFW-01-2023-B13-01282",
+            "carte_cfe": make_test_image("carte-cfe.png"),
+            "piece_identite_gerant": make_test_image("piece-identite.png"),
+            "password": self.password,
+            "password_confirmation": self.password,
+        }
+        with patch(
+            "compagnies.storage.AuthenticatedCompanyDocumentStorage.save",
+            side_effect=[
+                "compagnies/documents/carte-cfe.png",
+                "compagnies/documents/piece-identite.png",
+            ],
+        ):
+            first_response = self.client.post(
+                reverse("company-register"),
+                registration_data,
+                format="multipart",
+            )
+            retry_response = self.client.post(
+                reverse("company-register"),
+                {
+                    **registration_data,
+                    "carte_cfe": make_test_image("carte-cfe-retry.png"),
+                    "piece_identite_gerant": make_test_image("identity-retry.png"),
+                },
+                format="multipart",
+            )
+
+        self.assertEqual(first_response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertEqual(retry_response.status_code, status.HTTP_202_ACCEPTED)
+        self.assertIn("Utilisez le code encore valide", retry_response.data["detail"])
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(
+            User.objects.filter(email="retry-company@example.com").count(),
+            1,
+        )
+        self.assertEqual(Compagnie.objects.filter(nif="1234567890").count(), 1)
+
+    def test_company_registration_retry_reports_already_approved_or_active_account(self):
+        for email, company_status, is_active in (
+            (
+                "approved-retry@example.com",
+                Compagnie.Statut.EN_ATTENTE_ACTIVATION,
+                False,
+            ),
+            ("active-retry@example.com", Compagnie.Statut.ACTIVE, True),
+        ):
+            with self.subTest(status=company_status):
+                user = User.objects.create_user(
+                    email=email,
+                    password=self.password,
+                    nom="Transport",
+                    role=User.Role.COMPAGNIE,
+                    is_active=is_active,
+                )
+                Compagnie.objects.create(utilisateur=user, statut=company_status)
+                response = self.client.post(
+                    reverse("company-register"),
+                    {"email": email, "password": self.password},
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                if company_status == Compagnie.Statut.EN_ATTENTE_ACTIVATION:
+                    self.assertIn("validé", response.data["detail"])
+                else:
+                    self.assertIn("déjà activé", response.data["detail"])
 
     def test_company_registration_validates_nif_and_rccm_formats(self):
         invalid_numbers = (
@@ -400,6 +561,10 @@ class CompanyApiTests(APITestCase):
         )
         self.assertFalse(rccm_error.is_valid())
         self.assertIn("rccm", rccm_error.errors)
+        self.assertEqual(
+            normalize_rccm(" lfw-01-2023-b13-01282 "),
+            "TG-LFW-01-2023-B13-01282",
+        )
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
     def test_admin_approval_sends_one_time_activation_link(self):
@@ -933,6 +1098,26 @@ class AdminCompanyApiTests(APITestCase):
             response.data["results"][0]["id"],
             str(self.pending_company.pk),
         )
+
+    def test_admin_company_list_hides_unverified_company_applications(self):
+        user = User.objects.create_user(
+            email="unverified-company@example.com",
+            password=self.password,
+            nom="Transport",
+            role=User.Role.COMPAGNIE,
+            is_active=False,
+            email_verified=False,
+        )
+        Compagnie.objects.create(
+            utilisateur=user,
+            statut=Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL,
+        )
+
+        response = self.client.get(reverse("admin-company-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 1)
+        self.assertEqual(response.data["results"][0]["id"], str(self.pending_company.pk))
 
     def test_admin_lists_company_applications_with_signed_private_documents(self):
         self.pending_company.carte_cfe.name = "compagnies/documents/cfe.png"

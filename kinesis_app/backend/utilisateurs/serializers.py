@@ -5,10 +5,13 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.utils.encoding import force_str
 from django.utils.http import urlsafe_base64_decode
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
 from compagnies.models import AgentCompagnie, Compagnie
+from config.fields import LimitedImageField
 
 from .models import Utilisateur
+from .validators import normalize_togo_phone, validate_person_name
 
 
 class AdminCompanySummarySerializer(serializers.ModelSerializer):
@@ -73,6 +76,7 @@ class AdminUserListSerializer(serializers.ModelSerializer):
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
+    email = serializers.EmailField(validators=[])
     password = serializers.CharField(write_only=True, validators=[validate_password])
     password_confirmation = serializers.CharField(write_only=True)
     prenoms = serializers.CharField(max_length=150, required=False, allow_blank=True)
@@ -91,6 +95,38 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "role")
 
+    def validate_email(self, value):
+        existing = Utilisateur.objects.filter(email__iexact=value).first()
+        if existing and not (
+            existing.role == Utilisateur.Role.VOYAGEUR
+            and not existing.email_verified
+            and not existing.is_active
+        ):
+            raise serializers.ValidationError("Cette adresse email est déjà utilisée.")
+        return value.lower()
+
+    def validate_nom(self, value):
+        try:
+            return validate_person_name(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+    def validate_prenoms(self, value):
+        if not value:
+            return value
+        try:
+            return validate_person_name(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+    def validate_telephone(self, value):
+        if not value:
+            return value
+        try:
+            return normalize_togo_phone(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
     def validate(self, attrs):
         if attrs["password"] != attrs["password_confirmation"]:
             raise serializers.ValidationError(
@@ -104,7 +140,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return Utilisateur.objects.create_user(password=password, **validated_data)
 
 
-class UserProfilePhotoField(serializers.ImageField):
+class UserProfilePhotoField(LimitedImageField):
     def to_representation(self, value):
         user = self.parent.instance
         if user and user.role == Utilisateur.Role.COMPAGNIE:
@@ -152,6 +188,49 @@ class UserProfileSerializer(serializers.ModelSerializer):
         except AgentCompagnie.DoesNotExist:
             return None
 
+    def validate_nom(self, value):
+        try:
+            return validate_person_name(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+    def validate_prenoms(self, value):
+        if not value:
+            return value
+        try:
+            return validate_person_name(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+    def validate_telephone(self, value):
+        if not value:
+            return value
+        try:
+            return normalize_togo_phone(value)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.messages)
+
+
+class EmailVerificationRequestSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+
+
+class EmailVerificationConfirmSerializer(EmailVerificationRequestSerializer):
+    code = serializers.RegexField(r"^[0-9]{6}$")
+
+
+class UserTokenObtainPairSerializer(TokenObtainPairSerializer):
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        if (
+            self.user.role == Utilisateur.Role.VOYAGEUR
+            and not self.user.email_verified
+        ):
+            raise serializers.ValidationError(
+                {"detail": "Vérifiez votre adresse e-mail avant de vous connecter."}
+            )
+        return data
+
 
 class LogoutRequestSerializer(serializers.Serializer):
     refresh = serializers.CharField()
@@ -163,6 +242,22 @@ class PasswordChangeRequestSerializer(serializers.Serializer):
     )
     new_password = serializers.CharField()
     password_confirmation = serializers.CharField()
+
+    def validate(self, attrs):
+        user = self.context["request"].user
+        if not user.check_password(attrs["old_password"]):
+            raise serializers.ValidationError(
+                {"old_password": "Mot de passe actuel incorrect."}
+            )
+        if attrs["new_password"] != attrs["password_confirmation"]:
+            raise serializers.ValidationError(
+                {"password_confirmation": "Les mots de passe ne correspondent pas."}
+            )
+        try:
+            validate_password(attrs["new_password"], user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({"new_password": error.messages})
+        return attrs
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):

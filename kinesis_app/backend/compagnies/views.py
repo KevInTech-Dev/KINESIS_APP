@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
-from rest_framework import generics, parsers, serializers
+from rest_framework import generics, parsers, serializers, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
@@ -14,7 +14,9 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from config.pagination import StandardResultsSetPagination
+from utilisateurs.models import Utilisateur
 from utilisateurs.permissions import IsKinesisAdministrator
+from utilisateurs.email_verification import send_verification_code
 
 from .agent_invitations import activate_agent_account, resend_agent_invitation
 from .models import AgentCompagnie, Compagnie, Gare
@@ -43,6 +45,105 @@ class CompanyRegistrationView(generics.CreateAPIView):
     serializer_class = CompanyRegistrationSerializer
     permission_classes = [AllowAny]
     parser_classes = (parsers.JSONParser, parsers.FormParser, parsers.MultiPartParser)
+
+    @extend_schema(
+        responses={
+            200: serializers.DictField(),
+            202: serializers.DictField(),
+        }
+    )
+    def create(self, request, *args, **kwargs):
+        email = request.data.get("email", "")
+        password = request.data.get("password", "")
+        existing_user = (
+            Utilisateur.objects.filter(email__iexact=email).first()
+            if isinstance(email, str) and email
+            else None
+        )
+        if (
+            existing_user
+            and isinstance(password, str)
+            and password
+            and existing_user.role == Utilisateur.Role.COMPAGNIE
+            and existing_user.check_password(password)
+        ):
+            try:
+                company = existing_user.profil_compagnie
+            except Compagnie.DoesNotExist:
+                company = None
+            if company:
+                details = {
+                    Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL: (
+                        "Votre dossier est enregistré. Vérifiez votre adresse "
+                        "e-mail avec le code envoyé pour le transmettre à KINESIS."
+                    ),
+                    Compagnie.Statut.EN_ATTENTE_VALIDATION: (
+                        "Votre demande est déjà enregistrée et reste en attente "
+                        "de validation. Aucun doublon n’a été créé."
+                    ),
+                    Compagnie.Statut.EN_ATTENTE_ACTIVATION: (
+                        "Votre dossier a déjà été validé. Consultez votre e-mail "
+                        "pour activer le compte de la compagnie."
+                    ),
+                    Compagnie.Statut.ACTIVE: (
+                        "Le compte de votre compagnie est déjà activé. "
+                        "Vous pouvez vous connecter."
+                    ),
+                    Compagnie.Statut.REFUSEE: (
+                        "Cette demande a déjà été examinée. Contactez KINESIS "
+                        "pour connaître les suites possibles."
+                    ),
+                    Compagnie.Statut.DESACTIVE: (
+                        "Le compte de cette compagnie existe déjà mais il est "
+                        "désactivé. Contactez KINESIS."
+                    ),
+                }
+                detail = details.get(company.statut)
+                if detail:
+                    if (
+                        company.statut
+                        == Compagnie.Statut.EN_ATTENTE_VERIFICATION_EMAIL
+                    ):
+                        code_sent = send_verification_code(
+                            existing_user,
+                            reuse_valid=True,
+                        )
+                        return Response(
+                            {
+                                "detail": (
+                                    "Un code de vérification a été envoyé à votre "
+                                    "adresse e-mail."
+                                    if code_sent
+                                    else (
+                                        "Votre dossier est déjà enregistré. "
+                                        "Utilisez le code encore valide reçu "
+                                        "précédemment, ou demandez un nouveau code."
+                                    )
+                                )
+                            },
+                            status=status.HTTP_202_ACCEPTED,
+                        )
+                    return Response(
+                        {"detail": detail},
+                        status=status.HTTP_200_OK,
+                    )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        send_verification_code(serializer.instance.utilisateur)
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            {
+                "detail": (
+                    "Un code de vérification a été envoyé à votre adresse e-mail. "
+                    "Votre dossier ne sera transmis à l’administration qu’après "
+                    "la vérification du code."
+                )
+            },
+            status=status.HTTP_202_ACCEPTED,
+            headers=headers,
+        )
 
 
 class CompanyActivationView(APIView):
@@ -168,6 +269,7 @@ class AdminCompanyListView(generics.ListAPIView):
             Lower("nom_commercial"),
             "utilisateur_id",
         )
+        queryset = queryset.filter(utilisateur__email_verified=True)
         status_filter = self.request.query_params.get("status")
         if status_filter:
             if status_filter not in Compagnie.Statut.values:

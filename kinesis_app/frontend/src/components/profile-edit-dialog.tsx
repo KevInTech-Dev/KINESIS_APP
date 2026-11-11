@@ -3,11 +3,13 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import TogoPhoneInput from "@/components/togo-phone-input";
 import { toast } from "sonner";
 import {
   getUserFacingApiError,
   getUserFacingErrorMessage,
 } from "@/lib/user-facing-errors";
+import { formatTogoPhoneInput } from "@/lib/togo-phone";
 import { isUserProfile, type UserProfile } from "@/lib/user-profile";
 
 type ProfileEditDialogProps = {
@@ -30,6 +32,9 @@ export default function ProfileEditDialog({
 }: ProfileEditDialogProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [telephone, setTelephone] = useState(
+    formatTogoPhoneInput(profile.telephone ?? ""),
+  );
 
   useEffect(() => {
     function closeOnEscape(event: KeyboardEvent) {
@@ -43,6 +48,7 @@ export default function ProfileEditDialog({
   async function saveProfile(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    formData.set("telephone", telephone);
     const photo = formData.get("photo_profil");
     if (!(photo instanceof File) || photo.size === 0) {
       formData.delete("photo_profil");
@@ -129,11 +135,11 @@ export default function ProfileEditDialog({
           </label>
           <label>
             <span>Téléphone</span>
-            <input
+            <TogoPhoneInput
+              className="profile-edit-phone-input"
               name="telephone"
-              type="tel"
-              defaultValue={profile.telephone ?? ""}
-              maxLength={30}
+              value={telephone}
+              onChange={(value) => setTelephone(formatTogoPhoneInput(value))}
             />
           </label>
           <label>

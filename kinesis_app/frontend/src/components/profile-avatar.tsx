@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { CircleUserRound } from "lucide-react";
 import { useState } from "react";
 
 type ProfileAvatarProps = {
@@ -21,12 +22,6 @@ export default function ProfileAvatar({
   alt = "",
 }: ProfileAvatarProps) {
   const [failedSource, setFailedSource] = useState<string | null>(null);
-  const nameParts = name.trim().split(/\s+/).filter(Boolean);
-  const initials =
-    nameParts.length > 1
-      ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toLocaleUpperCase("fr-FR")
-      : nameParts[0]?.[0]?.toLocaleUpperCase("fr-FR") || "K";
-
   if (src && failedSource !== src) {
     return (
       <Image
@@ -34,7 +29,7 @@ export default function ProfileAvatar({
         src={src}
         width={size}
         height={size}
-        alt={alt}
+        alt={alt || name}
         onError={() => setFailedSource(src)}
       />
     );
@@ -43,11 +38,13 @@ export default function ProfileAvatar({
   return (
     <span
       className={`${className} profile-avatar-fallback ${fallbackClassName ?? ""}`.trim()}
-      role={alt ? "img" : undefined}
-      aria-label={alt || undefined}
-      aria-hidden={alt ? undefined : true}
+      role="img"
+      aria-label={alt || name}
     >
-      {initials}
+      <CircleUserRound
+        className="profile-avatar-fallback__icon"
+        aria-hidden="true"
+      />
     </span>
   );
 }

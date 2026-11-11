@@ -29,6 +29,7 @@ import { useListPagination } from "@/components/list-pagination";
 import ProfileAvatar from "@/components/profile-avatar";
 import ProfileEditDialog from "@/components/profile-edit-dialog";
 import ProfileViewDialog from "@/components/profile-view-dialog";
+import TogoPhoneInput from "@/components/togo-phone-input";
 import SidebarProfileMenu from "@/components/sidebar-profile-menu";
 import { getPublicCities } from "@/lib/public-cities";
 import { Separator } from "@/components/ui/separator";
@@ -55,6 +56,7 @@ import {
   getUserFacingApiError,
   getUserFacingErrorMessage,
 } from "@/lib/user-facing-errors";
+import { formatTogoPhoneInput } from "@/lib/togo-phone";
 
 const StationLocationInput = dynamic(
   () => import("@/components/station-location-input"),
@@ -699,6 +701,7 @@ export default function CompanyWorkspace() {
   const [tripDialogOpen, setTripDialogOpen] = useState(false);
   const [stationDialogOpen, setStationDialogOpen] = useState(false);
   const [agentDialogOpen, setAgentDialogOpen] = useState(false);
+  const [agentPhone, setAgentPhone] = useState("");
   const [paymentRange, setPaymentRange] = useState<PaymentRange>("7d");
   const [dashboardNow, setDashboardNow] = useState<number | null>(null);
   const [company, setCompany] = useState<Company | null>(null);
@@ -1339,6 +1342,7 @@ export default function CompanyWorkspace() {
           });
       }
       form.reset();
+      setAgentPhone("");
       resetAgentsPage();
       setAgentDialogOpen(false);
       toast.success("Le compte agent a été créé. Une invitation lui a été envoyée par e-mail.");
@@ -2050,7 +2054,16 @@ export default function CompanyWorkspace() {
                   <label><span>Nom</span><input name="nom" required maxLength={100} /></label>
                   <label><span>Prénoms</span><input name="prenoms" maxLength={150} /></label>
                 </div>
-                <label><span>Téléphone</span><input name="telephone" type="tel" maxLength={30} /></label>
+                <label>
+                  <span>Téléphone</span>
+                  <TogoPhoneInput
+                    name="telephone"
+                    value={agentPhone}
+                    onChange={(value) =>
+                      setAgentPhone(formatTogoPhoneInput(value))
+                    }
+                  />
+                </label>
                 <fieldset className="company-permissions"><legend>Autorisations</legend>{PERMISSIONS.map(([code, label]) => <label key={code}><input type="checkbox" name={`permission-${code}`} value={code} /><span>{label}</span></label>)}</fieldset>
                 <button type="submit" className="company-button" disabled={saving}>{saving ? "Création…" : "Créer et envoyer l’invitation"}</button>
               </form>
