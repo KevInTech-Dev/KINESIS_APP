@@ -43,6 +43,7 @@ class VoyageTarifListView(APIView):
             Voyage.objects.select_related("compagnie")
             .filter(
                 pk=voyage_id,
+                deleted_at__isnull=True,
                 statut=Voyage.Statut.PUBLIE,
                 compagnie__statut=Compagnie.Statut.ACTIVE,
             )

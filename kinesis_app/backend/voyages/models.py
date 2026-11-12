@@ -37,8 +37,7 @@ class Voyage(models.Model):
     class Statut(models.TextChoices):
         PUBLIE = "PUBLIE", "Publié"
         ARCHIVE = "ARCHIVE", "Archivé"
-        EXPIREE = "EXPIREE", "Expiré"
-        ANNULEE = "ANNULEE", "Annulé"
+        EXPIREE = "EXPIREE", "Terminé"
 
     id_voyage = models.UUIDField(
         primary_key=True,
@@ -76,6 +75,7 @@ class Voyage(models.Model):
     )
     date_depart = models.DateField()
     date_creation = models.DateTimeField(default=timezone.now, editable=False)
+    deleted_at = models.DateTimeField(null=True, blank=True, editable=False)
     heure_depart = models.TimeField()
     date_depart_effective = models.DateTimeField(null=True, blank=True)
     depart_effectue_par = models.ForeignKey(

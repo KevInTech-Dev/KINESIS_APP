@@ -1,5 +1,7 @@
-from django.db.models import Count, F, Q, QuerySet
+from django.db.models import Count, Exists, F, OuterRef, Q, QuerySet
 from django.utils import timezone
+
+from reservations.models import Reservation
 
 from .models import Voyage
 
@@ -20,6 +22,7 @@ def public_voyages_queryset(now=None) -> QuerySet[Voyage]:
     )
     return with_availability(queryset, now).filter(
         public,
+        deleted_at__isnull=True,
         _places_occupees__lt=F("place_totale"),
     )
 
@@ -32,6 +35,9 @@ def with_availability(queryset: QuerySet[Voyage], now) -> QuerySet[Voyage]:
         places_reservees__reservation__date_expiration__gt=now,
     )
     return queryset.annotate(
+        _has_reservations=Exists(
+            Reservation.objects.filter(voyage_id=OuterRef("pk"))
+        ),
         _places_occupees=Count(
             "places_reservees",
             filter=Q(places_reservees__liberee=False) & active_holds,

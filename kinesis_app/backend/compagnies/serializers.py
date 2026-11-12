@@ -4,13 +4,14 @@ import secrets
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.db.models import Q
 from rest_framework import serializers
 from rest_framework.validators import UniqueValidator
 
 from config.fields import LimitedImageField
 from utilisateurs.models import Utilisateur
 from utilisateurs.validators import normalize_togo_phone, validate_person_name
-from voyages.models import Ville
+from voyages.models import Ville, Voyage
 
 from .agent_invitations import get_agent_from_invitation
 from .models import AgentCompagnie, Compagnie, Gare, PermissionAgent
@@ -182,6 +183,7 @@ class GareSerializer(serializers.ModelSerializer):
     )
     ville_nom = serializers.CharField(source="ville.nom", read_only=True)
     compagnie = serializers.UUIDField(source="compagnie_id", read_only=True)
+    en_utilisation = serializers.SerializerMethodField()
 
     class Meta:
         model = Gare
@@ -198,13 +200,16 @@ class GareSerializer(serializers.ModelSerializer):
             "google_place_id",
             "maps_url",
             "active",
+            "en_utilisation",
         )
         read_only_fields = ("id_gare", "compagnie", "date_creation")
 
     def validate(self, attrs):
-        if self.instance and any(key != "active" for key in attrs):
+        if self.instance and any(key != "active" for key in attrs) and Voyage.objects.filter(
+            Q(gare_depart=self.instance) | Q(gare_arrivee=self.instance)
+        ).exists():
             raise serializers.ValidationError(
-                {"gare": "Les informations d’une gare sont conservées après sa création."}
+                {"gare": "Cette gare est déjà utilisée par un trajet et ne peut pas être modifiée."}
             )
         latitude = attrs.get("latitude")
         longitude = attrs.get("longitude")
@@ -221,6 +226,14 @@ class GareSerializer(serializers.ModelSerializer):
                 {"longitude": "La longitude doit être comprise entre -180 et 180."}
             )
         return attrs
+
+    def get_en_utilisation(self, obj) -> bool:
+        annotated_value = getattr(obj, "_en_utilisation", None)
+        if annotated_value is not None:
+            return annotated_value
+        return Voyage.objects.filter(
+            Q(gare_depart=obj) | Q(gare_arrivee=obj)
+        ).exists()
 
 
 class AdminCompanyReviewSerializer(serializers.ModelSerializer):

@@ -1446,7 +1446,7 @@ export default function TravelerDashboard() {
             </div>
             <div className="traveler-overview-welcome__copy">
               <p className="traveler-eyebrow">ESPACE VOYAGEUR</p>
-              <h2>Bienvenue {profile.prenoms || profile.nom}</h2>
+              <h2>Bienvenue</h2>
               <h3>{displayName || "Voyageur KINESIS"}</h3>
               <p className="traveler-overview-welcome__email">{profile.email}</p>
             </div>

@@ -386,6 +386,10 @@ function statusLabel(status: string) {
   );
 }
 
+function tripStatusLabel(trip: Trip) {
+  return trip.statut === "EXPIREE" ? "Terminé" : statusLabel(trip.statut);
+}
+
 function todayString() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -1146,9 +1150,9 @@ export default function AgentWorkspace() {
                     <div className="agent-trip-details">
                       <strong>{trip.ville_depart_nom} <span aria-hidden="true">→</span> {trip.ville_arrivee_nom}</strong>
                       <span>{formatDate(trip.date_depart)} · {trip.heure_depart.slice(0, 5)}</span>
-                      <span className={`agent-status ${trip.date_depart_effective ? "agent-status--done" : ""}`}>{trip.date_depart_effective ? `Départ enregistré · ${formatDateTime(trip.date_depart_effective)}` : statusLabel(trip.statut)}</span>
+                      <span className={`agent-status ${trip.date_depart_effective ? "agent-status--done" : ""}`}>{trip.date_depart_effective ? `Départ enregistré · ${formatDateTime(trip.date_depart_effective)}` : tripStatusLabel(trip)}</span>
                     </div>
-                    {!trip.date_depart_effective && trip.statut !== "ANNULEE" && trip.date_depart <= todayString() ? (
+                    {!trip.date_depart_effective && trip.statut !== "ARCHIVE" && trip.date_depart <= todayString() ? (
                       <button type="button" className="agent-button agent-button--small" disabled={saving} onClick={() => setConfirmation({ title: "Enregistrer le départ réel ?", description: `Confirmez le départ du trajet ${trip.ville_depart_nom} → ${trip.ville_arrivee_nom}. Les billets non embarqués seront invalidés.`, confirmLabel: "Enregistrer le départ", tone: "danger", action: () => declareDeparture(trip) })}>Enregistrer le départ</button>
                     ) : null}
                   </article>

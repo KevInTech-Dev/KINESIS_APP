@@ -172,6 +172,7 @@ def deactivate_company(*, company_id):
     local_now = timezone.localtime(now)
     upcoming_trips = Voyage.objects.filter(
         compagnie=company,
+        deleted_at__isnull=True,
         date_depart_effective__isnull=True,
         date_depart__gte=local_now.date(),
     )

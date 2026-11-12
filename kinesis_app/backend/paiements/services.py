@@ -424,8 +424,8 @@ def _get_ticket_for_company(*, code_qr, company, lock=False):
 
 def _validate_boarding_ticket(ticket):
     reservation = ticket.place.reservation
-    if reservation.voyage.statut == Voyage.Statut.ANNULEE:
-        raise ValidationError({"code_qr": "Le voyage associé à ce billet est annulé."})
+    if reservation.voyage.statut == Voyage.Statut.ARCHIVE:
+        raise ValidationError({"code_qr": "Le voyage associé à ce billet est archivé."})
     if reservation.statut != Reservation.Statut.PAYEE:
         raise ValidationError({"code_qr": "Le billet n’est pas payé."})
     if ticket.statut == BilletElectronique.Statut.EMBARQUE:
@@ -529,9 +529,9 @@ def register_voyage_departure(*, actor, voyage_id, now=None):
         )
         if voyage is None:
             raise ValidationError({"voyage": "Voyage introuvable ou hors périmètre."})
-        if voyage.statut == Voyage.Statut.ANNULEE:
+        if voyage.statut == Voyage.Statut.ARCHIVE:
             raise ValidationError(
-                {"voyage": "Un voyage annulé ne peut pas être déclaré parti."}
+                {"voyage": "Un voyage archivé ne peut pas être déclaré parti."}
             )
         if voyage.date_depart_effective is not None:
             return voyage, 0
@@ -544,7 +544,10 @@ def register_voyage_departure(*, actor, voyage_id, now=None):
 
         voyage.date_depart_effective = now
         voyage.depart_effectue_par = actor
-        voyage.save(update_fields=("date_depart_effective", "depart_effectue_par"))
+        voyage.statut = Voyage.Statut.EXPIREE
+        voyage.save(
+            update_fields=("date_depart_effective", "depart_effectue_par", "statut")
+        )
         expired_count = expire_unused_tickets_after_departure(
             now=now,
             voyage_id=voyage.pk,

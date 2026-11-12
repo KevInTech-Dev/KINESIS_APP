@@ -7888,7 +7888,7 @@ select:focus-visible {
 }
 
 .agent-overview-avatar {
-  width: min(100%, 270px);
+  width: min(100%, 225px);
   aspect-ratio: 1;
   border: 1px solid #dfe6df;
   border-radius: 50%;
@@ -8113,7 +8113,7 @@ select:focus-visible {
   }
 
   .agent-overview-avatar {
-    width: min(100%, 220px);
+    width: min(100%, 210px);
   }
 }
 
@@ -9872,6 +9872,131 @@ select:focus-visible {
   overflow-x: auto;
 }
 
+.company-record-table-wrap .company-table {
+  table-layout: fixed;
+  white-space: nowrap;
+}
+
+.company-record-table-wrap .company-table td,
+.company-record-table-wrap .company-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.company-record-table-wrap .company-table td {
+  vertical-align: middle;
+}
+
+.company-record-table-wrap .company-table th:last-child,
+.company-record-table-wrap .company-table td:last-child {
+  width: 76px;
+  text-align: center;
+  overflow: visible;
+}
+
+.company-table--stations {
+  min-width: 760px;
+}
+
+.company-table--stations th:nth-child(1) { width: 150px; }
+.company-table--stations th:nth-child(2) { width: 120px; }
+.company-table--stations th:nth-child(4) { width: 125px; }
+
+.company-table--trips {
+  min-width: 820px;
+}
+
+.company-table--trips th:nth-child(1) { width: 245px; }
+.company-table--trips th:nth-child(2) { width: 175px; }
+.company-table--trips th:nth-child(3) { width: 100px; }
+.company-table--trips th:nth-child(4) { width: 140px; }
+.company-table--trips th:nth-child(5) { width: 120px; }
+
+.company-table--reservations {
+  min-width: 1160px;
+}
+
+.company-table--reservations th:nth-child(1) { width: 145px; }
+.company-table--reservations th:nth-child(2) { width: 210px; }
+.company-table--reservations th:nth-child(3) { width: 185px; }
+.company-table--reservations th:nth-child(4) { width: 85px; }
+.company-table--reservations th:nth-child(5) { width: 145px; }
+.company-table--reservations th:nth-child(6) { width: 160px; }
+.company-table--reservations th:nth-child(7) { width: 150px; }
+
+.company-table--tariffs {
+  min-width: 620px;
+}
+
+.company-table--tariffs th:nth-child(1) { width: 200px; }
+.company-table--tariffs th:nth-child(2) { width: 170px; }
+.company-table--tariffs th:nth-child(3) { width: 170px; }
+
+.company-row-action-trigger {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 1px solid #e3eae3;
+  border-radius: 9px;
+  background: #fff;
+  color: #42564a;
+  cursor: pointer;
+}
+
+.company-row-action-trigger:hover,
+.company-row-action-trigger:focus-visible {
+  border-color: #b7d7c3;
+  background: #f5faf6;
+  color: var(--deep-green);
+}
+
+.company-row-action-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.company-row-action-menu {
+  z-index: 100;
+  min-width: 160px;
+  padding: 5px;
+  border: 1px solid #e2e9e2;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgb(22 52 40 / 15%);
+}
+
+.company-row-action-menu__item {
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #34493c;
+  cursor: pointer;
+  font-size: 12px;
+  outline: none;
+}
+
+.company-row-action-menu__item[data-highlighted] {
+  background: #f0f7f1;
+}
+
+.company-row-action-menu__item.is-danger {
+  color: #a33131;
+}
+
+.company-row-action-menu__item.is-danger[data-highlighted] {
+  background: #fff1f1;
+}
+
+.company-row-action-menu__item[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.company-mobile-record-list {
+  display: none;
+}
+
 .company-table {
   width: 100%;
   border-collapse: collapse;
@@ -9910,9 +10035,33 @@ select:focus-visible {
 }
 
 .company-status--active,
-.company-status--confirme {
+.company-status--confirme,
+.company-status--publie,
+.company-status--payee,
+.company-status--expiree {
   background: #e9f5e9;
   color: #17623f;
+}
+
+.company-status--archive {
+  background: #f1f3f1;
+  color: #637067;
+}
+
+.company-status--en_attente_paiement {
+  background: #fff3dc;
+  color: #875a09;
+}
+
+.company-status--reservation-expiree {
+  background: #f1f3f1;
+  color: #637067;
+}
+
+.company-status--annule,
+.company-status--annulee {
+  background: #fff0ed;
+  color: #9a4438;
 }
 
 .company-status--disabled {
@@ -10062,6 +10211,14 @@ select:focus-visible {
 }
 
 @media (max-width: 767px) {
+  .company-record-table-wrap {
+    display: none;
+  }
+
+  .company-mobile-record-list {
+    display: grid;
+  }
+
   .company-topbar {
     min-height: 74px;
     gap: 10px;
@@ -13271,8 +13428,13 @@ select:focus-visible {
     .profile-avatar-fallback__icon,
   .traveler-github-avatar.profile-avatar-fallback
     .profile-avatar-fallback__icon {
-    width: 68% !important;
-    height: 68% !important;
+    width: 75% !important;
+    height: 75% !important;
+  }
+
+  .agent-overview-avatar--fallback .profile-avatar-fallback__icon {
+    width: 75% !important;
+    height: 75% !important;
   }
 }
 
@@ -14345,6 +14507,43 @@ select:focus-visible {
 
 .company-form-dialog {
   width: min(760px, calc(100% - 32px));
+}
+
+.company-record-details-dialog {
+  width: min(560px, calc(100% - 32px));
+}
+
+.company-record-details {
+  display: grid;
+  gap: 0;
+  max-height: min(65dvh, 560px);
+  overflow: auto;
+  margin: 0 16px 16px;
+}
+
+.company-record-details > div {
+  display: grid;
+  gap: 5px;
+  padding: 12px 0;
+  border-bottom: 1px solid #e8eee8;
+}
+
+.company-record-details > div:last-child {
+  border-bottom: 0;
+}
+
+.company-record-details dt {
+  color: #657369;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.company-record-details dd {
+  margin: 0;
+  color: #26372c;
+  font-size: 13px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .company-form-dialog > .company-panel {
@@ -16546,7 +16745,7 @@ select:focus-visible {
   }
 
   .traveler-overview-profile__avatar {
-    width: min(100%, 270px);
+    width: min(100%, 225px);
     aspect-ratio: 1;
     border: 1px solid #dfe7df;
     border-radius: 50%;
@@ -16891,7 +17090,7 @@ select:focus-visible {
   }
 
   .traveler-overview-profile__avatar {
-    width: min(100%, 270px);
+    width: min(100%, 225px);
     border-color: #dfe6df;
     background: #eaf4e9;
   }

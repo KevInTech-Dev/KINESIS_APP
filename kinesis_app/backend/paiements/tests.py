@@ -988,9 +988,9 @@ class BilletBoardingApiTests(APITestCase):
         self.ticket.refresh_from_db()
         self.assertIsNone(self.ticket.date_embarquement)
 
-    def test_cancelled_trip_tickets_cannot_be_scanned_or_boarded(self):
+    def test_archived_trip_tickets_cannot_be_scanned_or_boarded(self):
         voyage = self.ticket.place.voyage
-        voyage.statut = Voyage.Statut.ANNULEE
+        voyage.statut = Voyage.Statut.ARCHIVE
         voyage.save(update_fields=("statut",))
 
         scan_response = self.client.post(

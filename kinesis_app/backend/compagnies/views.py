@@ -2,6 +2,7 @@ from django.conf import settings
 from django.core import signing
 from django.core.signing import BadSignature, SignatureExpired
 from django.db import transaction
+from django.db.models import Exists, OuterRef, Q
 from django.db.models.functions import Lower
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiParameter, extend_schema, inline_serializer
@@ -17,6 +18,7 @@ from config.pagination import StandardResultsSetPagination
 from utilisateurs.models import Utilisateur
 from utilisateurs.permissions import IsKinesisAdministrator
 from utilisateurs.email_verification import send_verification_code
+from voyages.models import Voyage
 
 from .agent_invitations import activate_agent_account, resend_agent_invitation
 from .models import AgentCompagnie, Compagnie, Gare
@@ -325,27 +327,44 @@ class CompanyStationListCreateView(generics.ListCreateAPIView):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
+        used_by_trips = Voyage.objects.filter(
+            Q(gare_depart_id=OuterRef("pk")) | Q(gare_arrivee_id=OuterRef("pk"))
+        ).order_by()
         return Gare.objects.filter(
             compagnie=self.request.user.profil_compagnie,
-        ).select_related("ville")
+        ).select_related("ville").annotate(
+            _en_utilisation=Exists(used_by_trips)
+        )
 
     def perform_create(self, serializer):
         serializer.save(compagnie=self.request.user.profil_compagnie)
 
 
-class CompanyStationDetailView(generics.UpdateAPIView):
+class CompanyStationDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = GareSerializer
     permission_classes = [IsActiveCompany]
-    http_method_names = ("patch", "options", "head")
-
     def get_queryset(self):
+        used_by_trips = Voyage.objects.filter(
+            Q(gare_depart_id=OuterRef("pk")) | Q(gare_arrivee_id=OuterRef("pk"))
+        ).order_by()
         return Gare.objects.filter(
             compagnie=self.request.user.profil_compagnie,
-        ).select_related("ville")
+        ).select_related("ville").annotate(
+            _en_utilisation=Exists(used_by_trips)
+        )
 
     def get_serializer(self, *args, **kwargs):
         kwargs["partial"] = True
         return super().get_serializer(*args, **kwargs)
+
+    def perform_destroy(self, instance):
+        if Voyage.objects.filter(
+            Q(gare_depart=instance) | Q(gare_arrivee=instance)
+        ).exists():
+            raise ValidationError(
+                {"gare": "Cette gare est déjà utilisée par un trajet et ne peut pas être supprimée."}
+            )
+        instance.delete()
 
 
 class AgentListCreateView(generics.ListCreateAPIView):

@@ -590,7 +590,7 @@ class VoyageApiTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
         )
 
-        for changes in ({"prix": "6000"}, {"statut": "ANNULEE"}, {"statut": "ARCHIVE"}):
+        for changes in ({"prix": "6000"}, {"statut": "ARCHIVE"}):
             with self.subTest(changes=changes):
                 response = self.client.patch(
                     reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
@@ -599,14 +599,66 @@ class VoyageApiTests(APITestCase):
                 )
 
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-                self.assertIn("réservations actives", str(response.data["voyage"]))
+                self.assertIn("déjà des réservations", str(response.data["voyage"]))
                 self.voyage.refresh_from_db()
                 self.assertEqual(self.voyage.statut, Voyage.Statut.PUBLIE)
                 self.assertEqual(str(self.voyage.prix), "5000")
 
+        invalid_status_response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"statut": "ANNULEE"},
+            format="json",
+        )
+        self.assertEqual(
+            invalid_status_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertIn("statut", invalid_status_response.data)
         self.assertFalse(Notification.objects.filter(utilisateur=traveler).exists())
 
-    def test_completed_trip_with_reservations_can_only_be_archived(self):
+    def test_company_soft_deletes_trip_without_reservations(self):
+        self.client.force_authenticate(user=self.company_user)
+
+        response = self.client.delete(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.voyage.refresh_from_db()
+        self.assertIsNotNone(self.voyage.deleted_at)
+        self.assertEqual(
+            self.client.get(reverse("voyage-detail", kwargs={"pk": self.voyage.pk})).status_code,
+            status.HTTP_404_NOT_FOUND,
+        )
+        list_response = self.client.get(reverse("voyage-list"))
+        listed_trip_ids = [item["id_voyage"] for item in list_response.data["results"]]
+        self.assertNotIn(str(self.voyage.pk), listed_trip_ids)
+
+    def test_company_cannot_soft_delete_trip_with_reservations(self):
+        traveler = User.objects.create_user(
+            email="trip-delete-traveler@example.com",
+            password=self.password,
+            nom="Voyageur",
+            prenoms="Test",
+        )
+        Reservation.objects.create(
+            reference="RES-TRIP-DELETE",
+            voyageur=traveler,
+            voyage=self.voyage,
+            montant_total=5000,
+            statut=Reservation.Statut.PAYEE,
+        )
+        self.client.force_authenticate(user=self.company_user)
+
+        response = self.client.delete(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.voyage.refresh_from_db()
+        self.assertIsNone(self.voyage.deleted_at)
+
+    def test_completed_trip_with_reservations_cannot_be_modified_or_archived(self):
         traveler = User.objects.create_user(
             email="completed-trip-traveler@example.com",
             password=self.password,
@@ -621,7 +673,8 @@ class VoyageApiTests(APITestCase):
             statut=Reservation.Statut.PAYEE,
         )
         self.voyage.date_depart_effective = timezone.now()
-        self.voyage.save(update_fields=("date_depart_effective",))
+        self.voyage.statut = Voyage.Statut.EXPIREE
+        self.voyage.save(update_fields=("date_depart_effective", "statut"))
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(self.company_user)}"
         )
@@ -638,9 +691,9 @@ class VoyageApiTests(APITestCase):
         )
 
         self.assertEqual(edit_response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertEqual(archive_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(archive_response.status_code, status.HTTP_400_BAD_REQUEST)
         self.voyage.refresh_from_db()
-        self.assertEqual(self.voyage.statut, Voyage.Statut.ARCHIVE)
+        self.assertEqual(self.voyage.statut, Voyage.Statut.EXPIREE)
 
     def test_company_cannot_reduce_capacity_below_active_reservations(self):
         from reservations.models import PlaceReservee, Reservation

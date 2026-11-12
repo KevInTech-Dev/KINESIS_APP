@@ -83,7 +83,7 @@ def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
         try:
             voyage = Voyage.objects.select_for_update().select_related(
                 "compagnie"
-            ).get(pk=voyage_id)
+            ).get(pk=voyage_id, deleted_at__isnull=True)
         except (Voyage.DoesNotExist, ValueError):
             raise ValidationError({"voyage_id": "Voyage introuvable."})
 

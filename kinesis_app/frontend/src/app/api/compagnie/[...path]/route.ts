@@ -21,11 +21,11 @@ function isAllowedResource(path: string[], method: string) {
   }
   if (resource === "voyages") return ["GET", "POST"].includes(method);
   if (/^voyages\/[0-9a-f-]{36}$/i.test(resource)) {
-    return ["GET", "PATCH", "PUT"].includes(method);
+    return ["GET", "PATCH", "PUT", "DELETE"].includes(method);
   }
   if (resource === "stations") return ["GET", "POST"].includes(method);
   if (/^stations\/[0-9a-f-]{36}$/i.test(resource)) {
-    return method === "PATCH";
+    return ["GET", "PATCH", "DELETE"].includes(method);
   }
   if (resource === "paiements" && method === "GET") return true;
   if (resource === "reservations" && method === "GET") return true;

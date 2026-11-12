@@ -22,9 +22,11 @@ from voyages.models import Ville, Voyage
 from .models import Bagage, TarifBagage
 from .services import (
     create_tariff,
+    delete_tariff,
     record_manual_fee_payment,
     register_baggage,
     return_baggage,
+    update_tariff,
 )
 from .storage import AuthenticatedBagageStorage
 
@@ -84,23 +86,62 @@ class BagageServiceTests(TestCase):
             prix=1000,
         )
 
-    def test_tariff_grid_rejects_gaps_and_accepts_contiguous_bands(self):
-        with self.assertRaises(ValidationError):
-            create_tariff(
-                actor=self.company_user,
-                poids_min=25,
-                poids_max=40,
-                prix=2000,
-            )
-
-        second = create_tariff(
+    def test_tariff_grid_allows_gaps_but_rejects_overlaps(self):
+        separate = create_tariff(
             actor=self.company_user,
-            poids_min=20,
+            poids_min=25,
             poids_max=40,
             prix=2000,
         )
+        self.assertEqual(separate.poids_min, 25)
+        second = create_tariff(
+            actor=self.company_user,
+            poids_min=20,
+            poids_max=25,
+            prix=2000,
+        )
         self.assertEqual(second.poids_min, 20)
-        self.assertEqual(TarifBagage.objects.filter(compagnie=self.company).count(), 2)
+        self.assertEqual(TarifBagage.objects.filter(compagnie=self.company).count(), 3)
+
+    def test_tariff_overlaps_are_rejected_on_create_and_update(self):
+        create_tariff(
+            actor=self.company_user,
+            poids_min=25,
+            poids_max=40,
+            prix=2000,
+        )
+        with self.assertRaises(ValidationError):
+            create_tariff(
+                actor=self.company_user,
+                poids_min=10,
+                poids_max=30,
+                prix=2000,
+            )
+
+        with self.assertRaises(ValidationError):
+            update_tariff(
+                actor=self.company_user,
+                tariff_id=self.tariff.pk,
+                changes={"poids_min": 15, "poids_max": 30},
+            )
+
+    def test_deleting_tariff_preserves_existing_baggage_snapshots(self):
+        baggage = Bagage.objects.create(
+            reservation=self.reservation,
+            poids=10,
+            tarif_applique=self.tariff,
+            poids_min_applique=self.tariff.poids_min,
+            poids_max_applique=self.tariff.poids_max,
+            prix_tarif_applique=self.tariff.prix,
+        )
+
+        delete_tariff(actor=self.company_user, tariff_id=self.tariff.pk)
+
+        baggage.refresh_from_db()
+        self.assertIsNone(baggage.tarif_applique)
+        self.assertEqual(baggage.poids_min_applique, Decimal("0"))
+        self.assertEqual(baggage.poids_max_applique, Decimal("20"))
+        self.assertEqual(baggage.prix_tarif_applique, Decimal("1000"))
 
     @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
     def test_registration_snapshots_tariff_requires_photos_and_fee_payment_is_manual(

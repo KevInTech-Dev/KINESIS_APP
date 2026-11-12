@@ -13,7 +13,6 @@ from config.pagination import StandardResultsSetPagination
 from notifications.models import Notification
 from notifications.services import notify_company_and_agents
 from reservations.models import Reservation
-from reservations.services import filter_active_reservations
 
 from .cache import (
     cache_public_cities,
@@ -51,7 +50,10 @@ class AgentVoyageListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = (
-            Voyage.objects.filter(compagnie=self.request.user.profil_agent.compagnie)
+            Voyage.objects.filter(
+                compagnie=self.request.user.profil_agent.compagnie,
+                deleted_at__isnull=True,
+            )
             .select_related(
                 "compagnie__utilisateur",
                 "ville_depart",
@@ -116,7 +118,7 @@ class VoyageListCreateView(generics.ListCreateAPIView):
                     "gare_arrivee__ville",
                 ),
                 now,
-            ).filter(compagnie__utilisateur=user)
+            ).filter(compagnie__utilisateur=user, deleted_at__isnull=True)
             queryset = queryset | own_trips
         ordering = filters.get("ordering", "date_depart")
         return queryset.order_by(
@@ -163,12 +165,12 @@ class VoyageListCreateView(generics.ListCreateAPIView):
         serializer.save(compagnie=self.request.user.profil_compagnie)
 
 
-class VoyageDetailView(generics.RetrieveUpdateAPIView):
+class VoyageDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = VoyageSerializer
     parser_classes = (JSONParser, FormParser, MultiPartParser)
 
     def get_permissions(self):
-        if self.request.method in ("PUT", "PATCH"):
+        if self.request.method in ("PUT", "PATCH", "DELETE"):
             return [IsActiveCompany(), IsOwnerCompany()]
         return [AllowAny()]
 
@@ -180,7 +182,8 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             "gare_depart__ville",
             "gare_arrivee__ville",
         )
-        if self.request.method in ("PUT", "PATCH"):
+        queryset = queryset.filter(deleted_at__isnull=True)
+        if self.request.method in ("PUT", "PATCH", "DELETE"):
             if not self.request.user.is_authenticated:
                 return queryset.none()
             return queryset.filter(compagnie__utilisateur=self.request.user)
@@ -198,7 +201,7 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
                     "gare_arrivee__ville",
                 ),
                 now,
-            ).filter(compagnie__utilisateur=user)
+            ).filter(compagnie__utilisateur=user, deleted_at__isnull=True)
             queryset = queryset | own_trips
         return queryset
 
@@ -214,6 +217,16 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
         if not changed_fields:
             return
 
+        if Reservation.objects.filter(voyage=voyage).exists():
+            raise ValidationError(
+                {
+                    "voyage": (
+                        "Ce trajet possède déjà des réservations. "
+                        "Il ne peut pas être modifié ou archivé."
+                    )
+                }
+            )
+
         if voyage.date_depart_effective is not None:
             changed_itinerary = changed_fields - {"statut"}
             next_status = serializer.validated_data.get("statut", voyage.statut)
@@ -222,23 +235,7 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
                     {
                         "voyage": (
                             "Après le départ réel, le trajet ne peut plus être "
-                            "modifié ni annulé. Seul son archivage est autorisé."
-                        )
-                    }
-                )
-        else:
-            now = timezone.now()
-            active_reservations = filter_active_reservations(
-                Reservation.objects.filter(voyage=voyage),
-                now=now,
-            )
-            if active_reservations.exists():
-                raise ValidationError(
-                    {
-                        "voyage": (
-                            "Ce trajet a des réservations actives ou payées. "
-                            "Il ne peut pas être modifié, annulé ou archivé. "
-                            "Contactez l’administration pour leur prise en charge."
+                            "modifié. Seul son archivage est autorisé."
                         )
                     }
                 )
@@ -261,18 +258,20 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             .values_list("voyageur_id", flat=True)
             .distinct()
         )
-        if voyage.statut == Voyage.Statut.ANNULEE:
-            titre = "Voyage annulé"
-            message = (
-                f"Le voyage {voyage.ville_depart} - {voyage.ville_arrivee} "
-                f"du {voyage.date_depart} a été annulé."
-            )
-        else:
-            titre = "Voyage modifié"
-            message = (
+        titre = (
+            "Voyage archivé"
+            if voyage.statut == Voyage.Statut.ARCHIVE
+            else "Voyage modifié"
+        )
+        message = (
+            f"Le voyage {voyage.ville_depart} - {voyage.ville_arrivee} "
+            f"du {voyage.date_depart} a été archivé."
+            if voyage.statut == Voyage.Statut.ARCHIVE
+            else (
                 f"Les informations du voyage {voyage.ville_depart} - "
                 f"{voyage.ville_arrivee} du {voyage.date_depart} ont été modifiées."
             )
+        )
         Notification.objects.bulk_create(
             [
                 Notification(
@@ -297,3 +296,18 @@ class VoyageDetailView(generics.RetrieveUpdateAPIView):
             ),
             exclude_user=self.request.user,
         )
+
+    @transaction.atomic
+    def perform_destroy(self, instance):
+        voyage = Voyage.objects.select_for_update().get(pk=instance.pk)
+        if Reservation.objects.filter(voyage=voyage).exists():
+            raise ValidationError(
+                {
+                    "voyage": (
+                        "Ce trajet possède déjà des réservations et ne peut pas "
+                        "être supprimé afin de préserver son historique."
+                    )
+                }
+            )
+        voyage.deleted_at = timezone.now()
+        voyage.save(update_fields=("deleted_at",))

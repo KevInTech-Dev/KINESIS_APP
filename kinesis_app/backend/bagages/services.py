@@ -13,17 +13,11 @@ from .models import Bagage, TarifBagage
 from .permissions import company_for_user
 
 
-def _validate_tariff_grid(company, intervals):
+def _validate_tariff_intervals(intervals):
     intervals = sorted(intervals, key=lambda interval: interval[0])
-    if not intervals:
-        return
-    if intervals[0][0] != 0:
-        raise ValidationError({"poids_min": "La première tranche doit commencer à 0 kg."})
     for previous, following in zip(intervals, intervals[1:]):
         if previous[1] > following[0]:
             raise ValidationError("Les tranches de poids ne doivent pas se chevaucher.")
-        if previous[1] < following[0]:
-            raise ValidationError("La grille tarifaire ne doit pas laisser de poids sans tarif.")
 
 
 def create_tariff(*, actor, poids_min, poids_max, prix):
@@ -35,9 +29,8 @@ def create_tariff(*, actor, poids_min, poids_max, prix):
                 "poids_min", "poids_max"
             )
         )
-        _validate_tariff_grid(
-            company,
-            tariffs + [(Decimal(poids_min), Decimal(poids_max))],
+        _validate_tariff_intervals(
+            tariffs + [(Decimal(poids_min), Decimal(poids_max))]
         )
         return TarifBagage.objects.create(
             compagnie=company,
@@ -66,7 +59,7 @@ def update_tariff(*, actor, tariff_id, changes):
             .exclude(pk=tariff.pk)
             .values_list("poids_min", "poids_max")
         )
-        _validate_tariff_grid(company, intervals + [(new_min, new_max)])
+        _validate_tariff_intervals(intervals + [(new_min, new_max)])
 
         for field, value in changes.items():
             setattr(tariff, field, value)
@@ -85,12 +78,6 @@ def delete_tariff(*, actor, tariff_id):
             )
         except TarifBagage.DoesNotExist:
             raise ValidationError({"tarif": "Tarif introuvable."})
-        intervals = list(
-            TarifBagage.objects.filter(compagnie=company)
-            .exclude(pk=tariff.pk)
-            .values_list("poids_min", "poids_max")
-        )
-        _validate_tariff_grid(company, intervals)
         tariff.delete()
 
 

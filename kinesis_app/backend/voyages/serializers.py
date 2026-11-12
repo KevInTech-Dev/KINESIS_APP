@@ -63,6 +63,14 @@ class GarePublicSerializer(serializers.ModelSerializer):
 class VoyageSerializer(serializers.ModelSerializer):
     image = LimitedImageField(required=False, allow_null=True)
     heure_depart = serializers.TimeField(format="%H:%M")
+    statut = serializers.ChoiceField(
+        choices=(
+            (Voyage.Statut.PUBLIE, "Publié"),
+            (Voyage.Statut.EXPIREE, "Terminé"),
+            (Voyage.Statut.ARCHIVE, "Archivé"),
+        ),
+        required=False,
+    )
     compagnie = serializers.UUIDField(source="compagnie_id", read_only=True)
     compagnie_nom = serializers.CharField(
         source="compagnie.utilisateur.nom",
@@ -90,6 +98,7 @@ class VoyageSerializer(serializers.ModelSerializer):
         allow_null=True,
     )
     places_disponibles = serializers.SerializerMethodField()
+    has_reservations = serializers.SerializerMethodField()
 
     class Meta:
         model = Voyage
@@ -111,6 +120,7 @@ class VoyageSerializer(serializers.ModelSerializer):
             "date_depart_effective",
             "place_totale",
             "places_disponibles",
+            "has_reservations",
             "prix",
             "image",
             "statut",
@@ -144,6 +154,14 @@ class VoyageSerializer(serializers.ModelSerializer):
                 .count()
             )
         return max(obj.place_totale - occupied, 0)
+
+    def get_has_reservations(self, obj) -> bool:
+        annotated_value = getattr(obj, "_has_reservations", None)
+        if annotated_value is not None:
+            return annotated_value
+        from reservations.models import Reservation
+
+        return Reservation.objects.filter(voyage=obj).exists()
 
     def validate_heure_depart(self, value):
         return value.replace(second=0, microsecond=0)

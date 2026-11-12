@@ -19,9 +19,15 @@ const EMPTY_LOCATION: PlaceLocation = {
 
 let placesLibraryPromise: Promise<google.maps.PlacesLibrary> | null = null;
 
-export default function StationLocationInput() {
+export default function StationLocationInput({
+  initialAddress = "",
+  initialLocation = EMPTY_LOCATION,
+}: {
+  initialAddress?: string;
+  initialLocation?: PlaceLocation;
+}) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [location, setLocation] = useState<PlaceLocation>(EMPTY_LOCATION);
+  const [location, setLocation] = useState<PlaceLocation>(initialLocation);
   const [warning, setWarning] = useState("");
 
   useEffect(() => {
@@ -93,6 +99,7 @@ export default function StationLocationInput() {
           ref={inputRef}
           name="adresse"
           type="text"
+          defaultValue={initialAddress}
           autoComplete="off"
           placeholder="Ex. Gare routière centrale, Cotonou"
           required

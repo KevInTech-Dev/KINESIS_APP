@@ -256,6 +256,70 @@ class CompanyApiTests(APITestCase):
         )
         self.assertEqual(invalid_response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_company_can_edit_and_delete_unused_station(self):
+        user, company = self.create_active_company("station-edit@example.com")
+        city = Ville.objects.create(nom="Atakpame")
+        station = Gare.objects.create(
+            compagnie=company,
+            ville=city,
+            nom="Ancienne gare",
+            adresse="Ancienne adresse",
+        )
+        self.client.force_authenticate(user=user)
+
+        update_response = self.client.patch(
+            reverse("company-station-detail", kwargs={"pk": station.pk}),
+            {"nom": "Nouvelle gare", "adresse": "Nouvelle adresse"},
+            format="json",
+        )
+
+        self.assertEqual(update_response.status_code, status.HTTP_200_OK)
+        station.refresh_from_db()
+        self.assertEqual(station.nom, "Nouvelle gare")
+        self.assertEqual(station.adresse, "Nouvelle adresse")
+
+        delete_response = self.client.delete(
+            reverse("company-station-detail", kwargs={"pk": station.pk}),
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(Gare.objects.filter(pk=station.pk).exists())
+
+    def test_company_cannot_edit_or_delete_station_used_by_a_trip(self):
+        user, company = self.create_active_company("station-in-use@example.com")
+        city = Ville.objects.create(nom="Kpalime")
+        station = Gare.objects.create(
+            compagnie=company,
+            ville=city,
+            nom="Gare utilisée",
+            adresse="Centre-ville",
+        )
+        destination = Ville.objects.create(nom="Badou")
+        Voyage.objects.create(
+            compagnie=company,
+            ville_depart=city,
+            ville_arrivee=destination,
+            gare_depart=station,
+            date_depart=timezone.localdate() + timedelta(days=2),
+            heure_depart=time(9, 0),
+            place_totale=30,
+            prix="5000",
+        )
+        self.client.force_authenticate(user=user)
+
+        update_response = self.client.patch(
+            reverse("company-station-detail", kwargs={"pk": station.pk}),
+            {"nom": "Nouveau nom"},
+            format="json",
+        )
+        delete_response = self.client.delete(
+            reverse("company-station-detail", kwargs={"pk": station.pk}),
+        )
+
+        self.assertEqual(update_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(delete_response.status_code, status.HTTP_400_BAD_REQUEST)
+        station.refresh_from_db()
+        self.assertEqual(station.nom, "Gare utilisée")
+
     def test_company_profile_logo_and_editable_fields_persist_after_reload(self):
         with TemporaryDirectory() as media_root, override_settings(
             MEDIA_ROOT=media_root,

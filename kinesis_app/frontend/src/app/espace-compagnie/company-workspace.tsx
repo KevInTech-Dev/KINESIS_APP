@@ -12,6 +12,7 @@ import {
   ChartNoAxesCombined,
   ChevronRight,
   CreditCard,
+  EllipsisVertical,
   ExternalLink,
   MapPin,
   LayoutDashboard,
@@ -22,6 +23,7 @@ import {
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
+import { DropdownMenu } from "radix-ui";
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
@@ -91,6 +93,7 @@ type Station = {
   google_place_id: string;
   maps_url: string;
   active: boolean;
+  en_utilisation: boolean;
 };
 type Trip = {
   id_voyage: string;
@@ -110,6 +113,7 @@ type Trip = {
   prix: string | number;
   image: string | null;
   statut: string;
+  has_reservations: boolean;
 };
 type Agent = {
   id: string;
@@ -178,6 +182,20 @@ type Tab =
   | "profile";
 type PaymentRange = "7d" | "30d" | "90d";
 type DeferredData = "locations" | "tariffs" | "notifications";
+type TripStatusConfirmation = {
+  trip: Trip;
+  status: "PUBLIE" | "ARCHIVE";
+};
+type RecordDetails = {
+  title: string;
+  fields: Array<[string, string]>;
+};
+type RowAction = {
+  label: string;
+  onSelect: () => void;
+  disabled?: boolean;
+  danger?: boolean;
+};
 
 function deferredDataForTab(tab: Tab): DeferredData | null {
   if (tab === "stations" || tab === "trips") return "locations";
@@ -259,7 +277,8 @@ function isTrip(value: unknown): value is Trip {
     typeof value.places_disponibles === "number" &&
     (typeof value.prix === "number" || typeof value.prix === "string") &&
     (typeof value.image === "string" || value.image === null) &&
-    typeof value.statut === "string"
+    typeof value.statut === "string" &&
+    typeof value.has_reservations === "boolean"
   );
 }
 
@@ -276,7 +295,8 @@ function isStation(value: unknown): value is Station {
     (typeof value.longitude === "string" || value.longitude === null) &&
     typeof value.google_place_id === "string" &&
     typeof value.maps_url === "string" &&
-    typeof value.active === "boolean"
+    typeof value.active === "boolean" &&
+    typeof value.en_utilisation === "boolean"
   );
 }
 
@@ -470,7 +490,7 @@ function statusLabel(status: string) {
   return (
     {
       PUBLIE: "Publié",
-      ANNULEE: "Annulé",
+      ANNULEE: "Annulée",
       ARCHIVE: "Archivé",
       EXPIREE: "Terminé",
       CONFIRME: "Confirmé",
@@ -483,6 +503,30 @@ function statusLabel(status: string) {
       PAYEE: "Payée",
     }[status] ?? status
   );
+}
+
+function tripStatus(trip: Trip) {
+  if (trip.statut === "ARCHIVE") return "ARCHIVE";
+  if (trip.statut === "EXPIREE" || trip.date_depart_effective) return "EXPIREE";
+  return "PUBLIE";
+}
+
+function tripStatusLabel(trip: Trip) {
+  return statusLabel(tripStatus(trip));
+}
+
+function tripStatusClass(trip: Trip) {
+  return `company-status--${tripStatus(trip).toLowerCase()}`;
+}
+
+function reservationStatusLabel(status: string) {
+  return status === "EXPIREE" ? "Expirée" : statusLabel(status);
+}
+
+function reservationStatusClass(status: string) {
+  return status === "EXPIREE"
+    ? "company-status--reservation-expiree"
+    : `company-status--${status.toLowerCase()}`;
 }
 
 function isFuture(value: Trip) {
@@ -731,6 +775,13 @@ export default function CompanyWorkspace() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [editingTrip, setEditingTrip] = useState<Trip | null>(null);
+  const [editingStation, setEditingStation] = useState<Station | null>(null);
+  const [tripStatusConfirmation, setTripStatusConfirmation] =
+    useState<TripStatusConfirmation | null>(null);
+  const [tripToDelete, setTripToDelete] = useState<Trip | null>(null);
+  const [stationToDelete, setStationToDelete] = useState<Station | null>(null);
+  const [recordDetails, setRecordDetails] = useState<RecordDetails | null>(null);
+  const [tariffDialogOpen, setTariffDialogOpen] = useState(false);
   const [stationToDeactivate, setStationToDeactivate] = useState<Station | null>(null);
   const [editingTariff, setEditingTariff] = useState<BaggageTariff | null>(null);
   const [agentToDelete, setAgentToDelete] = useState<Agent | null>(null);
@@ -934,7 +985,7 @@ export default function CompanyWorkspace() {
     useListPagination([...stations].sort(compareCreationDescending));
   const { pageItems: pageReservations, pagination: reservationPagination } =
     useListPagination(reservations);
-  const { pageItems: pageTariffs, pagination: tariffPagination } =
+  const { pageItems: pageTariffs, pagination: tariffPagination, resetPage: resetTariffsPage } =
     useListPagination([...tariffs].sort(compareCreationDescending));
   const { pageItems: pagePayments, pagination: paymentPagination } =
     useListPagination(payments);
@@ -1093,6 +1144,198 @@ export default function CompanyWorkspace() {
     setTripDialogOpen(true);
   }
 
+  function startTripEditing(trip: Trip) {
+    if (trip.has_reservations || tripStatus(trip) === "EXPIREE") {
+      toast.error("Ce trajet ne peut plus être modifié car il a déjà des réservations ou est terminé.");
+      return;
+    }
+    setEditingTrip(trip);
+    setTripDepartCity(trip.ville_depart);
+    setTripArrivalCity(trip.ville_arrivee);
+    setTripDepartStation(trip.gare_depart?.id_gare ?? "");
+    setTripArrivalStation(trip.gare_arrivee?.id_gare ?? "");
+    setTripDialogOpen(true);
+  }
+
+  function startStationCreation() {
+    setEditingStation(null);
+    setStationDialogOpen(true);
+  }
+
+  function startStationEditing(station: Station) {
+    if (station.en_utilisation) {
+      toast.error("Cette gare est déjà utilisée par un trajet et ne peut pas être modifiée.");
+      return;
+    }
+    setEditingStation(station);
+    setStationDialogOpen(true);
+  }
+
+  function startTariffCreation() {
+    setEditingTariff(null);
+    setTariffDialogOpen(true);
+  }
+
+  function showRecordDetails(title: string, fields: Array<[string, string]>) {
+    setRecordDetails({ title, fields });
+  }
+
+  function getStationActions(station: Station): RowAction[] {
+    return [
+      {
+        label: "Détails",
+        onSelect: () =>
+          showRecordDetails(`Gare : ${station.nom}`, [
+            ["Ville", station.ville_nom],
+            ["Adresse", station.adresse],
+            ["Statut", station.active ? "Active" : "Désactivée"],
+            ["Utilisée par un trajet", station.en_utilisation ? "Oui" : "Non"],
+            ["Google Maps", station.maps_url || "Non renseigné"],
+          ]),
+      },
+      {
+        label: "Modifier",
+        disabled: station.en_utilisation,
+        onSelect: () => startStationEditing(station),
+      },
+      station.active
+        ? {
+            label: "Désactiver",
+            danger: true,
+            onSelect: () => setStationToDeactivate(station),
+          }
+        : {
+            label: "Activer",
+            onSelect: () => void toggleStation(station, true),
+          },
+      {
+        label: "Supprimer",
+        danger: true,
+        disabled: station.en_utilisation,
+        onSelect: () => setStationToDelete(station),
+      },
+    ];
+  }
+
+  function getTripActions(trip: Trip): RowAction[] {
+    const displayedStatus = tripStatus(trip);
+    const canArchive =
+      displayedStatus !== "ARCHIVE";
+    const canRepublish =
+      displayedStatus === "ARCHIVE" &&
+      !trip.date_depart_effective &&
+      isFuture(trip) &&
+      !trip.has_reservations;
+
+    return [
+      {
+        label: "Détails",
+        onSelect: () =>
+          showRecordDetails(
+            `${trip.ville_depart_nom} → ${trip.ville_arrivee_nom}`,
+            [
+              ["Gare de départ", trip.gare_depart?.nom ?? "Non renseignée"],
+              ["Adresse de départ", trip.gare_depart?.adresse ?? "Non renseignée"],
+              ["Gare d’arrivée", trip.gare_arrivee?.nom ?? "Non renseignée"],
+              ["Adresse d’arrivée", trip.gare_arrivee?.adresse ?? "Non renseignée"],
+              ["Départ", `${formatDate(trip.date_depart)} à ${trip.heure_depart.slice(0, 5)}`],
+              ["Places disponibles", `${trip.places_disponibles} sur ${trip.place_totale}`],
+              ["Prix par place", formatPrice(trip.prix)],
+              ["Statut", tripStatusLabel(trip)],
+              ["Réservations", trip.has_reservations ? "Oui" : "Non"],
+            ],
+          ),
+      },
+      {
+        label: "Modifier",
+        onSelect: () => startTripEditing(trip),
+      },
+      ...(canArchive
+        ? [{
+            label: "Archiver",
+            onSelect: () => {
+              if (trip.has_reservations) {
+                toast.error("Ce trajet a des réservations et ne peut pas être archivé.");
+                return;
+              }
+              setTripStatusConfirmation({ trip, status: "ARCHIVE" });
+            },
+          }]
+        : []),
+      ...(canRepublish
+        ? [{
+            label: "Remettre en ligne",
+            disabled: !canRepublish,
+            onSelect: () =>
+              setTripStatusConfirmation({ trip, status: "PUBLIE" }),
+          }]
+        : []),
+      {
+        label: "Supprimer",
+        danger: true,
+        onSelect: () => {
+          if (trip.has_reservations) {
+            toast.error("Ce trajet a des réservations et ne peut pas être supprimé.");
+            return;
+          }
+          setTripToDelete(trip);
+        },
+      },
+    ];
+  }
+
+  function getTariffActions(tariff: BaggageTariff): RowAction[] {
+    return [
+      {
+        label: "Détails",
+        onSelect: () =>
+          showRecordDetails(
+            `Tarif ${tariff.poids_min} – ${tariff.poids_max} kg`,
+            [
+              ["Poids minimum", `${tariff.poids_min} kg`],
+              ["Poids maximum", `${tariff.poids_max} kg`],
+              ["Prix", formatPrice(tariff.prix)],
+              [
+                "Date de création",
+                tariff.date_creation
+                  ? formatDate(tariff.date_creation.slice(0, 10))
+                  : "Non renseignée",
+              ],
+            ],
+          ),
+      },
+      {
+        label: "Modifier",
+        onSelect: () => {
+          setEditingTariff(tariff);
+          setTariffDialogOpen(true);
+        },
+      },
+      {
+        label: "Supprimer",
+        danger: true,
+        onSelect: () => setTariffToDelete(tariff),
+      },
+    ];
+  }
+
+  function getReservationActions(reservation: CompanyReservation): RowAction[] {
+    return [{
+      label: "Détails",
+      onSelect: () =>
+        showRecordDetails(`Réservation ${reservation.reference}`, [
+          ["Trajet", `${reservation.voyage.ville_depart_nom} → ${reservation.voyage.ville_arrivee_nom}`],
+          ["Départ", `${formatDate(reservation.voyage.date_depart)} à ${reservation.voyage.heure_depart.slice(0, 5)}`],
+          ["Passagers", reservation.places.map((place) => `${place.nom_passager} · siège ${place.numero_siege}`).join(", ") || "Aucun"],
+          ["Nombre de places", String(reservation.places.length)],
+          ["Montant", formatPrice(reservation.montant_total)],
+          ["Statut", reservationStatusLabel(reservation.statut)],
+          ["Date de réservation", formatDate(reservation.date_reservation.slice(0, 10))],
+          ["Expiration", reservation.date_expiration ? formatDate(reservation.date_expiration.slice(0, 10)) : "—"],
+        ]),
+    }];
+  }
+
   async function handleLogout() {
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
@@ -1125,7 +1368,6 @@ export default function CompanyWorkspace() {
       heure_depart: String(formData.get("heure_depart") ?? editingTrip?.heure_depart ?? ""),
       place_totale: Number(formData.get("place_totale") ?? editingTrip?.place_totale),
       prix: Number(formData.get("prix") ?? editingTrip?.prix),
-      statut: String(formData.get("statut") ?? editingTrip?.statut ?? "PUBLIE"),
     };
     const image = formData.get("image");
     const requestPayload: FormData | typeof payload =
@@ -1208,12 +1450,19 @@ export default function CompanyWorkspace() {
     setSaving(true);
     setError(null);
     try {
-      const savedStation = await requestApi("stations", "POST", payload);
+      const savedStation = await requestApi(
+        editingStation ? `stations/${editingStation.id_gare}` : "stations",
+        editingStation ? "PATCH" : "POST",
+        payload,
+      );
       if (isStation(savedStation)) {
-        setStations((current) => [
-          savedStation,
-          ...current.filter((station) => station.id_gare !== savedStation.id_gare),
-        ]);
+        setStations((current) => editingStation
+          ? current.map((station) =>
+              station.id_gare === savedStation.id_gare ? savedStation : station,
+            )
+          : [savedStation, ...current.filter(
+              (station) => station.id_gare !== savedStation.id_gare,
+            )]);
       } else {
         console.error("Saved station response did not match the expected format.");
         void requestApi("stations?page_size=100")
@@ -1224,9 +1473,10 @@ export default function CompanyWorkspace() {
           });
       }
       form.reset();
-      resetStationsPage();
+      if (!editingStation) resetStationsPage();
       setStationDialogOpen(false);
-      toast.success("La gare a été ajoutée.");
+      setEditingStation(null);
+      toast.success(editingStation ? "La gare a été modifiée." : "La gare a été ajoutée.");
     } catch (saveError) {
       toast.error(
         getUserFacingErrorMessage(
@@ -1234,6 +1484,22 @@ export default function CompanyWorkspace() {
           "Impossible d’ajouter la gare. Vérifiez les informations puis réessayez.",
         ),
       );
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteStation(station: Station) {
+    setSaving(true);
+    try {
+      await requestApi(`stations/${station.id_gare}`, "DELETE");
+      setStations((current) =>
+        current.filter((item) => item.id_gare !== station.id_gare),
+      );
+      setStationToDelete(null);
+      toast.success("La gare a été supprimée.");
+    } catch (deleteError) {
+      toast.error(getUserFacingErrorMessage(deleteError, "Impossible de supprimer cette gare."));
     } finally {
       setSaving(false);
     }
@@ -1272,7 +1538,10 @@ export default function CompanyWorkspace() {
     }
   }
 
-  async function updateTripStatus(trip: Trip, status: string) {
+  async function updateTripStatus(
+    trip: Trip,
+    status: TripStatusConfirmation["status"],
+  ) {
     setSaving(true);
     setError(null);
     try {
@@ -1298,9 +1567,28 @@ export default function CompanyWorkspace() {
             toast.error("Trajet modifié, mais la liste n’a pas pu être actualisée.");
           });
       }
-      toast.success(`Le trajet est maintenant « ${statusLabel(status)} ».`);
+      setTripStatusConfirmation(null);
+      toast.success(status === "ARCHIVE" ? "Le trajet a été archivé." : "Le trajet est de nouveau publié.");
+      return true;
     } catch (saveError) {
       toast.error(getUserFacingErrorMessage(saveError, "Impossible de modifier le statut du trajet."));
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteTrip(trip: Trip) {
+    setSaving(true);
+    try {
+      await requestApi(`voyages/${trip.id_voyage}`, "DELETE");
+      setTrips((current) =>
+        current.filter((item) => item.id_voyage !== trip.id_voyage),
+      );
+      setTripToDelete(null);
+      toast.success("Le trajet a été supprimé. Il reste conservé dans l’historique interne.");
+    } catch (deleteError) {
+      toast.error(getUserFacingErrorMessage(deleteError, "Impossible de supprimer ce trajet."));
     } finally {
       setSaving(false);
     }
@@ -1476,6 +1764,8 @@ export default function CompanyWorkspace() {
           });
       }
       setEditingTariff(null);
+      setTariffDialogOpen(false);
+      if (!editingTariff) resetTariffsPage();
       form.reset();
       toast.success(editingTariff ? "Le tarif bagage a été mis à jour." : "Le tarif bagage a été ajouté.");
     } catch (saveError) {
@@ -1594,7 +1884,7 @@ export default function CompanyWorkspace() {
     .filter((payment) => payment.statut === "CONFIRME")
     .reduce((total, payment) => total + Number(payment.montant), 0);
   const editingTripHasActiveReservations = Boolean(
-    editingTrip && editingTrip.places_disponibles < editingTrip.place_totale,
+    editingTrip?.has_reservations,
   );
   const editingTripHasDeparted = Boolean(editingTrip?.date_depart_effective);
   const editingTripFieldsLocked =
@@ -1810,7 +2100,7 @@ export default function CompanyWorkspace() {
                             </td>
                             <td>{formatDate(reservation.voyage.date_depart)} · {reservation.voyage.heure_depart.slice(0, 5)}</td>
                             <td>{reservation.places.length}</td>
-                            <td><span className={`company-status company-status--${reservation.statut.toLowerCase()}`}>{statusLabel(reservation.statut)}</span></td>
+                            <td><span className={`company-status ${reservationStatusClass(reservation.statut)}`}>{reservationStatusLabel(reservation.statut)}</span></td>
                             <td>{formatPrice(reservation.montant_total)}</td>
                           </tr>
                         ))}
@@ -1864,16 +2154,19 @@ export default function CompanyWorkspace() {
           <div className="company-content">
             <AppDialog
               open={stationDialogOpen}
-              title="Ajouter une gare"
-              onClose={() => setStationDialogOpen(false)}
+              title={editingStation ? "Modifier une gare" : "Ajouter une gare"}
+              onClose={() => {
+                setStationDialogOpen(false);
+                setEditingStation(null);
+              }}
               className="company-form-dialog"
             >
               <section className="company-panel">
               <p className="company-form-dialog__description">Chaque gare est associée à une ville officielle. Google Maps peut proposer son adresse et sa localisation.</p>
-              <form className="company-form" onSubmit={submitStation}>
+              <form className="company-form" onSubmit={submitStation} key={editingStation?.id_gare ?? "new-station"}>
                 <label>
                   <span>Ville</span>
-                  <select name="ville" required defaultValue="">
+                  <select name="ville" required defaultValue={editingStation?.ville ?? ""}>
                     <option value="" disabled>Choisir une ville</option>
                     {cities.map((city) => (
                       <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>
@@ -1882,11 +2175,19 @@ export default function CompanyWorkspace() {
                 </label>
                 <label>
                   <span>Nom de la gare</span>
-                  <input name="nom" maxLength={150} required placeholder="Ex. Gare routière centrale" />
+                  <input name="nom" maxLength={150} required defaultValue={editingStation?.nom ?? ""} placeholder="Ex. Gare routière centrale" />
                 </label>
-                <StationLocationInput />
+                <StationLocationInput
+                  initialAddress={editingStation?.adresse ?? ""}
+                  initialLocation={{
+                    latitude: editingStation?.latitude ?? "",
+                    longitude: editingStation?.longitude ?? "",
+                    google_place_id: editingStation?.google_place_id ?? "",
+                    maps_url: editingStation?.maps_url ?? "",
+                  }}
+                />
                 <button type="submit" className="company-button" disabled={saving || !cities.length}>
-                  {saving ? "Enregistrement…" : "Ajouter la gare"}
+                  {saving ? "Enregistrement…" : editingStation ? "Enregistrer les modifications" : "Ajouter la gare"}
                 </button>
               </form>
               </section>
@@ -1894,12 +2195,29 @@ export default function CompanyWorkspace() {
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading">
                 <div><h2>Vos gares</h2><p>Du plus récent au plus ancien · {stations.length} gare(s)</p></div>
-                <button type="button" className="company-button" onClick={() => setStationDialogOpen(true)}>
+                <button type="button" className="company-button" onClick={startStationCreation}>
                   Ajouter une gare <Plus aria-hidden="true" size={16} />
                 </button>
               </div>
               {stations.length ? (
-                <div className="company-station-list">
+                <>
+                <div className="company-table-wrap company-record-table-wrap">
+                  <table className="company-table company-table--stations">
+                    <thead><tr><th>Gare</th><th>Ville</th><th>Adresse</th><th>Statut</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {pageStations.map((station) => (
+                        <tr key={station.id_gare}>
+                          <td className="company-table-cell--truncate" title={station.nom}>{station.nom}</td>
+                          <td className="company-table-cell--truncate" title={station.ville_nom}>{station.ville_nom}</td>
+                          <td className="company-table-cell--truncate" title={station.adresse}>{station.adresse}</td>
+                          <td><span className={`company-status company-status--${station.active ? "active" : "disabled"}`}>{station.active ? "Active" : "Désactivée"}</span></td>
+                          <td><CompanyRowActions label={`la gare ${station.nom}`} actions={getStationActions(station)} disabled={saving} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="company-mobile-record-list company-station-list">
                   {pageStations.map((station) => (
                     <article className="company-station-row" key={station.id_gare}>
                       <div>
@@ -1917,19 +2235,12 @@ export default function CompanyWorkspace() {
                             <ExternalLink aria-hidden="true" />
                           </a>
                         ) : null}
-                        <button
-                          type="button"
-                          disabled={saving}
-                          onClick={() => station.active
-                            ? setStationToDeactivate(station)
-                            : void toggleStation(station, true)}
-                        >
-                          {station.active ? "Désactiver" : "Réactiver"}
-                        </button>
+                        <CompanyRowActions label={`la gare ${station.nom}`} actions={getStationActions(station)} disabled={saving} />
                       </div>
                     </article>
                   ))}
                 </div>
+                </>
               ) : (
                 <p className="company-empty">Aucune gare pour le moment. Ajoutez vos lieux de départ et d’arrivée.</p>
               )}
@@ -1943,16 +2254,19 @@ export default function CompanyWorkspace() {
             <AppDialog
               open={tripDialogOpen}
               title={editingTrip ? "Modifier un trajet" : "Publier un trajet"}
-              onClose={() => setTripDialogOpen(false)}
+              onClose={() => {
+                setTripDialogOpen(false);
+                setEditingTrip(null);
+              }}
               className="company-form-dialog"
             >
               <section className="company-panel">
               <p className="company-form-dialog__description">
-                {editingTripHasActiveReservations && !editingTripHasDeparted
-                  ? "Les modifications sont bloquées tant que des réservations actives sont liées à ce trajet."
+                {editingTripHasActiveReservations
+                  ? "Ce trajet possède déjà des réservations et ne peut pas être modifié."
                   : editingTripHasDeparted
                     ? "Le départ a été enregistré. Seul l’archivage du trajet est possible."
-                    : "Les places disponibles sont calculées par l’API."}
+                    : "Les places disponibles sont calculées par l’API. Un trajet archivé pourra être remis en ligne depuis ses actions."}
               </p>
               <form className="company-form" onSubmit={submitTrip} key={editingTrip?.id_voyage ?? "new-trip"}>
                 <label><span>Ville de départ</span><select name="ville_depart" required disabled={editingTripFieldsLocked} value={tripDepartCity} onChange={(event) => { setTripDepartCity(event.target.value); setTripDepartStation(""); }}><option value="" disabled>Choisir une ville</option>{cities.map((city) => <option key={city.id_ville} value={city.id_ville}>{city.nom}</option>)}</select></label>
@@ -1980,9 +2294,8 @@ export default function CompanyWorkspace() {
                   <span>Image du trajet <small>{editingTrip?.image ? "(facultatif, remplace l’image actuelle)" : "(facultatif)"}</small></span>
                   <input name="image" type="file" accept="image/*" disabled={editingTripFieldsLocked} />
                 </label>
-                {editingTrip ? <label><span>Statut</span><select name="statut" disabled={editingTripHasActiveReservations && !editingTripHasDeparted} defaultValue={editingTripHasDeparted ? "ARCHIVE" : editingTrip.statut}>{editingTripHasDeparted ? <option value="ARCHIVE">Archivé</option> : <><option value="PUBLIE">Publié</option><option value="ANNULEE">Annulé</option><option value="ARCHIVE">Archivé</option></>}</select></label> : null}
                 <div className="company-form-actions">
-                  <button type="submit" className="company-button" disabled={saving || (editingTripHasActiveReservations && !editingTripHasDeparted)}>{saving ? "Enregistrement…" : editingTripHasDeparted ? "Archiver le trajet" : editingTrip ? "Enregistrer" : "Publier le trajet"}</button>
+                  <button type="submit" className="company-button" disabled={saving || editingTripFieldsLocked}>{saving ? "Enregistrement…" : editingTrip ? "Enregistrer les modifications" : "Publier le trajet"}</button>
                   {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => { setEditingTrip(null); setTripDepartCity(""); setTripArrivalCity(""); setTripDepartStation(""); setTripArrivalStation(""); setTripDialogOpen(false); }}>Annuler</button> : null}
                 </div>
               </form>
@@ -1996,42 +2309,35 @@ export default function CompanyWorkspace() {
                 </button>
               </div>
               {trips.length ? (
-                <div className="company-trip-list">{pageTrips.map((trip) => (
+                <>
+                <div className="company-table-wrap company-record-table-wrap">
+                  <table className="company-table company-table--trips">
+                    <thead><tr><th>Trajet</th><th>Départ</th><th>Places</th><th>Prix</th><th>Statut</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {pageTrips.map((trip) => (
+                        <tr key={trip.id_voyage}>
+                          <td className="company-table-cell--truncate" title={`${trip.ville_depart_nom} → ${trip.ville_arrivee_nom}`}>
+                            {trip.ville_depart_nom} → {trip.ville_arrivee_nom}
+                          </td>
+                          <td>{formatDate(trip.date_depart)} · {trip.heure_depart.slice(0, 5)}</td>
+                          <td>{trip.places_disponibles}/{trip.place_totale}</td>
+                          <td>{formatPrice(trip.prix)}</td>
+                          <td><span className={`company-status ${tripStatusClass(trip)}`}>{tripStatusLabel(trip)}</span></td>
+                          <td><CompanyRowActions label={`le trajet ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`} actions={getTripActions(trip)} disabled={saving} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="company-mobile-record-list company-trip-list">{pageTrips.map((trip) => (
                   <article className="company-trip-row" key={trip.id_voyage}>
                     <TripRow trip={trip} />
                     <div className="company-row-actions">
-                      <button
-                        type="button"
-                        disabled={saving || (trip.places_disponibles < trip.place_totale && !trip.date_depart_effective)}
-                        onClick={() => {
-                          setEditingTrip(trip);
-                          setTripDepartCity(trip.ville_depart);
-                          setTripArrivalCity(trip.ville_arrivee);
-                          setTripDepartStation(trip.gare_depart?.id_gare ?? "");
-                          setTripArrivalStation(trip.gare_arrivee?.id_gare ?? "");
-                          setTripDialogOpen(true);
-                        }}
-                      >
-                        {trip.date_depart_effective ? "Archiver" : "Modifier"}
-                      </button>
-                      {trip.statut === "PUBLIE" && isFuture(trip) ? (
-                        <button
-                          type="button"
-                          className="is-danger"
-                          disabled={saving || trip.places_disponibles < trip.place_totale}
-                          onClick={() => void updateTripStatus(trip, "ANNULEE")}
-                        >
-                          Annuler
-                        </button>
-                      ) : null}
-                      {trip.places_disponibles < trip.place_totale && !trip.date_depart_effective ? (
-                        <p className="company-trip-lock-note">
-                          Réservation active : modification, annulation et archivage bloqués.
-                        </p>
-                      ) : null}
+                      <CompanyRowActions label={`le trajet ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`} actions={getTripActions(trip)} disabled={saving} />
                     </div>
                   </article>
                 ))}</div>
+                </>
               ) : <p className="company-empty">Aucun trajet publié pour le moment.</p>}
               {tripPagination}
             </section>
@@ -2100,7 +2406,29 @@ export default function CompanyWorkspace() {
                 <div><h2>Réservations de vos trajets</h2><p>{reservations.length} réservation(s), tous statuts confondus.</p></div>
               </div>
               {reservations.length ? (
-                <div className="company-reservation-list">
+                <>
+                <div className="company-table-wrap company-record-table-wrap">
+                  <table className="company-table company-table--reservations">
+                    <thead><tr><th>Référence</th><th>Trajet</th><th>Départ</th><th>Places</th><th>Montant</th><th>Statut</th><th>Réservée le</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {pageReservations.map((reservation) => (
+                        <tr key={reservation.id_reservation}>
+                          <td>{reservation.reference}</td>
+                          <td className="company-table-cell--truncate" title={`${reservation.voyage.ville_depart_nom} → ${reservation.voyage.ville_arrivee_nom}`}>
+                            {reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}
+                          </td>
+                          <td>{formatDate(reservation.voyage.date_depart)} · {reservation.voyage.heure_depart.slice(0, 5)}</td>
+                          <td>{reservation.places.length}</td>
+                          <td>{formatPrice(reservation.montant_total)}</td>
+                          <td><span className={`company-status ${reservationStatusClass(reservation.statut)}`}>{reservationStatusLabel(reservation.statut)}</span></td>
+                          <td>{formatDate(reservation.date_reservation.slice(0, 10))}</td>
+                          <td><CompanyRowActions label={`la réservation ${reservation.reference}`} actions={getReservationActions(reservation)} disabled={saving} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="company-mobile-record-list company-reservation-list">
                   {pageReservations.map((reservation) => (
                     <article className="company-reservation-card" key={reservation.id_reservation}>
                       <div className="company-reservation-heading">
@@ -2108,8 +2436,8 @@ export default function CompanyWorkspace() {
                           <strong>{reservation.voyage.ville_depart_nom} → {reservation.voyage.ville_arrivee_nom}</strong>
                           <span>Réf. {reservation.reference}</span>
                         </div>
-                        <span className={`company-status company-status--${reservation.statut.toLowerCase()}`}>
-                          {statusLabel(reservation.statut)}
+                        <span className={`company-status ${reservationStatusClass(reservation.statut)}`}>
+                          {reservationStatusLabel(reservation.statut)}
                         </span>
                       </div>
                       <div className="company-reservation-meta">
@@ -2125,6 +2453,7 @@ export default function CompanyWorkspace() {
                     </article>
                   ))}
                 </div>
+                </>
               ) : <p className="company-empty">Aucune réservation n’est encore liée à vos trajets.</p>}
               {reservationPagination}
             </section>
@@ -2132,42 +2461,69 @@ export default function CompanyWorkspace() {
         ) : null}
 
         {tab === "tariffs" && !activeTabDataLoading && !activeTabDataFailed ? (
-          <div className="company-content company-content--split">
-            <section className="company-panel">
-              <div className="company-panel-heading">
-                <div>
-                  <h2>{editingTariff ? "Modifier un tarif" : "Ajouter un tarif bagage"}</h2>
-                  <p>Définissez une tranche de poids et son prix en FCFA.</p>
-                </div>
-              </div>
-              <form className="company-form" onSubmit={submitTariff} key={editingTariff?.id_tarif ?? "new-tariff"}>
-                <div className="company-form-grid">
-                  <label><span>Poids minimum (kg)</span><input name="poids_min" type="number" min="0" step="1" required defaultValue={editingTariff?.poids_min ?? ""} /></label>
-                  <label><span>Poids maximum (kg)</span><input name="poids_max" type="number" min="1" step="1" required defaultValue={editingTariff?.poids_max ?? ""} /></label>
-                </div>
-                <label><span>Prix (FCFA)</span><input name="prix" type="number" min="0" step="1" required defaultValue={editingTariff?.prix ?? ""} /></label>
-                <div className="company-form-actions">
-                  <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : editingTariff ? "Enregistrer" : "Ajouter le tarif"}</button>
-                  {editingTariff ? <button type="button" className="company-cancel-button" onClick={() => setEditingTariff(null)}>Annuler</button> : null}
-                </div>
-              </form>
-            </section>
+          <div className="company-content">
+            <AppDialog
+              open={tariffDialogOpen}
+              title={editingTariff ? "Modifier un tarif bagage" : "Ajouter un tarif bagage"}
+              onClose={() => {
+                setTariffDialogOpen(false);
+                setEditingTariff(null);
+              }}
+              className="company-form-dialog"
+            >
+              <section className="company-panel">
+                <p className="company-form-dialog__description">Définissez une tranche de poids et son prix en FCFA. Les intervalles peuvent comporter des espaces, mais ne doivent pas se chevaucher.</p>
+                <form className="company-form" onSubmit={submitTariff} key={editingTariff?.id_tarif ?? "new-tariff"}>
+                  <div className="company-form-grid">
+                    <label><span>Poids minimum (kg)</span><input name="poids_min" type="number" min="0" step="1" required defaultValue={editingTariff?.poids_min ?? ""} /></label>
+                    <label><span>Poids maximum (kg)</span><input name="poids_max" type="number" min="1" step="1" required defaultValue={editingTariff?.poids_max ?? ""} /></label>
+                  </div>
+                  <label><span>Prix (FCFA)</span><input name="prix" type="number" min="0" step="1" required defaultValue={editingTariff?.prix ?? ""} /></label>
+                  <div className="company-form-actions">
+                    <button type="submit" className="company-button" disabled={saving}>{saving ? "Enregistrement…" : editingTariff ? "Enregistrer" : "Ajouter le tarif"}</button>
+                    <button type="button" className="company-cancel-button" onClick={() => {
+                      setTariffDialogOpen(false);
+                      setEditingTariff(null);
+                    }}>Annuler</button>
+                  </div>
+                </form>
+              </section>
+            </AppDialog>
             <section className="company-panel company-panel--list">
               <div className="company-panel-heading">
                 <div><h2>Vos tarifs</h2><p>{tariffs.length} tranche(s) enregistrée(s)</p></div>
+                <button type="button" className="company-button" onClick={startTariffCreation}>
+                  Ajouter un tarif <Plus aria-hidden="true" size={16} />
+                </button>
               </div>
               {tariffs.length ? (
-                <div className="company-tariff-list">
+                <>
+                <div className="company-table-wrap company-record-table-wrap">
+                  <table className="company-table company-table--tariffs">
+                    <thead><tr><th>Tranche de poids</th><th>Prix</th><th>Créé le</th><th>Action</th></tr></thead>
+                    <tbody>
+                      {pageTariffs.map((tariff) => (
+                        <tr key={tariff.id_tarif}>
+                          <td>{tariff.poids_min} – {tariff.poids_max} kg</td>
+                          <td>{formatPrice(tariff.prix)}</td>
+                          <td>{tariff.date_creation ? formatDate(tariff.date_creation.slice(0, 10)) : "—"}</td>
+                          <td><CompanyRowActions label={`le tarif ${tariff.poids_min} à ${tariff.poids_max} kg`} actions={getTariffActions(tariff)} disabled={saving} /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="company-mobile-record-list company-tariff-list">
                   {pageTariffs.map((tariff) => (
                     <article className="company-tariff-card" key={tariff.id_tarif}>
                       <div><strong>{tariff.poids_min} – {tariff.poids_max} kg</strong><span>{formatPrice(tariff.prix)}</span></div>
                       <div className="company-row-actions">
-                        <button type="button" disabled={saving} onClick={() => setEditingTariff(tariff)}>Modifier</button>
-                        <button type="button" className="is-danger" disabled={saving} onClick={() => setTariffToDelete(tariff)}>Supprimer</button>
+                        <CompanyRowActions label={`le tarif ${tariff.poids_min} à ${tariff.poids_max} kg`} actions={getTariffActions(tariff)} disabled={saving} />
                       </div>
                     </article>
                   ))}
                 </div>
+                </>
               ) : <p className="company-empty">Aucun tarif bagage. Ajoutez vos premières tranches.</p>}
               {tariffPagination}
             </section>
@@ -2253,6 +2609,56 @@ export default function CompanyWorkspace() {
             </section>
           </div>
         ) : null}
+        {recordDetails ? (
+          <AppDialog
+            open
+            title={recordDetails.title}
+            onClose={() => setRecordDetails(null)}
+            className="company-record-details-dialog"
+          >
+            <dl className="company-record-details">
+              {recordDetails.fields.map(([label, value]) => (
+                <div key={label}>
+                  <dt>{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+            </dl>
+          </AppDialog>
+        ) : null}
+        {tripStatusConfirmation ? (
+          <ConfirmationDialog
+            open
+            title={tripStatusConfirmation.status === "ARCHIVE" ? "Archiver ce trajet ?" : "Remettre ce trajet en ligne ?"}
+            description={
+              tripStatusConfirmation.status === "ARCHIVE"
+                ? "Le trajet ne sera plus visible dans la liste publique des voyages, mais restera consultable par votre compagnie."
+                : "Le trajet sera de nouveau visible aux voyageurs et pourra recevoir des réservations."
+            }
+            confirmLabel={tripStatusConfirmation.status === "ARCHIVE" ? "Archiver" : "Remettre en ligne"}
+            tone={tripStatusConfirmation.status === "ARCHIVE" ? "danger" : "primary"}
+            pending={saving}
+            onCancel={() => setTripStatusConfirmation(null)}
+            onConfirm={async () => {
+              await updateTripStatus(
+                tripStatusConfirmation.trip,
+                tripStatusConfirmation.status,
+              );
+            }}
+          />
+        ) : null}
+        {tripToDelete ? (
+          <ConfirmationDialog
+            open
+            title="Supprimer ce trajet ?"
+            description="Le trajet sera masqué pour tous et ne pourra plus être restauré depuis l’application. Il ne sera toutefois pas effacé de la base de données. Un trajet ayant des réservations ne peut pas être supprimé."
+            confirmLabel="Supprimer définitivement de l’application"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setTripToDelete(null)}
+            onConfirm={() => deleteTrip(tripToDelete)}
+          />
+        ) : null}
         {agentToDelete ? (
           <ConfirmationDialog
             open
@@ -2293,11 +2699,23 @@ export default function CompanyWorkspace() {
             onConfirm={() => toggleStation(stationToDeactivate, false)}
           />
         ) : null}
+        {stationToDelete ? (
+          <ConfirmationDialog
+            open
+            title="Supprimer cette gare ?"
+            description={`${stationToDelete.nom} sera supprimée si elle n’est utilisée par aucun trajet. Une gare utilisée doit d’abord être retirée des trajets.`}
+            confirmLabel="Supprimer la gare"
+            tone="danger"
+            pending={saving}
+            onCancel={() => setStationToDelete(null)}
+            onConfirm={() => deleteStation(stationToDelete)}
+          />
+        ) : null}
         {tariffToDelete ? (
           <ConfirmationDialog
             open
             title="Supprimer ce tarif bagage ?"
-            description={`La tranche de ${tariffToDelete.poids_min} à ${tariffToDelete.poids_max} kg sera supprimée si aucun bagage enregistré ne l’utilise.`}
+            description={`La tranche de ${tariffToDelete.poids_min} à ${tariffToDelete.poids_max} kg sera supprimée. Les bagages déjà enregistrés conserveront le tarif et le montant appliqués au moment de leur enregistrement.`}
             confirmLabel="Supprimer le tarif"
             tone="danger"
             pending={saving}
@@ -2327,6 +2745,50 @@ export default function CompanyWorkspace() {
   );
 }
 
+function CompanyRowActions({
+  label,
+  actions,
+  disabled = false,
+}: {
+  label: string;
+  actions: RowAction[];
+  disabled?: boolean;
+}) {
+  return (
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button
+          type="button"
+          className="company-row-action-trigger"
+          aria-label={`Actions pour ${label}`}
+          title={`Actions pour ${label}`}
+          disabled={disabled}
+        >
+          <EllipsisVertical aria-hidden="true" size={18} />
+        </button>
+      </DropdownMenu.Trigger>
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          className="company-row-action-menu"
+          align="end"
+          sideOffset={4}
+        >
+          {actions.map((action) => (
+            <DropdownMenu.Item
+              key={action.label}
+              className={`company-row-action-menu__item${action.danger ? " is-danger" : ""}`}
+              disabled={disabled || action.disabled}
+              onSelect={action.onSelect}
+            >
+              {action.label}
+            </DropdownMenu.Item>
+          ))}
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
+  );
+}
+
 function TripRow({ trip }: { trip: Trip }) {
   return (
     <div className="company-trip-summary">
@@ -2336,7 +2798,7 @@ function TripRow({ trip }: { trip: Trip }) {
       </div>
       <div className="company-trip-details">
         <strong>{formatPrice(trip.prix)}</strong>
-        <span>{trip.places_disponibles}/{trip.place_totale} places · {statusLabel(trip.statut)}</span>
+        <span>{trip.places_disponibles}/{trip.place_totale} places · {tripStatusLabel(trip)}</span>
       </div>
     </div>
   );
