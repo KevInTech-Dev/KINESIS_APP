@@ -9886,6 +9886,13 @@ select:focus-visible {
 
 .company-record-table-wrap .company-table td {
   vertical-align: middle;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.company-record-table-wrap .company-row-action-trigger {
+  width: 30px;
+  height: 30px;
 }
 
 .company-record-table-wrap .company-table th:last-child,
@@ -10268,19 +10275,35 @@ select:focus-visible {
     padding: 17px 14px;
   }
 
-  .company-trip-row,
-  .company-trip-summary {
-    align-items: flex-start;
+  .company-trip-row {
+    align-items: center;
+    flex-wrap: nowrap;
   }
 
   .company-trip-summary {
+    align-items: flex-start;
     flex-direction: column;
     gap: 9px;
   }
 
   .company-station-row {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .company-station-row > div:first-child {
+    flex: 1;
+  }
+
+  .company-station-row .company-row-actions {
+    flex: 0 0 auto;
+    align-items: center;
+  }
+
+  .company-trip-row .company-row-actions {
+    flex: 0 0 auto;
+    align-self: center;
+    justify-content: center;
   }
 
   .company-trip-details {
@@ -10299,10 +10322,19 @@ select:focus-visible {
     align-items: flex-start;
   }
 
-  .company-notification-card,
-  .company-tariff-card {
+  .company-notification-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .company-tariff-card {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  .company-tariff-card > div:first-child {
+    min-width: 0;
+    flex: 1;
   }
 
   .company-reservation-meta {
@@ -10389,11 +10421,11 @@ select:focus-visible {
   }
 
   .company-trip-row {
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
   }
 
   .company-trip-row .company-row-actions {
-    justify-content: flex-start;
+    justify-content: center;
   }
 }
 

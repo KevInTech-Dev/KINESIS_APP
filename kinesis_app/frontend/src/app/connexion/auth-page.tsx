@@ -24,6 +24,14 @@ type AuthMode = "login" | "register";
 type Feedback = { kind: "error"; message: string };
 const PENDING_EMAIL_VERIFICATION_KEY = "kinesis:pending-email-verification";
 const PENDING_EMAIL_VERIFICATION_EVENT = "kinesis:pending-email-verification-change";
+const INVALID_PERSON_NAME_CHARACTERS = new RegExp(
+  "[^\\p{L}\\p{M} '\\u2019-]",
+  "gu",
+);
+
+function filterPersonNameInput(value: string) {
+  return value.replace(INVALID_PERSON_NAME_CHARACTERS, "");
+}
 
 function subscribeToPendingVerification(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -404,7 +412,9 @@ export default function AuthPage() {
                     <input
                       autoComplete="family-name"
                       value={nom}
-                      onChange={(event) => setNom(event.target.value)}
+                      onChange={(event) =>
+                        setNom(filterPersonNameInput(event.target.value))
+                      }
                       required
                       maxLength={100}
                     />
@@ -414,7 +424,9 @@ export default function AuthPage() {
                     <input
                       autoComplete="given-name"
                       value={prenoms}
-                      onChange={(event) => setPrenoms(event.target.value)}
+                      onChange={(event) =>
+                        setPrenoms(filterPersonNameInput(event.target.value))
+                      }
                       maxLength={150}
                     />
                   </label>
