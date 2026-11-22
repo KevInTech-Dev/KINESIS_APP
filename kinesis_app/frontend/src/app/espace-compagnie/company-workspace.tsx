@@ -204,11 +204,8 @@ function deferredDataForTab(tab: Tab): DeferredData | null {
 }
 
 const PERMISSIONS = [
-  ["ENREGISTRER_BAGAGE", "Enregistrer un bagage"],
-  ["SCANNER_BILLET", "Scanner un billet"],
-  ["VALIDER_EMBARQUEMENT", "Valider un embarquement"],
-  ["CONSULTER_BAGAGES", "Consulter les bagages"],
-  ["RESTITUER_BAGAGE", "Restituer un bagage"],
+  ["GERER_BILLETS", "Gérer les billets et les embarquements"],
+  ["GERER_BAGAGES", "Gérer les bagages"],
 ] as const;
 
 const TABS: { id: Tab; label: string; icon: LucideIcon; group: "operations" | "account" }[] = [
@@ -492,6 +489,7 @@ function statusLabel(status: string) {
       PUBLIE: "Publié",
       ANNULEE: "Annulée",
       ARCHIVE: "Archivé",
+      DEPART_A_CONFIRMER: "Terminé",
       EXPIREE: "Terminé",
       CONFIRME: "Confirmé",
       EN_ATTENTE: "En attente",
@@ -508,6 +506,7 @@ function statusLabel(status: string) {
 function tripStatus(trip: Trip) {
   if (trip.statut === "ARCHIVE") return "ARCHIVE";
   if (trip.statut === "EXPIREE" || trip.date_depart_effective) return "EXPIREE";
+  if (trip.statut === "DEPART_A_CONFIRMER") return "DEPART_A_CONFIRMER";
   return "PUBLIE";
 }
 
@@ -1145,8 +1144,15 @@ export default function CompanyWorkspace() {
   }
 
   function startTripEditing(trip: Trip) {
-    if (trip.has_reservations || tripStatus(trip) === "EXPIREE") {
-      toast.error("Ce trajet ne peut plus être modifié car il a déjà des réservations ou est terminé.");
+    if (
+      trip.has_reservations ||
+      ["DEPART_A_CONFIRMER", "EXPIREE"].includes(tripStatus(trip))
+    ) {
+      toast.error(
+        tripStatus(trip) === "DEPART_A_CONFIRMER"
+          ? "L’horaire de départ est dépassé; ce trajet ne peut plus être modifié."
+          : "Ce trajet ne peut plus être modifié car il a déjà des réservations ou est terminé.",
+      );
       return;
     }
     setEditingTrip(trip);

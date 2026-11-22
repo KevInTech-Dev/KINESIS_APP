@@ -66,6 +66,10 @@ class VoyageSerializer(serializers.ModelSerializer):
     statut = serializers.ChoiceField(
         choices=(
             (Voyage.Statut.PUBLIE, "Publié"),
+            (
+                Voyage.Statut.DEPART_A_CONFIRMER,
+                "Terminé",
+            ),
             (Voyage.Statut.EXPIREE, "Terminé"),
             (Voyage.Statut.ARCHIVE, "Archivé"),
         ),
@@ -196,6 +200,11 @@ class VoyageSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        if attrs.get("statut") == Voyage.Statut.DEPART_A_CONFIRMER:
+            raise serializers.ValidationError(
+                {"statut": "Ce statut est attribué automatiquement."}
+            )
+
         depart = attrs.get("ville_depart", getattr(self.instance, "ville_depart", None))
         arrivee = attrs.get(
             "ville_arrivee",

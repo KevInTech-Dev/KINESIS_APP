@@ -16,12 +16,6 @@ export type CachedVoyage = Pick<
   | "statut"
 >;
 
-const routePhotos = [
-  "https://images.unsplash.com/photo-1613463918637-3574cd5d34c0?auto=format&fit=crop&w=1000&q=85",
-  "https://images.unsplash.com/photo-1645364512519-5efd4cfaa1c6?auto=format&fit=crop&w=1000&q=85",
-  "https://images.unsplash.com/photo-1738427436305-453325092968?auto=format&fit=crop&w=1000&q=85",
-];
-
 const voyages = new Map<string, Voyage>();
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -73,13 +67,4 @@ export function cacheVoyages(items: readonly Voyage[]) {
 
 export function getCachedVoyage(id: string): Voyage | null {
   return voyages.get(id) ?? null;
-}
-
-export function getVoyageImage(image: string | null, voyageId: string): string {
-  if (image) return image;
-  const hash = Array.from(voyageId).reduce(
-    (value, character) => (value * 31 + character.charCodeAt(0)) >>> 0,
-    0,
-  );
-  return routePhotos[hash % routePhotos.length];
 }

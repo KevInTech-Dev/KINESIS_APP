@@ -54,14 +54,10 @@ def baggage_queryset_for_user(user):
     if user.role == Utilisateur.Role.VOYAGEUR:
         return Bagage.objects.filter(reservation__voyageur=user)
 
-    company = company_for_user(user)
-    if user.role == Utilisateur.Role.AGENT_COMPAGNIE and not user.profil_agent.permissions.filter(
-        permission__in=(
-            PermissionAgent.Code.CONSULTER_BAGAGES,
-            PermissionAgent.Code.RESTITUER_BAGAGE,
-        )
-    ).exists():
-        raise PermissionDenied("Permission de consultation ou de restitution manquante.")
+    company = company_for_user(
+        user,
+        permission=PermissionAgent.Code.GERER_BAGAGES,
+    )
     return Bagage.objects.filter(reservation__voyage__compagnie=company)
 
 
@@ -70,14 +66,10 @@ class CanListBaggage(BasePermission):
         try:
             if request.user.role == Utilisateur.Role.VOYAGEUR:
                 return request.user.is_authenticated
-            company_for_user(request.user)
-            if request.user.role == Utilisateur.Role.AGENT_COMPAGNIE and not request.user.profil_agent.permissions.filter(
-                permission__in=(
-                    PermissionAgent.Code.CONSULTER_BAGAGES,
-                    PermissionAgent.Code.RESTITUER_BAGAGE,
-                )
-            ).exists():
-                return False
+            company_for_user(
+                request.user,
+                permission=PermissionAgent.Code.GERER_BAGAGES,
+            )
             return True
         except PermissionDenied:
             return False
@@ -88,7 +80,7 @@ class CanRegisterBaggage(BasePermission):
         try:
             company_for_user(
                 request.user,
-                permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                permission=PermissionAgent.Code.GERER_BAGAGES,
             )
             return True
         except PermissionDenied:
@@ -100,7 +92,7 @@ class CanRecordBaggageFee(BasePermission):
         try:
             company_for_user(
                 request.user,
-                permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+                permission=PermissionAgent.Code.GERER_BAGAGES,
             )
             return True
         except PermissionDenied:
@@ -110,10 +102,7 @@ class CanRecordBaggageFee(BasePermission):
 class CanReturnBaggage(BasePermission):
     def has_permission(self, request, view):
         try:
-            company_for_user(
-                request.user,
-                permission=PermissionAgent.Code.RESTITUER_BAGAGE,
-            )
+            company_for_user(request.user, permission=PermissionAgent.Code.GERER_BAGAGES)
             return True
         except PermissionDenied:
             return False

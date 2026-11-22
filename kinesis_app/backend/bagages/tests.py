@@ -160,7 +160,7 @@ class BagageServiceTests(TestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.CONSULTER_BAGAGES,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
 
         baggage = register_baggage(
@@ -236,17 +236,13 @@ class BagageServiceTests(TestCase):
 
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
         baggage = register_baggage(
             actor=agent_user,
             reservation_id=self.reservation.pk,
             poids=12,
             photo_files=[make_image()],
-        )
-        PermissionAgent.objects.create(
-            agent=agent,
-            permission=PermissionAgent.Code.RESTITUER_BAGAGE,
         )
         with self.assertRaises(ValidationError):
             return_baggage(actor=agent_user, baggage_id=baggage.pk)
@@ -437,7 +433,7 @@ class BagageApiTests(APITestCase):
         self.assertEqual(self.client.get(reverse("bagage-list")).data, [])
 
     @patch.object(AuthenticatedBagageStorage, "_save", return_value="bagages/private.png")
-    def test_agent_with_return_permission_can_list_company_baggage(self, _save):
+    def test_agent_with_baggage_permission_can_list_company_baggage(self, _save):
         baggage = register_baggage(
             actor=self.company_user,
             reservation_id=self.reservation.pk,
@@ -457,7 +453,7 @@ class BagageApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.RESTITUER_BAGAGE,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"

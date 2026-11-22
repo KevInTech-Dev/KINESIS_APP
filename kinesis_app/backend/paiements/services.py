@@ -299,8 +299,7 @@ def apply_verified_fedapay_event(
                 f"{reservation.voyage.ville_arrivee}."
             ),
             any_agent_permissions=(
-                PermissionAgent.Code.ENREGISTRER_BAGAGE,
-                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.GERER_BAGAGES,
             ),
         )
         return payment
@@ -446,7 +445,7 @@ def _validate_boarding_ticket(ticket):
 def scan_ticket(*, actor, code_qr):
     company = _company_for_ticket_permission(
         actor,
-        PermissionAgent.Code.SCANNER_BILLET,
+        PermissionAgent.Code.GERER_BILLETS,
     )
     ticket = _get_ticket_for_company(code_qr=code_qr, company=company)
     _validate_boarding_ticket(ticket)
@@ -456,11 +455,7 @@ def scan_ticket(*, actor, code_qr):
 def validate_ticket_boarding(*, actor, code_qr, now=None):
     company = _company_for_ticket_permission(
         actor,
-        PermissionAgent.Code.SCANNER_BILLET,
-    )
-    _company_for_ticket_permission(
-        actor,
-        PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+        PermissionAgent.Code.GERER_BILLETS,
     )
     now = now or timezone.now()
 
@@ -502,8 +497,7 @@ def validate_ticket_boarding(*, actor, code_qr, now=None):
                 f"(réservation {reservation.reference}) a été validé."
             ),
             required_agent_permissions=(
-                PermissionAgent.Code.SCANNER_BILLET,
-                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                PermissionAgent.Code.GERER_BILLETS,
             ),
             exclude_user=actor,
         )
@@ -513,11 +507,7 @@ def validate_ticket_boarding(*, actor, code_qr, now=None):
 def register_voyage_departure(*, actor, voyage_id, now=None):
     company = _company_for_ticket_permission(
         actor,
-        PermissionAgent.Code.SCANNER_BILLET,
-    )
-    _company_for_ticket_permission(
-        actor,
-        PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+        PermissionAgent.Code.GERER_BILLETS,
     )
     now = now or timezone.now()
 
@@ -561,8 +551,7 @@ def register_voyage_departure(*, actor, voyage_id, now=None):
                 f"{voyage.ville_arrivee} a été enregistré."
             ),
             required_agent_permissions=(
-                PermissionAgent.Code.SCANNER_BILLET,
-                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                PermissionAgent.Code.GERER_BILLETS,
             ),
             exclude_user=actor,
         )

@@ -43,11 +43,8 @@ import {
 } from "@/lib/user-facing-errors";
 
 const PERMISSIONS = {
-  registerBaggage: "ENREGISTRER_BAGAGE",
-  scanTicket: "SCANNER_BILLET",
-  validateBoarding: "VALIDER_EMBARQUEMENT",
-  consultBaggage: "CONSULTER_BAGAGES",
-  returnBaggage: "RESTITUER_BAGAGE",
+  manageBaggage: "GERER_BAGAGES",
+  manageTickets: "GERER_BILLETS",
 } as const;
 
 type Tab = "overview" | "scan" | "boarding" | "baggage" | "notifications";
@@ -381,6 +378,7 @@ function statusLabel(status: string) {
       ENREGISTRE: "Enregistré",
       RESTITUE: "Restitué",
       PUBLIE: "Publié",
+      DEPART_A_CONFIRMER: "Terminé",
       ARCHIVE: "Archivé",
     }[status] ?? status
   );
@@ -427,23 +425,16 @@ export default function AgentWorkspace() {
     useListPagination(notifications);
 
   const permissions = profile?.agent_permissions ?? [];
-  const canScan = permissions.includes(PERMISSIONS.scanTicket);
-  const canBoard =
-    canScan && permissions.includes(PERMISSIONS.validateBoarding);
-  const canRegisterBaggage = permissions.includes(PERMISSIONS.registerBaggage);
-  const canConsultBaggage = permissions.includes(PERMISSIONS.consultBaggage);
-  const canReturnBaggage = permissions.includes(PERMISSIONS.returnBaggage);
+  const canManageTickets = permissions.includes(PERMISSIONS.manageTickets);
+  const canManageBaggage = permissions.includes(PERMISSIONS.manageBaggage);
   const tabs = useMemo(
     () =>
       TABS.filter((item) => {
-        if (item.id === "scan") return canScan;
-        if (item.id === "boarding") return canBoard;
-        if (item.id === "baggage") {
-          return canRegisterBaggage || canConsultBaggage || canReturnBaggage;
-        }
+        if (item.id === "scan" || item.id === "boarding") return canManageTickets;
+        if (item.id === "baggage") return canManageBaggage;
         return true;
       }),
-    [canBoard, canConsultBaggage, canRegisterBaggage, canReturnBaggage, canScan],
+    [canManageBaggage, canManageTickets],
   );
   const activeTab = tabs.some((item) => item.id === tab) ? tab : "overview";
   const selectTab = useCallback(
@@ -522,20 +513,15 @@ export default function AgentWorkspace() {
       }
 
       const agentPermissions = sessionData.agent_permissions ?? [];
-      const canListBaggages =
-        agentPermissions.includes(PERMISSIONS.consultBaggage) ||
-        agentPermissions.includes(PERMISSIONS.returnBaggage);
-      const canListReservations =
-        agentPermissions.includes(PERMISSIONS.registerBaggage);
-      const canListTrips =
-        agentPermissions.includes(PERMISSIONS.scanTicket) &&
-        agentPermissions.includes(PERMISSIONS.validateBoarding);
+      const canListBaggages = agentPermissions.includes(PERMISSIONS.manageBaggage);
+      const canListReservations = canListBaggages;
+      const canListTrips = agentPermissions.includes(PERMISSIONS.manageTickets);
       const [tripData, ticketData, reservationData, baggageData, notificationData] =
         await Promise.all([
           canListTrips
             ? requestAgentApi("voyages?page_size=100")
             : Promise.resolve({ results: [] }),
-          agentPermissions.includes(PERMISSIONS.validateBoarding)
+          canListTrips
             ? requestAgentApi("billets?page_size=100")
             : Promise.resolve({ results: [] }),
           canListReservations
@@ -726,7 +712,7 @@ export default function AgentWorkspace() {
         `Bagage enregistré pour ${result.reservation_reference}. Frais : ${formatPrice(result.frais_total)}.`,
       );
       setBaggages((current) => [result, ...current]);
-      if (canRegisterBaggage && !reservations.some((item) => item.id_reservation === result.reservation)) {
+      if (canManageBaggage && !reservations.some((item) => item.id_reservation === result.reservation)) {
         await loadWorkspace();
       }
     } catch (baggageError) {
@@ -995,7 +981,7 @@ export default function AgentWorkspace() {
                   Modifier mon profil
                 </button>
               </div>
-              {canScan ? (
+              {canManageTickets ? (
                 <button
                   type="button"
                   className="agent-overview-primary"
@@ -1009,21 +995,21 @@ export default function AgentWorkspace() {
 
             <div className="agent-overview-main">
               <section className="agent-overview-stats" aria-label="Résumé des opérations">
-                {canBoard ? (
+                {canManageTickets ? (
                   <article className="agent-overview-stat">
                     <span>Billets à traiter</span>
                     <strong>{tickets.filter((ticket) => ticket.statut === "VALIDE").length}</strong>
                     <small>Billets valides à embarquer</small>
                   </article>
                 ) : null}
-                {canConsultBaggage ? (
+                {canManageBaggage ? (
                   <article className="agent-overview-stat">
                     <span>Bagages enregistrés</span>
                     <strong>{baggages.length}</strong>
                     <small>{baggages.filter((baggage) => !baggage.frais_payes).length} frais à percevoir</small>
                   </article>
                 ) : null}
-                {canRegisterBaggage ? (
+                {canManageBaggage ? (
                   <article className="agent-overview-stat">
                     <span>Réservations payées</span>
                     <strong>{availableReservations.length}</strong>
@@ -1122,7 +1108,7 @@ export default function AgentWorkspace() {
                     <p><span>Trajet</span><strong>{scanResult.voyage.ville_depart} → {scanResult.voyage.ville_arrivee}</strong></p>
                     <p><span>Départ</span><strong>{formatDate(scanResult.voyage.date_depart)} · {scanResult.voyage.heure_depart.slice(0, 5)}</strong></p>
                   </div>
-                  {canBoard && scanResult.statut === "VALIDE" ? (
+                  {canManageTickets && scanResult.statut === "VALIDE" ? (
                     <button className="agent-button" type="button" disabled={saving} onClick={() => void confirmBoarding()}>
                       {saving ? "Confirmation…" : "Confirmer l’embarquement"}
                     </button>
@@ -1130,7 +1116,7 @@ export default function AgentWorkspace() {
                 </article>
               ) : null}
             </section>
-            {canBoard ? (
+            {canManageTickets ? (
               <section className="agent-panel">
                 <div className="agent-panel-heading"><div><h2>Billets récents</h2><p>La liste ne révèle jamais le code QR secret.</p></div></div>
                 {tickets.length ? <div className="agent-ticket-list">{pageTickets.map((ticket) => <TicketRow key={ticket.id_billet} ticket={ticket} />)}</div> : <p className="agent-empty">Aucun billet n’est encore associé aux trajets de votre compagnie.</p>}
@@ -1170,7 +1156,7 @@ export default function AgentWorkspace() {
 
         {activeTab === "baggage" ? (
           <div className="agent-content agent-content--baggage">
-            {canRegisterBaggage ? (
+            {canManageBaggage ? (
               <>
                 <AppDialog
                   open={baggageFormOpen}
@@ -1286,14 +1272,14 @@ export default function AgentWorkspace() {
                 </AppDialog>
               </>
             ) : null}
-            {canRegisterBaggage || canConsultBaggage || canReturnBaggage ? (
+            {canManageBaggage ? (
               <section className="agent-panel">
                 <div className="agent-panel-heading agent-baggage-panel-heading">
                   <div>
                     <h2>Suivi des bagages</h2>
                     <p>Bagages enregistrés pour les voyages de votre compagnie.</p>
                   </div>
-                  {canRegisterBaggage ? (
+                  {canManageBaggage ? (
                     <button
                       className="agent-button agent-button--small"
                       type="button"
@@ -1326,16 +1312,16 @@ export default function AgentWorkspace() {
                         </div>
                       </div>
                       <div className="agent-baggage-photos">{baggage.photos.map((photo) => <a href={photo.url} target="_blank" rel="noreferrer" key={photo.id_photobagage}>Voir la photo</a>)}</div>
-                      {!baggage.frais_payes && canRegisterBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer le paiement en espèces ?", description: `Confirmez avoir reçu ${formatPrice(baggage.frais_total)} pour les frais du bagage de la réservation ${baggage.reservation_reference}.`, confirmLabel: "Confirmer le paiement", tone: "primary", action: () => markFeePaid(baggage) })}>Confirmer le paiement des frais</button> : null}
-                      {baggage.statut !== "RESTITUE" && baggage.frais_payes && canReturnBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer la restitution ?", description: `Confirmez la remise du bagage associé à la réservation ${baggage.reservation_reference} à son propriétaire.`, confirmLabel: "Confirmer la restitution", tone: "primary", action: () => returnBaggage(baggage) })}>Confirmer la restitution</button> : null}
+                      {!baggage.frais_payes && canManageBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer le paiement en espèces ?", description: `Confirmez avoir reçu ${formatPrice(baggage.frais_total)} pour les frais du bagage de la réservation ${baggage.reservation_reference}.`, confirmLabel: "Confirmer le paiement", tone: "primary", action: () => markFeePaid(baggage) })}>Confirmer le paiement des frais</button> : null}
+                      {baggage.statut !== "RESTITUE" && baggage.frais_payes && canManageBaggage ? <button className="agent-button agent-button--small" type="button" disabled={saving} onClick={() => setConfirmation({ title: "Confirmer la restitution ?", description: `Confirmez la remise du bagage associé à la réservation ${baggage.reservation_reference} à son propriétaire.`, confirmLabel: "Confirmer la restitution", tone: "primary", action: () => returnBaggage(baggage) })}>Confirmer la restitution</button> : null}
                       {!baggage.frais_payes ? <span className="agent-fee-due">Frais à percevoir</span> : <span className="agent-fee-paid">Frais payés</span>}
                     </article>
                   ))}</div>
-                ) : <p className="agent-empty">{canConsultBaggage || canReturnBaggage ? "Aucun bagage enregistré." : "Les bagages enregistrés pendant cette session apparaîtront ici pour le suivi des frais."}</p>}
+                ) : <p className="agent-empty">{canManageBaggage ? "Aucun bagage enregistré." : "Les bagages enregistrés pendant cette session apparaîtront ici pour le suivi des frais."}</p>}
                 {baggagePagination}
               </section>
             ) : null}
-            {!canRegisterBaggage && !canConsultBaggage && !canReturnBaggage ? <section className="agent-panel"><p className="agent-empty">Aucun accès bagage ne vous a été attribué.</p></section> : null}
+            {!canManageBaggage ? <section className="agent-panel"><p className="agent-empty">Aucun accès bagage ne vous a été attribué.</p></section> : null}
           </div>
         ) : null}
 
@@ -1382,11 +1368,8 @@ export default function AgentWorkspace() {
 function permissionLabel(permission: string) {
   return (
     {
-      ENREGISTRER_BAGAGE: "Enregistrer et facturer des bagages",
-      SCANNER_BILLET: "Scanner et vérifier les billets",
-      VALIDER_EMBARQUEMENT: "Valider l’embarquement et déclarer un départ",
-      CONSULTER_BAGAGES: "Consulter les bagages",
-      RESTITUER_BAGAGE: "Confirmer la restitution",
+      GERER_BAGAGES: "Gérer les bagages",
+      GERER_BILLETS: "Gérer les billets et les embarquements",
     }[permission] ?? permission
   );
 }

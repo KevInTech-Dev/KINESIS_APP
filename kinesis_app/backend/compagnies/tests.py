@@ -51,7 +51,7 @@ class CompagnieModelTests(TestCase):
         self.assertEqual(compagnie.statut, Compagnie.Statut.EN_ATTENTE_VALIDATION)
         self.assertEqual(compagnie.utilisateur, self.user)
 
-    def test_agent_has_individual_permissions_and_cannot_duplicate_them(self):
+    def test_agent_has_grouped_permissions_and_cannot_duplicate_them(self):
         compagnie = Compagnie.objects.create(utilisateur=self.user)
         agent_user = User.objects.create_user(
             email="agent@example.com",
@@ -66,18 +66,14 @@ class CompagnieModelTests(TestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.SCANNER_BILLET,
-        )
-        PermissionAgent.objects.create(
-            agent=agent,
-            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            permission=PermissionAgent.Code.GERER_BILLETS,
         )
 
-        self.assertEqual(agent.permissions.count(), 2)
+        self.assertEqual(agent.permissions.count(), 1)
         with self.assertRaises(IntegrityError), transaction.atomic():
             PermissionAgent.objects.create(
                 agent=agent,
-                permission=PermissionAgent.Code.SCANNER_BILLET,
+                permission=PermissionAgent.Code.GERER_BILLETS,
             )
 
     def test_company_documents_use_authenticated_cloudinary_assets(self):
@@ -737,10 +733,7 @@ class CompanyApiTests(APITestCase):
                 "email": "agent@example.com",
                 "nom": "Agent",
                 "prenoms": "Kinesis",
-                "permissions": [
-                    PermissionAgent.Code.SCANNER_BILLET,
-                    PermissionAgent.Code.VALIDER_EMBARQUEMENT,
-                ],
+                "permissions": [PermissionAgent.Code.GERER_BILLETS],
             },
             format="json",
         )
@@ -748,7 +741,7 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         agent = AgentCompagnie.objects.get(utilisateur__email="agent@example.com")
         self.assertEqual(agent.compagnie, company)
-        self.assertEqual(agent.permissions.count(), 2)
+        self.assertEqual(agent.permissions.count(), 1)
         self.assertFalse(agent.utilisateur.is_active)
         self.assertFalse(agent.utilisateur.has_usable_password())
         self.assertFalse(agent.utilisateur.must_change_password)
@@ -836,7 +829,7 @@ class CompanyApiTests(APITestCase):
             reverse("company-agent-detail", kwargs={"pk": agent.pk}),
             {
                 "nom": "Agent modifie",
-                "permissions": [PermissionAgent.Code.SCANNER_BILLET],
+                "permissions": [PermissionAgent.Code.GERER_BILLETS],
             },
             format="json",
         )
@@ -845,7 +838,7 @@ class CompanyApiTests(APITestCase):
         self.assertEqual(agent.utilisateur.nom, "Agent modifie")
         self.assertEqual(
             list(agent.permissions.values_list("permission", flat=True)),
-            [PermissionAgent.Code.SCANNER_BILLET],
+            [PermissionAgent.Code.GERER_BILLETS],
         )
 
         agent_user = agent.utilisateur

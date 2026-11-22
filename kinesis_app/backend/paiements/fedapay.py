@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import json
+import logging
 import time
 from urllib.error import HTTPError, URLError
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
@@ -8,6 +9,8 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 from rest_framework.exceptions import APIException
+
+logger = logging.getLogger(__name__)
 
 
 class FedaPayUnavailable(APIException):
@@ -45,9 +48,41 @@ def _request_json(method, path, payload=None):
         with urlopen(request, timeout=15) as response:
             response_body = response.read()
     except HTTPError as error:
-        raise FedaPayUnavailable(
-            "FedaPay a refusé la requête. Vérifie la configuration du compte."
-        ) from error
+        endpoint = (
+            "/transactions"
+            if path == "/transactions"
+            else "/transactions/{id}/token"
+            if path.endswith("/token")
+            else "/transactions/{id}"
+        )
+        logger.warning(
+            "FedaPay rejected %s %s with HTTP %s.",
+            method,
+            endpoint,
+            error.code,
+        )
+        if error.code in (401, 403):
+            detail = (
+                f"FedaPay a refusé l’authentification (HTTP {error.code}). "
+                "Vérifie que la clé secrète correspond à l’environnement "
+                "configuré (sandbox ou live)."
+            )
+        elif error.code in (400, 422):
+            detail = (
+                f"FedaPay a rejeté les données de la transaction (HTTP {error.code}). "
+                "Vérifie les informations du paiement et les exigences du compte."
+            )
+        elif error.code == 404:
+            detail = (
+                "FedaPay n’a pas trouvé la transaction demandée (HTTP 404). "
+                "Consulte les journaux API FedaPay pour vérifier son état."
+            )
+        else:
+            detail = (
+                f"FedaPay a refusé la requête (HTTP {error.code}). Consulte les "
+                "journaux API FedaPay pour en connaître la raison."
+            )
+        raise FedaPayUnavailable(detail) from error
     except (TimeoutError, URLError) as error:
         raise FedaPayUnavailable(
             "FedaPay ne répond pas pour le moment. Réessaie ultérieurement."

@@ -33,10 +33,6 @@ class CanOperateAgentVoyages(BasePermission):
         return (
             agent.compagnie.statut == Compagnie.Statut.ACTIVE
             and agent.permissions.filter(
-                permission__in=(
-                    PermissionAgent.Code.SCANNER_BILLET,
-                    PermissionAgent.Code.VALIDER_EMBARQUEMENT,
-                )
-            ).count()
-            == 2
+                permission=PermissionAgent.Code.GERER_BILLETS
+            ).exists()
         )

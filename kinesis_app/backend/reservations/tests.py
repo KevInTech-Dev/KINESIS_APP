@@ -217,7 +217,7 @@ class ReservationApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
         response = self.reserve(["Jane Doe"])
         reservation_id = response.data["id_reservation"]
@@ -332,7 +332,7 @@ class ReservationApiTests(APITestCase):
             status.HTTP_404_NOT_FOUND,
         )
 
-    def test_agent_with_baggage_registration_permission_can_read_company_reservations(self):
+    def test_agent_with_baggage_permission_can_read_company_reservations(self):
         reservation_response = self.reserve(["Jane Doe"])
         reservation_id = reservation_response.data["id_reservation"]
         agent_user = User.objects.create_user(
@@ -349,7 +349,7 @@ class ReservationApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.ENREGISTRER_BAGAGE,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
 
         self.authenticate(agent_user)

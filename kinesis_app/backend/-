@@ -478,7 +478,7 @@ paths:
     get:
       operationId: billets_list
       description: Liste paginée des billets du voyageur connecté. Un agent de compagnie
-        ayant la permission VALIDER_EMBARQUEMENT voit uniquement les billets de sa
+        ayant la permission GERER_BILLETS voit uniquement les billets de sa
         compagnie; le QR code secret n’est pas inclus dans cette liste.
       parameters:
       - name: page
@@ -1017,7 +1017,7 @@ paths:
       operationId: reservations_list
       description: 'Retourne les réservations paginées du voyageur connecté ou celles
         des voyages de sa compagnie. Un agent ne peut les consulter que s’il a la
-        permission ENREGISTRER_BAGAGE ou CONSULTER_BAGAGES. Paramètres de pagination
+        permission GERER_BAGAGES. Paramètres de pagination
         : page et page_size (maximum 100).'
       parameters:
       - name: page
@@ -2508,18 +2508,12 @@ components:
           $ref: '#/components/schemas/VoyageStatutEnum'
     PermissionsEnum:
       enum:
-      - ENREGISTRER_BAGAGE
-      - SCANNER_BILLET
-      - VALIDER_EMBARQUEMENT
-      - CONSULTER_BAGAGES
-      - RESTITUER_BAGAGE
+      - GERER_BILLETS
+      - GERER_BAGAGES
       type: string
       description: |-
-        * `ENREGISTRER_BAGAGE` - Enregistrer un bagage
-        * `SCANNER_BILLET` - Scanner un billet
-        * `VALIDER_EMBARQUEMENT` - Valider un embarquement
-        * `CONSULTER_BAGAGES` - Consulter les bagages
-        * `RESTITUER_BAGAGE` - Restituer un bagage
+        * `GERER_BILLETS` - Gérer les billets et les embarquements
+        * `GERER_BAGAGES` - Gérer les bagages
     PhotoBagage:
       type: object
       properties:

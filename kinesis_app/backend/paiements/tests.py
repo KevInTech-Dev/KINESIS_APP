@@ -4,13 +4,15 @@ import json
 import time as time_module
 from datetime import time, timedelta
 from decimal import Decimal
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import patch
+from urllib.error import HTTPError
 
 from django.contrib.auth import get_user_model
 from django.core.management import call_command
 from django.db import connection
-from django.test import TestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
@@ -26,6 +28,7 @@ from reservations.services import create_reservation
 from voyages.models import Ville, Voyage
 
 from .fedapay import (
+    FedaPayUnavailable,
     _request_json,
     create_payment_link,
     create_transaction,
@@ -508,7 +511,7 @@ class PaiementApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=baggage_agent,
-            permission=PermissionAgent.Code.CONSULTER_BAGAGES,
+            permission=PermissionAgent.Code.GERER_BAGAGES,
         )
         boarding_agent_user = User.objects.create_user(
             email="agent-embarquement-paiement@example.com",
@@ -522,7 +525,7 @@ class PaiementApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=boarding_agent,
-            permission=PermissionAgent.Code.SCANNER_BILLET,
+            permission=PermissionAgent.Code.GERER_BILLETS,
         )
 
         payment = start_payment_attempt(
@@ -574,7 +577,7 @@ class PaiementApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
-class FedaPayGatewayTests(TestCase):
+class FedaPayGatewayTests(SimpleTestCase):
     @override_settings(
         FEDAPAY_ENVIRONMENT="sandbox",
         FEDAPAY_SECRET_KEY="test_secret",
@@ -596,6 +599,47 @@ class FedaPayGatewayTests(TestCase):
             "Bearer test_secret",
         )
         self.assertEqual(payload, {"id": 12345})
+
+    @override_settings(
+        FEDAPAY_ENVIRONMENT="sandbox",
+        FEDAPAY_SECRET_KEY="test_secret",
+    )
+    def test_api_rejection_explains_status_and_logs_no_sensitive_data(self):
+        cases = (
+            (
+                401,
+                "clé secrète correspond à l’environnement configuré",
+            ),
+            (
+                403,
+                "clé secrète correspond à l’environnement configuré",
+            ),
+            (422, "rejeté les données de la transaction"),
+        )
+        for status_code, expected_detail in cases:
+            with self.subTest(status_code=status_code):
+                error = HTTPError(
+                    "https://sandbox-api.fedapay.com/v1/transactions/123/token",
+                    status_code,
+                    "Rejected",
+                    hdrs=None,
+                    fp=BytesIO(b""),
+                )
+                with patch("paiements.fedapay.urlopen", side_effect=error):
+                    with self.assertLogs("paiements.fedapay", level="WARNING") as logs:
+                        with self.assertRaises(FedaPayUnavailable) as raised:
+                            _request_json(
+                                "POST",
+                                "/transactions/123/token",
+                                {"customer": {"email": "traveler@example.com"}},
+                            )
+
+                self.assertIn(expected_detail, str(raised.exception.detail))
+                self.assertIn(f"HTTP {status_code}", logs.output[0])
+                self.assertIn("/transactions/{id}/token", logs.output[0])
+                self.assertNotIn("test_secret", logs.output[0])
+                self.assertNotIn("traveler@example.com", logs.output[0])
+                self.assertNotIn("/123/", logs.output[0])
 
     @override_settings(
         FEDAPAY_ENVIRONMENT="sandbox",
@@ -930,11 +974,7 @@ class BilletBoardingApiTests(APITestCase):
             [
                 PermissionAgent(
                     agent=self.agent,
-                    permission=PermissionAgent.Code.SCANNER_BILLET,
-                ),
-                PermissionAgent(
-                    agent=self.agent,
-                    permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                    permission=PermissionAgent.Code.GERER_BILLETS,
                 ),
             ]
         )
@@ -1011,10 +1051,7 @@ class BilletBoardingApiTests(APITestCase):
         self.assertIsNone(self.ticket.date_embarquement)
         self.assertEqual(self.ticket.statut, BilletElectronique.Statut.VALIDE)
 
-    def test_agent_with_boarding_permission_lists_company_tickets_without_qr(self):
-        self.agent.permissions.filter(
-            permission=PermissionAgent.Code.SCANNER_BILLET
-        ).delete()
+    def test_agent_with_ticket_permission_lists_company_tickets_without_qr(self):
         other_company_user = User.objects.create_user(
             email="autre-compagnie-billets@example.com",
             password="Qx7!mR4#vN8p",
@@ -1066,7 +1103,7 @@ class BilletBoardingApiTests(APITestCase):
 
     def test_agent_without_boarding_permission_cannot_list_tickets(self):
         self.agent.permissions.filter(
-            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT
+            permission=PermissionAgent.Code.GERER_BILLETS
         ).delete()
 
         response = self.client.get(reverse("billet-list"))
@@ -1097,11 +1134,7 @@ class BilletBoardingApiTests(APITestCase):
             [
                 PermissionAgent(
                     agent=observing_agent,
-                    permission=PermissionAgent.Code.SCANNER_BILLET,
-                ),
-                PermissionAgent(
-                    agent=observing_agent,
-                    permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                    permission=PermissionAgent.Code.GERER_BILLETS,
                 ),
             ]
         )
@@ -1275,9 +1308,9 @@ class BilletBoardingApiTests(APITestCase):
         self.assertEqual(self.ticket.statut, BilletElectronique.Statut.VALIDE)
         self.assertIsNone(self.ticket.date_embarquement)
 
-    def test_scanning_permission_does_not_grant_boarding_permission(self):
+    def test_agent_without_ticket_permission_cannot_scan_or_board(self):
         self.agent.permissions.filter(
-            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT
+            permission=PermissionAgent.Code.GERER_BILLETS
         ).delete()
 
         scan_response = self.client.post(
@@ -1291,7 +1324,7 @@ class BilletBoardingApiTests(APITestCase):
             format="json",
         )
 
-        self.assertEqual(scan_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(scan_response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(boarding_response.status_code, status.HTTP_403_FORBIDDEN)
 
     def test_agent_cannot_scan_another_companys_ticket(self):
@@ -1319,7 +1352,7 @@ class BilletBoardingApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=other_agent,
-            permission=PermissionAgent.Code.SCANNER_BILLET,
+            permission=PermissionAgent.Code.GERER_BILLETS,
         )
         self.client.force_authenticate(user=other_agent_user)
 

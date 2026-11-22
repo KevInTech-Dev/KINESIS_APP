@@ -118,11 +118,7 @@ class VoyageApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.SCANNER_BILLET,
-        )
-        PermissionAgent.objects.create(
-            agent=agent,
-            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            permission=PermissionAgent.Code.GERER_BILLETS,
         )
         self.client.credentials(
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(agent_user)}"
@@ -149,11 +145,7 @@ class VoyageApiTests(APITestCase):
         )
         PermissionAgent.objects.create(
             agent=agent,
-            permission=PermissionAgent.Code.SCANNER_BILLET,
-        )
-        PermissionAgent.objects.create(
-            agent=agent,
-            permission=PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            permission=PermissionAgent.Code.GERER_BILLETS,
         )
         for index in range(4):
             Voyage.objects.create(
@@ -319,6 +311,48 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         trip_ids = {item["id_voyage"] for item in response.data["results"]}
         self.assertIn(str(archived_trip.pk), trip_ids)
+
+    def test_company_catalog_marks_past_departures_as_awaiting_confirmation(self):
+        past_trip = Voyage.objects.create(
+            compagnie=self.company,
+            ville_depart=self.depart,
+            ville_arrivee=self.arrivee,
+            date_depart=timezone.localdate() - timedelta(days=1),
+            heure_depart=time(10, 0),
+            place_totale=30,
+            prix="4500",
+        )
+        self.client.force_authenticate(user=self.company_user)
+
+        response = self.client.get(reverse("voyage-list"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        trip_data = next(
+            item
+            for item in response.data["results"]
+            if item["id_voyage"] == str(past_trip.pk)
+        )
+        self.assertEqual(
+            trip_data["statut"],
+            Voyage.Statut.DEPART_A_CONFIRMER,
+        )
+        past_trip.refresh_from_db()
+        self.assertEqual(past_trip.statut, Voyage.Statut.DEPART_A_CONFIRMER)
+        self.assertIsNone(past_trip.date_depart_effective)
+
+    def test_company_cannot_set_awaiting_departure_status_manually(self):
+        self.client.force_authenticate(user=self.company_user)
+
+        response = self.client.patch(
+            reverse("voyage-detail", kwargs={"pk": self.voyage.pk}),
+            {"statut": Voyage.Statut.DEPART_A_CONFIRMER},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("statut", response.data)
+        self.voyage.refresh_from_db()
+        self.assertEqual(self.voyage.statut, Voyage.Statut.PUBLIE)
 
     def test_public_catalog_accepts_optional_filters_and_minimum_seats(self):
         response = self.client.get(

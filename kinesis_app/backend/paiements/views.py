@@ -226,7 +226,7 @@ class BilletListView(generics.ListAPIView):
     @extend_schema(
         description=(
             "Liste paginée des billets du voyageur connecté. Un agent de compagnie "
-            "ayant la permission VALIDER_EMBARQUEMENT voit uniquement les billets "
+            "ayant la permission GERER_BILLETS voit uniquement les billets "
             "de sa compagnie; le QR code secret n’est pas inclus dans cette liste."
         )
     )

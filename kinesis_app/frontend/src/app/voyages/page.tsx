@@ -425,7 +425,6 @@ function VoyagesCatalog() {
                 <div className="catalog-card__image">
                   <VoyageCoverImage
                     image={trip.image}
-                    voyageId={trip.id_voyage}
                     alt=""
                     sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw"
                   />

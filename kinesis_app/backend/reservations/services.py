@@ -205,8 +205,7 @@ def cancel_reservation(*, reservation_id, voyageur, now=None):
             titre="Réservation annulée",
             message=message,
             any_agent_permissions=(
-                PermissionAgent.Code.ENREGISTRER_BAGAGE,
-                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.GERER_BAGAGES,
             ),
             exclude_user=voyageur,
         )

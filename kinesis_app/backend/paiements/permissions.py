@@ -58,7 +58,7 @@ class CanScanTicket(BasePermission):
     def has_permission(self, request, view):
         return has_ticket_permission(
             request.user,
-            PermissionAgent.Code.SCANNER_BILLET,
+            PermissionAgent.Code.GERER_BILLETS,
         )
 
 
@@ -66,10 +66,7 @@ class CanValidateBoarding(BasePermission):
     def has_permission(self, request, view):
         return has_ticket_permission(
             request.user,
-            PermissionAgent.Code.SCANNER_BILLET,
-        ) and has_ticket_permission(
-            request.user,
-            PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            PermissionAgent.Code.GERER_BILLETS,
         )
 
 
@@ -77,5 +74,5 @@ class CanListBoardingTickets(BasePermission):
     def has_permission(self, request, view):
         return has_ticket_permission(
             request.user,
-            PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+            PermissionAgent.Code.GERER_BILLETS,
         )

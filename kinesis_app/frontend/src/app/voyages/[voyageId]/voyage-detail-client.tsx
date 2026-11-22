@@ -326,7 +326,6 @@ export default function VoyageDetailClient({
           <div className="voyage-detail__cover">
             <VoyageCoverImage
               image={trip.image}
-              voyageId={trip.id_voyage}
               alt=""
               priority
               sizes="(max-width: 900px) 100vw, 1240px"

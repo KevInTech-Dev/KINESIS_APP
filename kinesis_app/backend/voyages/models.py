@@ -37,6 +37,7 @@ class Voyage(models.Model):
     class Statut(models.TextChoices):
         PUBLIE = "PUBLIE", "Publié"
         ARCHIVE = "ARCHIVE", "Archivé"
+        DEPART_A_CONFIRMER = "DEPART_A_CONFIRMER", "Terminé"
         EXPIREE = "EXPIREE", "Terminé"
 
     id_voyage = models.UUIDField(

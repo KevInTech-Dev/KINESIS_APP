@@ -149,11 +149,8 @@ class AgentCompagnie(models.Model):
 
 class PermissionAgent(models.Model):
     class Code(models.TextChoices):
-        ENREGISTRER_BAGAGE = "ENREGISTRER_BAGAGE", "Enregistrer un bagage"
-        SCANNER_BILLET = "SCANNER_BILLET", "Scanner un billet"
-        VALIDER_EMBARQUEMENT = "VALIDER_EMBARQUEMENT", "Valider un embarquement"
-        CONSULTER_BAGAGES = "CONSULTER_BAGAGES", "Consulter les bagages"
-        RESTITUER_BAGAGE = "RESTITUER_BAGAGE", "Restituer un bagage"
+        GERER_BILLETS = "GERER_BILLETS", "Gérer les billets et les embarquements"
+        GERER_BAGAGES = "GERER_BAGAGES", "Gérer les bagages"
 
     agent = models.ForeignKey(
         AgentCompagnie,

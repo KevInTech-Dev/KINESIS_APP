@@ -25,6 +25,7 @@ from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
 from .querysets import public_voyages_queryset, with_availability
 from .serializers import VilleSerializer, VoyageSearchSerializer, VoyageSerializer
+from .services import synchronize_due_departures
 
 
 class VilleListView(generics.ListAPIView):
@@ -49,9 +50,11 @@ class AgentVoyageListView(generics.ListAPIView):
     pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
+        company = self.request.user.profil_agent.compagnie
+        synchronize_due_departures(company=company)
         queryset = (
             Voyage.objects.filter(
-                compagnie=self.request.user.profil_agent.compagnie,
+                compagnie=company,
                 deleted_at__isnull=True,
             )
             .select_related(
@@ -138,6 +141,9 @@ class VoyageListCreateView(generics.ListCreateAPIView):
                 if cached_data is not None:
                     return Response(cached_data)
 
+        if request.method == "GET":
+            synchronize_due_departures()
+
         response = super().list(request, *args, **kwargs)
         if (
             request.query_params.get("include_facets") == "1"
@@ -175,6 +181,8 @@ class VoyageDetailView(generics.RetrieveUpdateDestroyAPIView):
         return [AllowAny()]
 
     def get_queryset(self):
+        if self.request.method == "GET":
+            synchronize_due_departures()
         queryset = Voyage.objects.select_related(
             "compagnie__utilisateur",
             "ville_depart",
@@ -240,6 +248,18 @@ class VoyageDetailView(generics.RetrieveUpdateDestroyAPIView):
                     }
                 )
 
+        if voyage.statut == Voyage.Statut.DEPART_A_CONFIRMER:
+            next_status = serializer.validated_data.get("statut", voyage.statut)
+            if changed_fields != {"statut"} or next_status != Voyage.Statut.ARCHIVE:
+                raise ValidationError(
+                    {
+                        "voyage": (
+                            "L’horaire de départ est dépassé. Le trajet ne peut "
+                            "plus être modifié; il peut être archivé."
+                        )
+                    }
+                )
+
         voyage = serializer.save()
         if (
             voyage.date_depart_effective is not None
@@ -289,10 +309,8 @@ class VoyageDetailView(generics.RetrieveUpdateDestroyAPIView):
             titre=titre,
             message=message,
             any_agent_permissions=(
-                PermissionAgent.Code.ENREGISTRER_BAGAGE,
-                PermissionAgent.Code.CONSULTER_BAGAGES,
-                PermissionAgent.Code.SCANNER_BILLET,
-                PermissionAgent.Code.VALIDER_EMBARQUEMENT,
+                PermissionAgent.Code.GERER_BAGAGES,
+                PermissionAgent.Code.GERER_BILLETS,
             ),
             exclude_user=self.request.user,
         )

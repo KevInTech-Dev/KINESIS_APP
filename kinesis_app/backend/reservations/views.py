@@ -58,7 +58,7 @@ class ReservationListCreateView(generics.ListCreateAPIView):
         description=(
             "Retourne les réservations paginées du voyageur connecté ou celles "
             "des voyages de sa compagnie. Un agent ne peut les consulter que s’il "
-            "a la permission ENREGISTRER_BAGAGE ou CONSULTER_BAGAGES. "
+            "a la permission GERER_BAGAGES. "
             "Paramètres de pagination : page et page_size (maximum 100)."
         )
     )

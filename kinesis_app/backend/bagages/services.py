@@ -95,7 +95,7 @@ def register_baggage(
     if not photo_files:
         raise ValidationError({"photos": "Au moins une photo est obligatoire."})
 
-    company = company_for_user(actor, permission=PermissionAgent.Code.ENREGISTRER_BAGAGE)
+    company = company_for_user(actor, permission=PermissionAgent.Code.GERER_BAGAGES)
     weight = Decimal(str(poids))
     now = timezone.now()
 
@@ -179,8 +179,7 @@ def register_baggage(
                 f"{reservation.reference}. Frais dus : {fee} FCFA."
             ),
             any_agent_permissions=(
-                PermissionAgent.Code.ENREGISTRER_BAGAGE,
-                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.GERER_BAGAGES,
             ),
             exclude_user=actor,
         )
@@ -188,7 +187,7 @@ def register_baggage(
 
 
 def record_manual_fee_payment(*, actor, baggage_id):
-    company = company_for_user(actor, permission=PermissionAgent.Code.ENREGISTRER_BAGAGE)
+    company = company_for_user(actor, permission=PermissionAgent.Code.GERER_BAGAGES)
     with transaction.atomic():
         try:
             baggage = Bagage.objects.select_for_update().select_related(
@@ -227,8 +226,7 @@ def record_manual_fee_payment(*, actor, baggage_id):
                 f"réservation {baggage.reservation.reference} ont été enregistrés."
             ),
             any_agent_permissions=(
-                PermissionAgent.Code.ENREGISTRER_BAGAGE,
-                PermissionAgent.Code.CONSULTER_BAGAGES,
+                PermissionAgent.Code.GERER_BAGAGES,
             ),
             exclude_user=actor,
         )
@@ -236,7 +234,7 @@ def record_manual_fee_payment(*, actor, baggage_id):
 
 
 def return_baggage(*, actor, baggage_id):
-    company = company_for_user(actor, permission=PermissionAgent.Code.RESTITUER_BAGAGE)
+    company = company_for_user(actor, permission=PermissionAgent.Code.GERER_BAGAGES)
     with transaction.atomic():
         try:
             baggage = Bagage.objects.select_for_update().select_related(
@@ -273,8 +271,7 @@ def return_baggage(*, actor, baggage_id):
                 "a été marqué comme restitué."
             ),
             any_agent_permissions=(
-                PermissionAgent.Code.CONSULTER_BAGAGES,
-                PermissionAgent.Code.RESTITUER_BAGAGE,
+                PermissionAgent.Code.GERER_BAGAGES,
             ),
             exclude_user=actor,
         )

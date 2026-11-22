@@ -22,11 +22,9 @@ def reservation_view_company(user):
 
     if agent.compagnie.statut != Compagnie.Statut.ACTIVE:
         return None
-    required_permissions = (
-        PermissionAgent.Code.ENREGISTRER_BAGAGE,
-        PermissionAgent.Code.CONSULTER_BAGAGES,
-    )
-    if agent.permissions.filter(permission__in=required_permissions).exists():
+    if agent.permissions.filter(
+        permission=PermissionAgent.Code.GERER_BAGAGES
+    ).exists():
         return agent.compagnie
     return None
 
