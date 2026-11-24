@@ -432,7 +432,9 @@ export default function MobileAppNav() {
 
   return (
     <>
-      {pathname !== "/" && !isUserWorkspace ? (
+      {pathname !== "/" &&
+      !pathname.startsWith("/voyages/") &&
+      !isUserWorkspace ? (
         <button
           type="button"
           className="app-back-button"

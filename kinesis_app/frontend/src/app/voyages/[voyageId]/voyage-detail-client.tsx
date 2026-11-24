@@ -331,11 +331,15 @@ export default function VoyageDetailClient({
               sizes="(max-width: 900px) 100vw, 1240px"
             />
             <div className="voyage-detail__cover-shade" />
-            <Link href="/voyages" className="voyage-detail__back">
-              <span aria-hidden="true">←</span> Tous les voyages
-            </Link>
+            <div className="voyage-detail__cover-toolbar">
+              <Link href="/voyages" className="voyage-detail__back">
+                <span aria-hidden="true">←</span> Tous les voyages
+              </Link>
+              <span className="voyage-detail__company">
+                Opéré par <strong>{trip.compagnie_nom || "une compagnie partenaire"}</strong>
+              </span>
+            </div>
             <div className="voyage-detail__cover-copy">
-              <p>VOTRE PROCHAIN DÉPART</p>
               <h1>
                 <span className="voyage-detail__origin">{trip.ville_depart_nom}</span>
                 <span className="voyage-detail__route-arrow" aria-hidden="true"> →  </span>
@@ -346,31 +350,36 @@ export default function VoyageDetailClient({
                 {trip.heure_depart.slice(0, 5)}
               </span>
             </div>
-            <span className="voyage-detail__company">
-              Opéré par <strong>{trip.compagnie_nom || "une compagnie partenaire"}</strong>
-            </span>
           </div>
 
           <div className="voyage-detail__lower">
             <section className="voyage-detail__information">
-              <p className="voyage-detail__section-label">LES INFORMATIONS DU TRAJET</p>
-              <h2>Les étapes de votre voyage</h2>
+              <div className="voyage-detail__information-heading">
+                <h2>Départ et arrivée</h2>
+                <div className="voyage-detail__availability">
+                  <UsersRound aria-hidden="true" />
+                  <strong>
+                    {trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}
+                  </strong>
+                </div>
+              </div>
               <div className="voyage-detail__facts">
                 <article className="voyage-detail__stop">
                   <span className="voyage-detail__stop-icon voyage-detail__stop-icon--origin" aria-hidden="true">
                     <MapPin />
                   </span>
                   <div className="voyage-detail__stop-copy">
-                    <small>Ville de départ</small>
-                    <h3>{trip.ville_depart_nom}</h3>
+                    <small>Départ · {trip.ville_depart_nom}</small>
                     {trip.gare_depart ? (
                       <>
-                        <span className="voyage-detail__station-name">{trip.gare_depart.nom}</span>
-                        <span className="voyage-detail__station-address">{trip.gare_depart.adresse}</span>
+                        <h3 className="voyage-detail__station-name">{trip.gare_depart.nom}</h3>
+                        {trip.gare_depart.adresse.trim().toLocaleLowerCase() !== trip.gare_depart.nom.trim().toLocaleLowerCase() ? (
+                          <span className="voyage-detail__station-address">{trip.gare_depart.adresse}</span>
+                        ) : null}
                         {trip.gare_depart.maps_url ? (
                           <a className="maps-link" href={trip.gare_depart.maps_url} target="_blank" rel="noreferrer">
                             <MapPin aria-hidden="true" />
-                            <span>Ouvrir dans Google Maps</span>
+                            <span>Voir le lieu</span>
                             <ArrowUpRight aria-hidden="true" />
                           </a>
                         ) : null}
@@ -379,23 +388,23 @@ export default function VoyageDetailClient({
                       <span className="voyage-detail__station-address">Lieu exact à confirmer auprès de la compagnie</span>
                     )}
                   </div>
-                  <span className="voyage-detail__stop-tag">DÉPART</span>
                 </article>
                 <article className="voyage-detail__stop">
                   <span className="voyage-detail__stop-icon voyage-detail__stop-icon--destination" aria-hidden="true">
                     <MapPin />
                   </span>
                   <div className="voyage-detail__stop-copy">
-                    <small>Ville d’arrivée</small>
-                    <h3>{trip.ville_arrivee_nom}</h3>
+                    <small>Arrivée · {trip.ville_arrivee_nom}</small>
                     {trip.gare_arrivee ? (
                       <>
-                        <span className="voyage-detail__station-name">{trip.gare_arrivee.nom}</span>
-                        <span className="voyage-detail__station-address">{trip.gare_arrivee.adresse}</span>
+                        <h3 className="voyage-detail__station-name">{trip.gare_arrivee.nom}</h3>
+                        {trip.gare_arrivee.adresse.trim().toLocaleLowerCase() !== trip.gare_arrivee.nom.trim().toLocaleLowerCase() ? (
+                          <span className="voyage-detail__station-address">{trip.gare_arrivee.adresse}</span>
+                        ) : null}
                         {trip.gare_arrivee.maps_url ? (
                           <a className="maps-link" href={trip.gare_arrivee.maps_url} target="_blank" rel="noreferrer">
                             <MapPin aria-hidden="true" />
-                            <span>Ouvrir dans Google Maps</span>
+                            <span>Voir le lieu</span>
                             <ArrowUpRight aria-hidden="true" />
                           </a>
                         ) : null}
@@ -404,13 +413,7 @@ export default function VoyageDetailClient({
                       <span className="voyage-detail__station-address">Lieu exact à confirmer auprès de la compagnie</span>
                     )}
                   </div>
-                  <span className="voyage-detail__stop-tag voyage-detail__stop-tag--destination">ARRIVÉE</span>
                 </article>
-              </div>
-              <div className="voyage-detail__availability">
-                <UsersRound aria-hidden="true" />
-                <span>Disponibilité</span>
-                <strong>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""}</strong>
               </div>
             </section>
 
@@ -419,38 +422,37 @@ export default function VoyageDetailClient({
               onSubmit={continueToReservation}
             >
               <p className="voyage-detail__section-label">RÉSERVATION</p>
-              <span className="voyage-detail__price-caption">Prix par passager</span>
-              <strong className="voyage-detail__price">{formatPrice(trip.prix)}</strong>
-              <div className="voyage-detail__passenger-count">
-                <span>Nombre de passagers</span>
-                <div className="booking-passenger-stepper">
-                  <button
-                    type="button"
-                    aria-label="Retirer un passager"
-                    onClick={() => updatePassengerCount(passengers - 1)}
-                    disabled={passengers <= 1}
-                  >
-                    <Minus aria-hidden="true" />
-                  </button>
-                  <strong aria-live="polite">{passengers}</strong>
-                  <button
-                    type="button"
-                    aria-label="Ajouter un passager"
-                    onClick={() => updatePassengerCount(passengers + 1)}
-                    disabled={
-                      passengers >= 100 ||
-                      passengers >= trip.places_disponibles
-                    }
-                  >
-                    <Plus aria-hidden="true" />
-                  </button>
+              <div className="voyage-detail__booking-top">
+                <div className="voyage-detail__price-block">
+                  <span className="voyage-detail__price-caption">Prix par passager</span>
+                  <strong className="voyage-detail__price">{formatPrice(trip.prix)}</strong>
+                </div>
+                <div className="voyage-detail__passenger-count">
+                  <span>Nombre de passagers</span>
+                  <div className="booking-passenger-stepper">
+                    <button
+                      type="button"
+                      aria-label="Retirer un passager"
+                      onClick={() => updatePassengerCount(passengers - 1)}
+                      disabled={passengers <= 1}
+                    >
+                      <Minus aria-hidden="true" />
+                    </button>
+                    <strong aria-live="polite">{passengers}</strong>
+                    <button
+                      type="button"
+                      aria-label="Ajouter un passager"
+                      onClick={() => updatePassengerCount(passengers + 1)}
+                      disabled={
+                        passengers >= 100 ||
+                        passengers >= trip.places_disponibles
+                      }
+                    >
+                      <Plus aria-hidden="true" />
+                    </button>
+                  </div>
                 </div>
               </div>
-              <small className="voyage-detail__seat-hint">
-                {trip.places_disponibles} place
-                {trip.places_disponibles > 1 ? "s" : ""} disponible
-                {trip.places_disponibles > 1 ? "s" : ""}
-              </small>
               <div className="voyage-detail__passenger-fields">
                 {passengerNames.map((name, index) => (
                   <label key={index}>
@@ -575,10 +577,6 @@ export default function VoyageDetailClient({
                 Paiement sécurisé · Places bloquées pendant 10 minutes
               </p>
             </form>
-          </div>
-          <div className="voyage-detail__help">
-            <p>Un voyage, sans stress. Réservez en ligne et retrouvez votre billet dans votre espace voyageur.</p>
-            <Link href="/voyages">Explorer d’autres départs <span aria-hidden="true">→</span></Link>
           </div>
         </article>
       ) : null}

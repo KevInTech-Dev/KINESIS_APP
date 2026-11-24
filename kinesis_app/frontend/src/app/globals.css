@@ -2170,18 +2170,6 @@ select:focus-visible {
     margin-top: 25px;
   }
 
-  .voyage-detail__booking > div {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    gap: 12px;
-  }
-
-  .voyage-detail__booking > div strong {
-    font-size: 22px;
-    font-weight: 900;
-  }
-
   .detail-seats-warning {
     margin: 0;
     color: #a02b2b;
@@ -12221,16 +12209,24 @@ select:focus-visible {
   );
 }
 
-.voyage-detail__back,
-.voyage-detail__cover-copy,
-.voyage-detail__company {
+.voyage-detail__cover-toolbar,
+.voyage-detail__cover-copy {
   position: absolute;
   z-index: 2;
 }
 
+.voyage-detail__cover-toolbar {
+  top: 20px;
+  right: 24px;
+  left: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
 .voyage-detail__back {
-  top: 25px;
-  left: 28px;
+  position: static;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -12251,16 +12247,8 @@ select:focus-visible {
 
 .voyage-detail__cover-copy {
   right: 30px;
-  bottom: 60px;
+  bottom: 32px;
   left: clamp(28px, 6vw, 70px);
-}
-
-.voyage-detail__cover-copy > p {
-  margin: 0 0 13px;
-  color: var(--lime);
-  font-size: 10px;
-  font-weight: 850;
-  letter-spacing: 0.17em;
 }
 
 .voyage-detail__cover-copy h1 {
@@ -12293,7 +12281,7 @@ select:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 12px;
   color: rgb(255 255 255 / 85%);
   font-size: 14px;
   font-weight: 650;
@@ -12305,10 +12293,16 @@ select:focus-visible {
 }
 
 .voyage-detail__company {
-  right: 30px;
-  bottom: 24px;
-  color: rgb(255 255 255 / 76%);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 9px 13px;
+  border: 1px solid rgb(255 255 255 / 20%);
+  border-radius: 999px;
+  background: rgb(3 50 36 / 40%);
+  color: rgb(255 255 255 / 82%);
   font-size: 10px;
+  backdrop-filter: blur(10px);
 }
 
 .voyage-detail__company strong {
@@ -12319,22 +12313,26 @@ select:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 370px;
   align-items: start;
-  gap: 44px;
-  margin-top: 38px;
+  gap: clamp(24px, 3vw, 40px);
+  margin-top: 28px;
 }
 
 .voyage-detail__information {
-  padding: 18px 0;
+  min-width: 0;
+  padding: 6px 0;
 }
 
-.voyage-detail__section-label {
-  color: var(--green);
-  font-size: 9px;
+.voyage-detail__information-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
 .voyage-detail__information h2 {
-  margin: 12px 0 28px;
-  font-size: clamp(25px, 3vw, 34px);
+  margin: 0;
+  font-size: clamp(23px, 2.4vw, 30px);
   font-weight: 850;
   letter-spacing: -0.055em;
 }
@@ -12351,21 +12349,14 @@ select:focus-visible {
   position: relative;
   display: flex;
   min-width: 0;
-  min-height: 218px;
+  min-height: 156px;
   align-items: flex-start;
-  gap: 14px;
-  padding: 20px;
+  gap: 13px;
+  padding: 17px;
   border: 1px solid #e1e9e1;
-  border-radius: 17px;
+  border-radius: 16px;
   background: linear-gradient(145deg, #fff 0%, #fbfdfb 100%);
-  box-shadow: 0 7px 22px rgb(22 52 40 / 4%);
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
-}
-
-.voyage-detail__stop:hover {
-  transform: translateY(-2px);
-  border-color: #c8dccb;
-  box-shadow: 0 12px 26px rgb(22 52 40 / 7%);
+  box-shadow: 0 5px 18px rgb(22 52 40 / 3%);
 }
 
 .voyage-detail__stop-icon {
@@ -12394,8 +12385,8 @@ select:focus-visible {
 .voyage-detail__stop-copy {
   display: grid;
   min-width: 0;
-  gap: 7px;
-  padding: 2px 0 24px;
+  gap: 6px;
+  padding: 2px 0;
 }
 
 .voyage-detail__stop-copy small {
@@ -12415,11 +12406,12 @@ select:focus-visible {
 }
 
 .voyage-detail__station-name {
-  margin-top: 2px;
-  color: #2e4436;
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 1.4;
+  margin: 0;
+  color: #173b2c;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.35;
 }
 
 .voyage-detail__station-address {
@@ -12428,44 +12420,28 @@ select:focus-visible {
   line-height: 1.5;
 }
 
-.voyage-detail__stop-tag {
-  position: absolute;
-  right: 15px;
-  bottom: 14px;
-  color: #728579;
-  font-size: 8px;
-  font-weight: 850;
-  letter-spacing: 0.12em;
-}
-
-.voyage-detail__stop-tag--destination {
-  color: #587d8f;
-}
-
 .voyage-detail__availability {
-  display: flex;
-  min-height: 48px;
+  display: inline-flex;
+  min-height: 34px;
   align-items: center;
-  gap: 9px;
-  margin-top: 13px;
-  padding: 0 14px;
+  gap: 7px;
+  padding: 0 10px;
   border: 1px solid #deeadf;
-  border-radius: 12px;
+  border-radius: 999px;
   background: #f0f7ef;
-  color: #64766a;
-  font-size: 11px;
+  color: #176345;
+  font-size: 10px;
 }
 
 .voyage-detail__availability svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   color: #28714d;
 }
 
 .voyage-detail__availability strong {
-  margin-left: auto;
   color: #176345;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 850;
 }
 
@@ -12552,11 +12528,11 @@ select:focus-visible {
   position: sticky;
   top: 25px;
   display: grid;
-  gap: 12px;
+  gap: 13px;
   margin: 0;
-  padding: 24px;
+  padding: 22px;
   border: 1px solid #e1e9e1;
-  border-radius: 19px;
+  border-radius: 18px;
   background: white;
   box-shadow: 0 15px 40px rgb(24 51 42 / 7%);
 }
@@ -12707,6 +12683,12 @@ select:focus-visible {
   }
 }
 
+@media (max-width: 760px) {
+  .voyage-detail__lower {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 620px) {
   .voyages-header__inner,
   .catalog-hero,
@@ -12819,71 +12801,80 @@ select:focus-visible {
   }
 
   .voyage-detail-page__content {
-    margin-top: 20px;
-    margin-bottom: 45px;
+    margin-top: 12px;
+    margin-bottom: 24px;
   }
 
   .voyage-detail__cover {
-    min-height: 390px;
-    padding: 26px 23px;
-    border-radius: 20px;
+    min-height: 230px;
+    padding: 20px;
+    border-radius: 18px;
+  }
+
+  .voyage-detail__cover-toolbar {
+    top: 14px;
+    right: 14px;
+    left: 14px;
+    gap: 8px;
   }
 
   .voyage-detail__back {
-    top: 18px;
-    left: 18px;
-    padding: 9px 12px;
+    padding: 8px 10px;
     font-size: 10px;
   }
 
   .voyage-detail__cover-copy {
-    right: 20px;
-    bottom: 62px;
-    left: 23px;
+    right: 16px;
+    bottom: 24px;
+    left: 20px;
   }
 
   .voyage-detail__cover-copy h1 {
-    display: grid;
-    grid-template-columns: auto auto;
+    display: flex;
     justify-content: start;
-    gap: 0 8px;
-    font-size: clamp(34px, 9.5vw, 49px);
+    gap: 0 7px;
+    font-size: clamp(30px, 8vw, 40px);
   }
 
-  .voyage-detail__cover-copy h1 .voyage-detail__destination {
-    grid-column: 1 / -1;
+  .voyage-detail__cover-copy h1 .voyage-detail__route-arrow {
+    white-space: nowrap;
   }
 
   .voyage-detail__cover-date {
     align-items: flex-start;
     gap: 7px;
+    margin-top: 8px;
     font-size: 12px;
   }
 
   .voyage-detail__company {
-    right: 20px;
-    bottom: 22px;
-    left: 23px;
+    max-width: 58%;
+    justify-content: flex-end;
+    padding: 7px 9px;
     font-size: 9px;
+    line-height: 1.3;
+    text-align: right;
   }
 
   .voyage-detail__lower {
     grid-template-columns: 1fr;
-    gap: 18px;
-    margin-top: 20px;
+    gap: 12px;
+    margin-top: 12px;
   }
 
   .voyage-detail__information {
     padding: 13px 0 0;
   }
 
-  .voyage-detail__information h2 {
-    margin-bottom: 18px;
-    font-size: 27px;
+  .voyage-detail__information-heading {
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 14px;
   }
 
-  .voyage-detail__facts {
-    gap: 9px;
+  .voyage-detail__information h2 {
+    font-size: 24px;
   }
 
   .voyage-detail__facts {
@@ -15982,6 +15973,18 @@ select:focus-visible {
   gap: 10px;
 }
 
+.voyage-detail__booking-top {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.voyage-detail__price-block {
+  display: grid;
+  gap: 3px;
+}
+
 .voyage-detail__passenger-count {
   display: flex;
   align-items: center;
@@ -16020,10 +16023,9 @@ select:focus-visible {
 
 .voyage-detail__passenger-fields {
   display: grid;
-  max-height: 180px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  overflow: auto;
-  padding-right: 3px;
+  overflow: visible;
 }
 
 .voyage-detail__passenger-fields label {
@@ -16273,8 +16275,15 @@ select:focus-visible {
     max-height: none;
   }
 
+  .voyage-detail__booking-top {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 8px;
+  }
+
   .voyage-detail__passenger-fields {
-    max-height: 160px;
+    grid-template-columns: 1fr;
+    max-height: none;
+    overflow: visible;
   }
 }
 
@@ -16323,34 +16332,46 @@ select:focus-visible {
 
 @media (min-width: 1024px) {
   .voyage-detail-page__content {
-    width: min(100% - 64px, 1500px);
-    margin-top: 24px;
-    margin-bottom: 32px;
+    width: min(100% - 40px, 1480px);
+    margin-top: 12px;
+    margin-bottom: 18px;
+  }
+
+  .voyage-detail-page .voyages-header__inner {
+    min-height: 76px;
   }
 
   .voyage-detail__cover {
-    min-height: clamp(250px, 32vh, 320px);
-    padding: 38px;
+    min-height: clamp(230px, 29vh, 255px);
+    padding: 30px;
     border-radius: 24px;
   }
 
+  .voyage-detail__cover-toolbar {
+    top: 20px;
+    right: 24px;
+    left: 24px;
+  }
+
   .voyage-detail__cover-copy {
-    bottom: 43px;
-    left: 42px;
+    right: 32px;
+    bottom: 34px;
+    left: 32px;
   }
 
   .voyage-detail__cover-copy h1 {
-    font-size: clamp(48px, 5vw, 66px);
+    font-size: clamp(46px, 4vw, 60px);
   }
 
   .voyage-detail__cover-date {
-    margin-top: 13px;
+    margin-top: 12px;
+    font-size: 14px;
   }
 
   .voyage-detail__lower {
     grid-template-columns: minmax(0, 1fr) minmax(355px, 410px);
-    gap: clamp(24px, 3vw, 44px);
-    margin-top: 22px;
+    gap: clamp(22px, 2.4vw, 34px);
+    margin-top: 24px;
   }
 
   .voyage-detail__information {
@@ -16358,80 +16379,96 @@ select:focus-visible {
   }
 
   .voyage-detail__information h2 {
-    margin: 8px 0 16px;
-    font-size: clamp(25px, 2.3vw, 32px);
+    font-size: clamp(24px, 2.1vw, 29px);
   }
 
   .voyage-detail__facts {
-    gap: 12px;
+    gap: 14px;
   }
 
   .voyage-detail__stop {
-    min-height: 160px;
+    min-height: 148px;
     padding: 17px;
-    border-radius: 15px;
+    border-radius: 16px;
   }
 
   .voyage-detail__stop-copy {
-    gap: 5px;
-    padding-bottom: 20px;
+    gap: 7px;
+    padding-bottom: 0;
   }
 
   .voyage-detail__availability {
-    min-height: 44px;
-    margin-top: 10px;
+    min-height: 32px;
   }
 
   .voyage-detail__booking {
-    top: 18px;
-    gap: 8px;
-    padding: 20px;
-    border-radius: 17px;
+    top: 16px;
+    gap: 12px;
+    padding: 22px;
+    border-radius: 18px;
+  }
+
+  .voyage-detail__booking-top {
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+    gap: 12px;
   }
 
   .voyage-detail__price {
-    font-size: 28px;
+    font-size: 25px;
   }
 
   .voyage-detail__passenger-count {
-    margin-top: 2px;
-    padding: 6px 9px;
+    margin-top: 0;
+    padding: 7px 10px;
+    font-size: 11px;
   }
 
   .voyage-detail__passenger-count .booking-passenger-stepper button {
-    width: 28px;
-    height: 28px;
+    width: 30px;
+    height: 30px;
   }
 
   .voyage-detail__passenger-fields {
-    max-height: 132px;
-    gap: 6px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: none;
+    gap: 9px 12px;
+    overflow: visible;
+  }
+
+  .voyage-detail__passenger-fields label {
+    font-size: 10px;
+  }
+
+  .voyage-detail__passenger-fields label:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
   }
 
   .voyage-detail__passenger-fields input {
-    min-height: 35px;
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 12px;
   }
 
   .voyage-detail__baggage {
-    gap: 5px;
-    padding: 5px 8px 7px;
+    gap: 7px;
+    padding: 7px 9px 9px;
   }
 
   .voyage-detail__baggage > label {
-    min-height: 28px;
+    min-height: 31px;
   }
 
   .voyage-detail__total {
-    padding-top: 7px;
+    padding-top: 9px;
   }
 
   .voyage-detail__booking .catalog-submit {
-    min-height: 44px;
+    min-height: 46px;
   }
 
-  .voyage-detail__help {
-    margin-top: 18px;
-    padding: 14px 18px;
+  .voyage-detail__secure {
+    margin-top: 2px;
+    font-size: 10px;
   }
 
   .booking-header {
