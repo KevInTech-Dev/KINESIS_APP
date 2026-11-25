@@ -42,6 +42,16 @@ class ReservationCreateSerializer(serializers.Serializer):
             "valeur séparée par des virgules."
         ),
     )
+    sieges = serializers.ListField(
+        child=serializers.CharField(max_length=30),
+        min_length=1,
+        max_length=100,
+        required=False,
+        help_text=(
+            "Numéro d’un siège par passager, par exemple [\"S001\", \"S002\"]. "
+            "Si absent, les sièges sont attribués automatiquement."
+        ),
+    )
 
     def validate_passagers(self, value):
         if any(not name for name in value):
@@ -53,4 +63,5 @@ class ReservationCreateSerializer(serializers.Serializer):
             voyageur=self.context["request"].user,
             voyage_id=validated_data["voyage_id"],
             passenger_names=validated_data["passagers"],
+            seat_numbers=validated_data.get("sieges"),
         )

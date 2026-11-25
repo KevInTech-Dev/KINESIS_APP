@@ -60,6 +60,14 @@ class GarePublicSerializer(serializers.ModelSerializer):
         return None
 
 
+class VoyageSeatAvailabilitySerializer(serializers.Serializer):
+    voyage_id = serializers.UUIDField()
+    capacity = serializers.IntegerField(min_value=1)
+    occupied_seats = serializers.ListField(
+        child=serializers.CharField(max_length=30),
+    )
+
+
 class VoyageSerializer(serializers.ModelSerializer):
     image = LimitedImageField(required=False, allow_null=True)
     heure_depart = serializers.TimeField(format="%H:%M")

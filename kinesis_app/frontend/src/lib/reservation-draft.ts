@@ -1,6 +1,7 @@
 export type ReservationDraft = {
   passengers: string[];
   hasBaggage: boolean | null;
+  selectedSeats?: string[];
 };
 
 export function reservationDraftKey(voyageId: string) {
@@ -8,6 +9,10 @@ export function reservationDraftKey(voyageId: string) {
 }
 
 export function isReservationDraft(value: unknown): value is ReservationDraft {
+  const selectedSeats =
+    typeof value === "object" && value !== null && "selectedSeats" in value
+      ? value.selectedSeats
+      : undefined;
   return (
     typeof value === "object" &&
     value !== null &&
@@ -18,6 +23,10 @@ export function isReservationDraft(value: unknown): value is ReservationDraft {
       (passenger) => typeof passenger === "string" && passenger.trim().length > 0,
     ) &&
     "hasBaggage" in value &&
-    (typeof value.hasBaggage === "boolean" || value.hasBaggage === null)
+    (typeof value.hasBaggage === "boolean" || value.hasBaggage === null) &&
+    (selectedSeats === undefined ||
+      (Array.isArray(selectedSeats) &&
+        selectedSeats.every((seat: unknown) => typeof seat === "string") &&
+        new Set(selectedSeats).size === selectedSeats.length))
   );
 }

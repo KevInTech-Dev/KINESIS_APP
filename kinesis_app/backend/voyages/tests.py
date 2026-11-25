@@ -71,6 +71,73 @@ class VoyageApiTests(APITestCase):
             prix="5000",
         )
 
+    def test_public_seat_map_returns_occupied_numbers_without_passenger_data(self):
+        traveler = User.objects.create_user(
+            email="voyageur-sieges@example.com",
+            password=self.password,
+            nom="Voyageur",
+            role=User.Role.VOYAGEUR,
+        )
+        active_reservations = (
+            Reservation.objects.create(
+                reference="RES-SEAT-PAID",
+                voyageur=traveler,
+                voyage=self.voyage,
+                montant_total="5000",
+                statut=Reservation.Statut.PAYEE,
+            ),
+            Reservation.objects.create(
+                reference="RES-SEAT-HELD",
+                voyageur=traveler,
+                voyage=self.voyage,
+                date_expiration=timezone.now() + timedelta(minutes=5),
+                montant_total="5000",
+            ),
+        )
+        expired_reservation = Reservation.objects.create(
+            reference="RES-SEAT-EXPIRED",
+            voyageur=traveler,
+            voyage=self.voyage,
+            date_expiration=timezone.now() - timedelta(seconds=1),
+            montant_total="5000",
+        )
+        for reservation, seat_number in zip(
+            active_reservations,
+            ("S002", "S007"),
+        ):
+            PlaceReservee.objects.create(
+                reservation=reservation,
+                voyage=self.voyage,
+                numero_siege=seat_number,
+                nom_passager="Donnée privée",
+            )
+        PlaceReservee.objects.create(
+            reservation=expired_reservation,
+            voyage=self.voyage,
+            numero_siege="S009",
+            nom_passager="Donnée privée",
+        )
+
+        response = self.client.get(
+            reverse("voyage-seat-availability", kwargs={"pk": self.voyage.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["capacity"], self.voyage.place_totale)
+        self.assertEqual(response.data["occupied_seats"], ["S002", "S007"])
+        self.assertNotIn("nom_passager", response.data)
+        self.assertEqual(response["Cache-Control"], "no-store")
+
+    def test_public_seat_map_does_not_expose_archived_trips(self):
+        self.voyage.statut = Voyage.Statut.ARCHIVE
+        self.voyage.save(update_fields=("statut",))
+
+        response = self.client.get(
+            reverse("voyage-seat-availability", kwargs={"pk": self.voyage.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
     def authenticate_company(self, email):
         user = User.objects.create_user(
             email=email,

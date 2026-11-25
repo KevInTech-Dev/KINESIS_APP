@@ -1,7 +1,9 @@
 from django.db import transaction
 from django.db.models import F, Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
-from rest_framework import generics
+from drf_spectacular.utils import extend_schema
+from rest_framework import generics, status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
@@ -12,7 +14,7 @@ from compagnies.permissions import CanOperateAgentVoyages
 from config.pagination import StandardResultsSetPagination
 from notifications.models import Notification
 from notifications.services import notify_company_and_agents
-from reservations.models import Reservation
+from reservations.models import PlaceReservee, Reservation
 
 from .cache import (
     cache_public_cities,
@@ -24,7 +26,12 @@ from .cache import (
 from .models import Ville, Voyage
 from .permissions import IsActiveCompany, IsOwnerCompany
 from .querysets import public_voyages_queryset, with_availability
-from .serializers import VilleSerializer, VoyageSearchSerializer, VoyageSerializer
+from .serializers import (
+    VilleSerializer,
+    VoyageSearchSerializer,
+    VoyageSeatAvailabilitySerializer,
+    VoyageSerializer,
+)
 from .services import synchronize_due_departures
 
 
@@ -173,6 +180,58 @@ class VoyageListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(compagnie=self.request.user.profil_compagnie)
+
+
+class VoyageSeatAvailabilityView(generics.GenericAPIView):
+    permission_classes = (AllowAny,)
+    serializer_class = VoyageSeatAvailabilitySerializer
+
+    @extend_schema(
+        description=(
+            "Retourne la capacité et les numéros de sièges occupés d’un trajet "
+            "publié. Aucune information personnelle des passagers n’est exposée."
+        ),
+        responses=VoyageSeatAvailabilitySerializer,
+    )
+    def get(self, request, pk):
+        synchronize_due_departures()
+        now = timezone.localtime()
+        voyage = get_object_or_404(
+            Voyage.objects.filter(
+                deleted_at__isnull=True,
+                statut=Voyage.Statut.PUBLIE,
+                compagnie__statut="ACTIVE",
+            ).filter(
+                Q(date_depart__gt=now.date())
+                | Q(
+                    date_depart=now.date(),
+                    heure_depart__gte=now.time().replace(tzinfo=None),
+                )
+            ),
+            pk=pk,
+        )
+        active_reservations = Q(
+            reservation__statut=Reservation.Statut.PAYEE,
+        ) | Q(
+            reservation__statut=Reservation.Statut.EN_ATTENTE_PAIEMENT,
+            reservation__date_expiration__gt=now,
+        )
+        payload = {
+            "voyage_id": voyage.pk,
+            "capacity": voyage.place_totale,
+            "occupied_seats": list(
+                PlaceReservee.objects.filter(voyage=voyage, liberee=False)
+                .filter(active_reservations)
+                .order_by("numero_siege")
+                .values_list("numero_siege", flat=True)
+            ),
+        }
+        serializer = self.get_serializer(payload)
+        return Response(
+            serializer.data,
+            status=status.HTTP_200_OK,
+            headers={"Cache-Control": "no-store"},
+        )
 
 
 class VoyageDetailView(generics.RetrieveUpdateDestroyAPIView):

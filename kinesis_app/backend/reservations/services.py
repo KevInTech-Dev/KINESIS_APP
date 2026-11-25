@@ -76,7 +76,14 @@ def expire_overdue_reservations(*, voyageur=None, company=None, now=None):
     return len(expired_ids)
 
 
-def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
+def create_reservation(
+    *,
+    voyageur,
+    voyage_id,
+    passenger_names,
+    seat_numbers=None,
+    now=None,
+):
     now = now or timezone.now()
 
     with transaction.atomic():
@@ -108,25 +115,62 @@ def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
             )
         )
         seat_count = len(passenger_names)
-        seat_numbers = []
-        for first_seat in range(1, voyage.place_totale - seat_count + 2):
-            candidate = [
-                f"S{seat_number:03d}"
-                for seat_number in range(first_seat, first_seat + seat_count)
-            ]
-            if not occupied_seats.intersection(candidate):
-                seat_numbers = candidate
-                break
-
-        if not seat_numbers:
-            raise ValidationError(
-                {
-                    "passagers": (
-                        "Il n’y a pas assez de places consécutives disponibles "
-                        "pour tous les passagers."
+        if seat_numbers is not None:
+            if len(seat_numbers) != seat_count:
+                raise ValidationError(
+                    {"sieges": "Choisissez un siège pour chaque passager."}
+                )
+            if len(set(seat_numbers)) != seat_count:
+                raise ValidationError(
+                    {"sieges": "Un même siège ne peut pas être choisi deux fois."}
+                )
+            for seat_number in seat_numbers:
+                if (
+                    not seat_number.startswith("S")
+                    or not seat_number[1:].isdigit()
+                ):
+                    raise ValidationError(
+                        {"sieges": "Le numéro d’un siège sélectionné est invalide."}
                     )
-                }
-            )
+                numeric_seat = int(seat_number[1:])
+                if (
+                    numeric_seat < 1
+                    or numeric_seat > voyage.place_totale
+                    or seat_number != f"S{numeric_seat:03d}"
+                ):
+                    raise ValidationError(
+                        {"sieges": "Un siège sélectionné n’existe pas dans ce bus."}
+                    )
+            if occupied_seats.intersection(seat_numbers):
+                raise ValidationError(
+                    {
+                        "sieges": (
+                            "Un ou plusieurs sièges viennent d’être réservés. "
+                            "Actualisez le plan et choisissez d’autres sièges."
+                        )
+                    }
+                )
+            selected_seats = seat_numbers
+        else:
+            selected_seats = []
+            for first_seat in range(1, voyage.place_totale - seat_count + 2):
+                candidate = [
+                    f"S{seat_number:03d}"
+                    for seat_number in range(first_seat, first_seat + seat_count)
+                ]
+                if not occupied_seats.intersection(candidate):
+                    selected_seats = candidate
+                    break
+
+            if not selected_seats:
+                raise ValidationError(
+                    {
+                        "passagers": (
+                            "Il n’y a pas assez de places consécutives disponibles "
+                            "pour tous les passagers."
+                        )
+                    }
+                )
 
         reservation = Reservation.objects.create(
             reference=f"RES-{uuid.uuid4().hex[:16].upper()}",
@@ -144,7 +188,7 @@ def create_reservation(*, voyageur, voyage_id, passenger_names, now=None):
                     numero_siege=seat_number,
                     nom_passager=passenger_name,
                 )
-                for seat_number, passenger_name in zip(seat_numbers, passenger_names)
+                for seat_number, passenger_name in zip(selected_seats, passenger_names)
             ]
         )
         Notification.objects.create(

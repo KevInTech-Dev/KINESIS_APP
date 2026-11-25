@@ -63,10 +63,16 @@ class ReservationApiTests(APITestCase):
             HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(user)}"
         )
 
-    def reserve(self, passengers):
+    def reserve(self, passengers, seats=None):
+        payload = {
+            "voyage_id": str(self.voyage.pk),
+            "passagers": passengers,
+        }
+        if seats is not None:
+            payload["sieges"] = seats
         return self.client.post(
             reverse("reservation-list"),
-            {"voyage_id": str(self.voyage.pk), "passagers": passengers},
+            payload,
             format="json",
         )
 
@@ -89,6 +95,50 @@ class ReservationApiTests(APITestCase):
         notification = Notification.objects.get(utilisateur=self.traveler)
         self.assertEqual(notification.type, Notification.Type.RESERVATION)
         self.assertEqual(notification.titre, "Réservation créée")
+
+    def test_group_reservation_uses_requested_seats_for_each_passenger(self):
+        self.voyage.place_totale = 6
+        self.voyage.save(update_fields=("place_totale",))
+
+        response = self.reserve(
+            ["Jane Doe", "John Doe"],
+            seats=["S005", "S002"],
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        reservation = Reservation.objects.get(pk=response.data["id_reservation"])
+        self.assertEqual(
+            list(
+                reservation.places.order_by("nom_passager").values_list(
+                    "numero_siege",
+                    "nom_passager",
+                )
+            ),
+            [("S005", "Jane Doe"), ("S002", "John Doe")],
+        )
+
+    def test_group_reservation_rejects_invalid_or_unavailable_requested_seats(self):
+        self.voyage.place_totale = 4
+        self.voyage.save(update_fields=("place_totale",))
+        existing = self.reserve(["Already booked"])
+        existing_reservation = Reservation.objects.get(
+            pk=existing.data["id_reservation"]
+        )
+
+        cases = (
+            (["Jane", "John"], ["S002"]),
+            (["Jane", "John"], ["S002", "S002"]),
+            (["Jane"], ["S005"]),
+            (["Jane"], ["S000"]),
+            (["Jane"], ["S001"]),
+        )
+        for passengers, seats in cases:
+            with self.subTest(passengers=passengers, seats=seats):
+                response = self.reserve(passengers, seats=seats)
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertEqual(Reservation.objects.count(), 1)
+        self.assertEqual(existing_reservation.places.get().numero_siege, "S001")
 
     def test_three_passengers_get_three_seats_and_three_fares(self):
         self.voyage.place_totale = 3

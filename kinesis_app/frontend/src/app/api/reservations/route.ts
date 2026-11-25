@@ -64,6 +64,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  const requestedSeats =
+    typeof payload === "object" && payload !== null && "sieges" in payload
+      ? payload.sieges
+      : undefined;
   if (
     typeof payload !== "object" ||
     payload === null ||
@@ -71,7 +75,10 @@ export async function POST(request: Request) {
     typeof payload.voyage_id !== "string" ||
     !("passagers" in payload) ||
     !Array.isArray(payload.passagers) ||
-    !payload.passagers.every((name) => typeof name === "string")
+    !payload.passagers.every((name) => typeof name === "string") ||
+    (requestedSeats !== undefined &&
+      (!Array.isArray(requestedSeats) ||
+        !requestedSeats.every((seat) => typeof seat === "string")))
   ) {
     return NextResponse.json(
       { detail: "Indiquez le voyage et le nom de chaque passager." },
@@ -81,7 +88,11 @@ export async function POST(request: Request) {
 
   const result = await postBackendResource(
     "reservations/",
-    { voyage_id: payload.voyage_id, passagers: payload.passagers },
+    {
+      voyage_id: payload.voyage_id,
+      passagers: payload.passagers,
+      ...(Array.isArray(requestedSeats) ? { sieges: requestedSeats } : {}),
+    },
     auth.session.access,
   );
   const response = NextResponse.json(result.data, { status: result.status });

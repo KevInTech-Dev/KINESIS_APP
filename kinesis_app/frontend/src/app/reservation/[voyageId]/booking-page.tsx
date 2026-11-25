@@ -3,8 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { Luggage, UsersRound } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import { BusFront, Luggage, UsersRound } from "lucide-react";
 import { toast } from "sonner";
 import KinesisLoader from "@/components/kinesis-loader";
 import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
@@ -45,6 +45,49 @@ function formatPrice(value: number | string) {
     : "Prix indisponible";
 }
 
+type SeatAvailability = {
+  voyage_id: string;
+  capacity: number;
+  occupied_seats: string[];
+};
+
+function formatSeatNumber(index: number) {
+  return `S${String(index).padStart(3, "0")}`;
+}
+
+function isSeatAvailability(value: unknown): value is SeatAvailability {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("voyage_id" in value) ||
+    typeof value.voyage_id !== "string" ||
+    !("capacity" in value) ||
+    typeof value.capacity !== "number" ||
+    !Number.isSafeInteger(value.capacity) ||
+    value.capacity < 1 ||
+    !("occupied_seats" in value) ||
+    !Array.isArray(value.occupied_seats) ||
+    !value.occupied_seats.every((seat) => typeof seat === "string")
+  ) {
+    return false;
+  }
+  const capacity = value.capacity;
+  const occupiedSeats = value.occupied_seats as string[];
+  return (
+    new Set(occupiedSeats).size === occupiedSeats.length &&
+    occupiedSeats.every((seat) => {
+      const index = Number(seat.slice(1));
+      return (
+        seat.startsWith("S") &&
+        Number.isSafeInteger(index) &&
+        index > 0 &&
+        index <= capacity &&
+        seat === formatSeatNumber(index)
+      );
+    })
+  );
+}
+
 function formatTripDate(date: string, time: string) {
   const formattedDate = new Intl.DateTimeFormat("fr-FR", {
     dateStyle: "long",
@@ -64,15 +107,44 @@ export default function BookingPage({
   const [trip, setTrip] = useState<Voyage | null>(() =>
     getCachedVoyage(voyageId),
   );
+  const [seatAvailability, setSeatAvailability] =
+    useState<SeatAvailability | null>(null);
+  const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [draft, setDraft] = useState<ReservationDraft | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [createdReservation, setCreatedReservation] = useState<string | null>(
     null,
   );
   const count = draft?.passengers.length ?? passengerCount;
+  const occupiedSeats = useMemo(
+    () => new Set(seatAvailability?.occupied_seats ?? []),
+    [seatAvailability],
+  );
+  const availableSeatCount = seatAvailability
+    ? Math.max(0, seatAvailability.capacity - seatAvailability.occupied_seats.length)
+    : 0;
+  const seatRows = useMemo(
+    () =>
+      seatAvailability
+        ? Array.from(
+            { length: Math.ceil(seatAvailability.capacity / 4) },
+            (_, rowIndex) => ({
+              number: rowIndex + 1,
+              seats: Array.from({ length: 4 }, (_, seatIndex) => {
+                const number = rowIndex * 4 + seatIndex + 1;
+                return number <= seatAvailability.capacity
+                  ? formatSeatNumber(number)
+                  : null;
+              }),
+            }),
+          )
+        : [],
+    [seatAvailability],
+  );
   const total = useMemo(
     () => (trip ? Number(trip.prix) * count : 0),
     [trip, count],
@@ -83,11 +155,14 @@ export default function BookingPage({
 
     async function loadSummary() {
       try {
-        const [tripResponse, profileResponse] = await Promise.all([
+        const [tripResponse, profileResponse, seatsResponse] = await Promise.all([
           fetch(`/api/voyages/${encodeURIComponent(voyageId)}`, {
             cache: "no-store",
           }),
           fetch("/api/auth/session", { cache: "no-store" }),
+          fetch(`/api/voyages/${encodeURIComponent(voyageId)}/sieges`, {
+            cache: "no-store",
+          }),
         ]);
         if (!tripResponse.ok) {
           throw new Error(await responseMessage(tripResponse));
@@ -95,6 +170,17 @@ export default function BookingPage({
         const tripData: unknown = await tripResponse.json();
         if (!isCachedVoyage(tripData)) {
           throw new Error("Les informations reçues pour ce voyage sont invalides.");
+        }
+        if (!seatsResponse.ok) {
+          throw new Error(await responseMessage(seatsResponse));
+        }
+        const seatsData: unknown = await seatsResponse.json();
+        if (
+          !isSeatAvailability(seatsData) ||
+          seatsData.voyage_id !== tripData.id_voyage ||
+          seatsData.capacity !== tripData.place_totale
+        ) {
+          throw new Error("Le plan des sièges reçu pour ce voyage est invalide.");
         }
 
         let currentProfile: UserProfile | null = null;
@@ -125,13 +211,41 @@ export default function BookingPage({
           storedDraft = parsedDraft;
         }
 
+        const passengersToSeat = storedDraft?.passengers.length ?? passengerCount;
+        const occupied = new Set(seatsData.occupied_seats);
+        const initialSeats = (storedDraft?.selectedSeats ?? [])
+          .filter((seat) => {
+            const seatIndex = Number(seat.slice(1));
+            return (
+              seat.startsWith("S") &&
+              Number.isSafeInteger(seatIndex) &&
+              seatIndex > 0 &&
+              seatIndex <= seatsData.capacity &&
+              seat === formatSeatNumber(seatIndex) &&
+              !occupied.has(seat)
+            );
+          })
+          .slice(0, passengersToSeat);
+        for (
+          let seatIndex = 1;
+          seatIndex <= seatsData.capacity && initialSeats.length < passengersToSeat;
+          seatIndex += 1
+        ) {
+          const seat = formatSeatNumber(seatIndex);
+          if (!occupied.has(seat) && !initialSeats.includes(seat)) {
+            initialSeats.push(seat);
+          }
+        }
+
         if (!active) return;
         setTrip(tripData);
+        setSeatAvailability(seatsData);
+        setSelectedSeats(initialSeats);
         setProfile(currentProfile);
         setDraft(storedDraft);
       } catch (loadError: unknown) {
         if (active) {
-          setError(
+          setLoadError(
             getUserFacingErrorMessage(
               loadError,
               "Le récapitulatif du voyage n’a pas pu être chargé.",
@@ -147,11 +261,71 @@ export default function BookingPage({
     return () => {
       active = false;
     };
-  }, [voyageId]);
+  }, [passengerCount, voyageId]);
+
+  function saveSeatSelection(seats: string[]) {
+    setSelectedSeats(seats);
+    if (!draft) return;
+    const updatedDraft: ReservationDraft = { ...draft, selectedSeats: seats };
+    setDraft(updatedDraft);
+    try {
+      window.sessionStorage.setItem(
+        reservationDraftKey(voyageId),
+        JSON.stringify(updatedDraft),
+      );
+    } catch (storageError) {
+      console.error("Could not save the selected seats", storageError);
+      toast.error("Votre choix de sièges ne pourra pas être conservé.");
+    }
+  }
+
+  async function refreshSeatAvailability() {
+    if (!trip) return;
+    const response = await fetch(
+      `/api/voyages/${encodeURIComponent(voyageId)}/sieges`,
+      { cache: "no-store" },
+    );
+    if (!response.ok) {
+      throw new Error(await responseMessage(response));
+    }
+    const payload: unknown = await response.json();
+    if (
+      !isSeatAvailability(payload) ||
+      payload.voyage_id !== trip.id_voyage ||
+      payload.capacity !== trip.place_totale
+    ) {
+      throw new Error("Le plan des sièges reçu du serveur est invalide.");
+    }
+    setSeatAvailability(payload);
+    const occupied = new Set(payload.occupied_seats);
+    const stillAvailableSeats = selectedSeats.filter(
+      (seat) => !occupied.has(seat),
+    );
+    if (stillAvailableSeats.length !== selectedSeats.length) {
+      saveSeatSelection(stillAvailableSeats);
+    }
+  }
+
+  function toggleSeat(seat: string) {
+    if (!seatAvailability || occupiedSeats.has(seat) || submitting) return;
+    const selectedIndex = selectedSeats.indexOf(seat);
+    if (selectedIndex >= 0) {
+      saveSeatSelection(selectedSeats.filter((selected) => selected !== seat));
+      setError("");
+      return;
+    }
+    if (selectedSeats.length >= count) {
+      setError(`Vous avez déjà choisi ${count} siège${count > 1 ? "s" : ""}.`);
+      return;
+    }
+    saveSeatSelection([...selectedSeats, seat]);
+    setError("");
+  }
 
   async function pay() {
     if (!trip || !draft) return;
     if (!profile) {
+      saveSeatSelection(selectedSeats);
       const returnPath =
         `/reservation/${encodeURIComponent(voyageId)}?passagers=${draft.passengers.length}`;
       router.push(`/connexion?next=${encodeURIComponent(returnPath)}`);
@@ -161,10 +335,14 @@ export default function BookingPage({
       setError("La réservation est réservée aux comptes voyageurs.");
       return;
     }
-    if (trip.places_disponibles < draft.passengers.length) {
+    if (availableSeatCount < draft.passengers.length) {
       setError(
-        `Il ne reste que ${trip.places_disponibles} place${trip.places_disponibles > 1 ? "s" : ""} disponible${trip.places_disponibles > 1 ? "s" : ""}.`,
+        `Il ne reste que ${availableSeatCount} place${availableSeatCount > 1 ? "s" : ""} disponible${availableSeatCount > 1 ? "s" : ""}.`,
       );
+      return;
+    }
+    if (selectedSeats.length !== draft.passengers.length) {
+      setError("Choisissez un siège pour chaque passager avant de continuer.");
       return;
     }
 
@@ -177,10 +355,21 @@ export default function BookingPage({
         body: JSON.stringify({
           voyage_id: trip.id_voyage,
           passagers: draft.passengers.map((name) => name.trim()),
+          sieges: selectedSeats,
         }),
       });
       if (!reservationResponse.ok) {
-        throw new Error(await responseMessage(reservationResponse));
+        const reservationError = await responseMessage(reservationResponse);
+        let availabilityError = "";
+        if (reservationResponse.status === 400) {
+          try {
+            await refreshSeatAvailability();
+          } catch (refreshError) {
+            console.error("Could not refresh the seat map after reservation failure", refreshError);
+            availabilityError = " Le plan n’a pas pu être actualisé; rechargez la page.";
+          }
+        }
+        throw new Error(`${reservationError}${availabilityError}`);
       }
       const reservationData: unknown = await reservationResponse.json();
       if (
@@ -271,9 +460,9 @@ export default function BookingPage({
       <section className="booking-content booking-summary-content">
         <p className="traveler-eyebrow">DERNIÈRE ÉTAPE</p>
         <h1>Récapitulatif de votre voyage</h1>
-        {error ? (
+        {loadError ? (
           <div className="traveler-state traveler-state--error" role="alert">
-            {error}
+            {loadError}
             <Link href={`/voyages/${encodeURIComponent(voyageId)}`}>
               Retourner au voyage
             </Link>
@@ -340,6 +529,128 @@ export default function BookingPage({
               ) : null}
             </section>
 
+            <section
+              className="booking-card booking-seat-card"
+              aria-labelledby="booking-seat-heading"
+            >
+              <div className="booking-seat-heading">
+                <span className="booking-seat-heading__icon">
+                  <BusFront aria-hidden="true" />
+                </span>
+                <div>
+                  <p className="traveler-eyebrow">CHOIX DU SIÈGE</p>
+                  <h2 id="booking-seat-heading">Choisissez vos places</h2>
+                  <p>
+                    Deux sièges de chaque côté de l’allée centrale.
+                  </p>
+                </div>
+                <span className="booking-seat-count" aria-live="polite">
+                  {selectedSeats.length} / {draft.passengers.length} choisi
+                  {draft.passengers.length > 1 ? "s" : ""}
+                </span>
+              </div>
+
+              <div className="booking-seat-meta">
+                <strong>
+                  {availableSeatCount} place{availableSeatCount > 1 ? "s" : ""} disponible
+                  {availableSeatCount > 1 ? "s" : ""}
+                </strong>
+                <div
+                  className="booking-seat-legend"
+                  role="group"
+                  aria-label="Légende des sièges"
+                >
+                  <span><i className="is-available" />Disponible</span>
+                  <span><i className="is-selected" />Votre choix</span>
+                  <span><i className="is-occupied" />Occupé</span>
+                </div>
+              </div>
+
+              <div className="booking-bus-frame">
+                <div className="booking-bus-front">
+                  <span className="booking-bus-front__driver">
+                    <BusFront aria-hidden="true" />
+                    Conducteur
+                  </span>
+                  <span className="booking-bus-front__exit">
+                    Sortie <span aria-hidden="true">→</span>
+                  </span>
+                </div>
+                <div
+                  className="booking-seat-grid"
+                  role="group"
+                  aria-label="Plan interactif du bus"
+                >
+                  {seatRows.map((row) => (
+                    <div className="booking-seat-row" key={row.number}>
+                      <span className="booking-seat-row__number">
+                        {String(row.number).padStart(2, "0")}
+                      </span>
+                      {row.seats.map((seat, index) => (
+                        <Fragment
+                          key={seat ?? `empty-${row.number}-${index}`}
+                        >
+                          {index === 2 ? (
+                            <span
+                              className="booking-seat-row__aisle"
+                              aria-hidden="true"
+                            />
+                          ) : null}
+                          {seat ? (
+                            <button
+                              type="button"
+                              className={`booking-seat${selectedSeats.includes(seat) ? " is-selected" : ""}${occupiedSeats.has(seat) ? " is-occupied" : ""}`}
+                              disabled={occupiedSeats.has(seat) || submitting}
+                              aria-pressed={selectedSeats.includes(seat)}
+                              aria-label={`Siège ${seat.slice(1)}, ${
+                                occupiedSeats.has(seat)
+                                  ? "occupé"
+                                  : selectedSeats.includes(seat)
+                                    ? "sélectionné"
+                                    : "disponible"
+                              }`}
+                              onClick={() => toggleSeat(seat)}
+                            >
+                              {occupiedSeats.has(seat)
+                                ? "×"
+                                : seat.slice(1)}
+                            </button>
+                          ) : (
+                            <span
+                              className="booking-seat booking-seat--empty"
+                              aria-hidden="true"
+                            />
+                          )}
+                        </Fragment>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <ul className="booking-seat-passengers">
+                {draft.passengers.map((name, index) => (
+                  <li key={`${index}-${name}`}>
+                    <span>Passager {index + 1} · {name}</span>
+                    <strong>
+                      {selectedSeats[index]
+                        ? `Siège ${selectedSeats[index].slice(1)}`
+                        : "À choisir"}
+                    </strong>
+                  </li>
+                ))}
+              </ul>
+              {availableSeatCount < draft.passengers.length ? (
+                <p className="traveler-form-error" role="alert">
+                  Il n’y a pas assez de sièges disponibles pour tous les passagers.
+                </p>
+              ) : null}
+              <p className="booking-seat-help">
+                Les sièges sont attribués aux passagers dans l’ordre de la liste.
+                Touchez un siège déjà choisi pour le libérer.
+              </p>
+            </section>
+
             <section className="booking-card booking-summary-payment">
               <div className="booking-total">
                 <span>Total à régler</span>
@@ -359,12 +670,18 @@ export default function BookingPage({
                 className="booking-submit"
                 type="button"
                 onClick={() => void pay()}
-                disabled={submitting || (Boolean(profile) && profile?.role !== "VOYAGEUR")}
+                disabled={
+                  submitting ||
+                  !seatAvailability ||
+                  selectedSeats.length !== draft.passengers.length ||
+                  availableSeatCount < draft.passengers.length ||
+                  (Boolean(profile) && profile?.role !== "VOYAGEUR")
+                }
               >
                 {submitting ? "Préparation du paiement…" : "Payer"}
               </button>
               <p className="booking-note">
-                Vos places seront bloquées pendant 10 minutes. Le paiement est
+                Vos sièges seront bloqués pendant 10 minutes. Le paiement est
                 traité de manière sécurisée par FedaPay.
               </p>
               {createdReservation ? (

@@ -73,6 +73,7 @@ class ReservationListCreateView(generics.ListCreateAPIView):
                 value={
                     "voyage_id": "3004343b-b4a2-4225-9a9a-c972c25851e6",
                     "passagers": ["Jean", "Kévin", "Julien"],
+                    "sieges": ["S001", "S002", "S003"],
                 },
                 request_only=True,
                 media_type="application/json",
