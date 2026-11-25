@@ -20,6 +20,10 @@ def generate_qr_token():
 
 
 class Paiement(models.Model):
+    class Fournisseur(models.TextChoices):
+        FEDAPAY = "FEDAPAY", "FedaPay"
+        CINETPAY = "CINETPAY", "CinetPay"
+
     class Statut(models.TextChoices):
         EN_ATTENTE = "EN_ATTENTE", "En attente"
         CONFIRME = "CONFIRME", "Confirmé"
@@ -48,6 +52,23 @@ class Paiement(models.Model):
         unique=True,
         null=True,
         blank=True,
+    )
+    reference_cinetpay = models.CharField(
+        max_length=128,
+        unique=True,
+        null=True,
+        blank=True,
+    )
+    url_paiement_cinetpay = models.URLField(max_length=2048, blank=True)
+    notify_token_cinetpay = models.CharField(
+        max_length=255,
+        blank=True,
+        editable=False,
+    )
+    fournisseur = models.CharField(
+        max_length=20,
+        choices=Fournisseur.choices,
+        default=Fournisseur.FEDAPAY,
     )
     montant = models.DecimalField(
         max_digits=12,

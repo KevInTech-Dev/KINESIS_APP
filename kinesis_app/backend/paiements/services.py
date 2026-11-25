@@ -14,11 +14,18 @@ from reservations.services import RESERVATION_HOLD_DURATION, expire_overdue_rese
 from utilisateurs.models import Utilisateur
 from voyages.models import Voyage
 
+from .cinetpay import create_checkout as create_cinetpay_payment_link
 from .fedapay import create_payment_link, create_transaction
 from .models import BilletElectronique, Paiement
 
 
-def start_payment_attempt(*, reservation_id, voyageur, now=None):
+def start_payment_attempt(
+    *,
+    reservation_id,
+    voyageur,
+    fournisseur=Paiement.Fournisseur.FEDAPAY,
+    now=None,
+):
     now = now or timezone.now()
     expire_overdue_reservations(voyageur=voyageur, now=now)
     with transaction.atomic():
@@ -39,16 +46,33 @@ def start_payment_attempt(*, reservation_id, voyageur, now=None):
         if reservation.montant_total <= 0:
             raise ValidationError(
                 {
-                    "reservation": "Le montant doit être positif pour un paiement FedaPay."
+                    "reservation": "Le montant doit être positif pour un paiement."
                 }
             )
 
-        existing = Paiement.objects.filter(
-            reservation=reservation,
-            statut=Paiement.Statut.EN_ATTENTE,
-        ).first()
+        existing = (
+            Paiement.objects.select_for_update()
+            .filter(
+                reservation=reservation,
+                statut=Paiement.Statut.EN_ATTENTE,
+            )
+            .first()
+        )
         if existing:
-            return existing
+            if existing.fournisseur == fournisseur:
+                return existing
+            if existing.reference_fedapay or existing.reference_cinetpay:
+                raise ValidationError(
+                    {
+                        "paiement": (
+                            "Une transaction de paiement est déjà en cours pour "
+                            "cette réservation. Vérifiez son statut avant de "
+                            "changer de fournisseur."
+                        )
+                    }
+                )
+            existing.statut = Paiement.Statut.ECHEC
+            existing.save(update_fields=("statut",))
 
         reservation.date_expiration = now + RESERVATION_HOLD_DURATION
         reservation.save(update_fields=("date_expiration",))
@@ -56,6 +80,7 @@ def start_payment_attempt(*, reservation_id, voyageur, now=None):
         return Paiement.objects.create(
             reservation=reservation,
             montant=reservation.montant_total,
+            fournisseur=fournisseur,
         )
 
 
@@ -76,6 +101,33 @@ def create_fedapay_checkout(*, paiement_id):
     return payment, create_payment_link(transaction_id)
 
 
+def create_cinetpay_checkout(*, paiement_id):
+    with transaction.atomic():
+        payment = (
+            Paiement.objects.select_for_update()
+            .select_related("reservation__voyageur")
+            .get(pk=paiement_id)
+        )
+        if payment.statut != Paiement.Statut.EN_ATTENTE:
+            raise ValidationError({"paiement": "Ce paiement n’est plus en attente."})
+        if payment.fournisseur != Paiement.Fournisseur.CINETPAY:
+            raise ValidationError({"paiement": "Ce paiement n’utilise pas CinetPay."})
+        if not payment.reference_cinetpay:
+            payment.reference_cinetpay = payment.reference_interne
+            payment.save(update_fields=("reference_cinetpay",))
+        if not payment.url_paiement_cinetpay or not payment.notify_token_cinetpay:
+            checkout = create_cinetpay_payment_link(payment)
+            payment.url_paiement_cinetpay = checkout["payment_url"]
+            payment.notify_token_cinetpay = checkout["notify_token"]
+            payment.save(
+                update_fields=(
+                    "url_paiement_cinetpay",
+                    "notify_token_cinetpay",
+                )
+            )
+    return payment, payment.url_paiement_cinetpay
+
+
 def _sanitize_fedapay_response(provider_transaction):
     allowed_fields = (
         "id",
@@ -94,9 +146,33 @@ def _sanitize_fedapay_response(provider_transaction):
     }
 
 
-def _reconcile_mismatched_fedapay_payment(*, payment, provider_transaction):
-    event_id = f"transaction.approved:{payment.reference_fedapay}"
-    confirmed_at = parse_datetime(provider_transaction.get("approved_at") or "")
+def _sanitize_cinetpay_response(provider_response):
+    allowed_fields = (
+        "code",
+        "status",
+        "merchant_transaction_id",
+        "transaction_id",
+        "amount",
+        "currency",
+        "payment_method",
+    )
+    sanitized_response = {
+        key: provider_response[key]
+        for key in allowed_fields
+        if key in provider_response
+    }
+    return sanitized_response
+
+
+def _reconcile_mismatched_payment(
+    *,
+    payment,
+    provider_transaction,
+    event_id,
+    provider_name,
+    response_sanitizer,
+    confirmed_at=None,
+):
     confirmation_time = confirmed_at or timezone.now()
     with transaction.atomic():
         reservation = Reservation.objects.select_for_update().get(
@@ -123,7 +199,7 @@ def _reconcile_mismatched_fedapay_payment(*, payment, provider_transaction):
 
         payment.statut = Paiement.Statut.A_RECONCILIER
         payment.cle_evenement_fournisseur = event_id
-        payment.reponse_fournisseur = _sanitize_fedapay_response(provider_transaction)
+        payment.reponse_fournisseur = response_sanitizer(provider_transaction)
         payment.date_confirmation = confirmation_time
         payment.save(
             update_fields=(
@@ -138,7 +214,8 @@ def _reconcile_mismatched_fedapay_payment(*, payment, provider_transaction):
             type=Notification.Type.PAIEMENT,
             titre="Paiement à réconcilier",
             message=(
-                f"FedaPay a confirmé un montant différent pour la réservation "
+                f"{provider_name} a confirmé un montant ou une devise différente "
+                f"pour la réservation "
                 f"{reservation.reference}. Aucun billet n’a été émis. Le paiement "
                 "doit être vérifié manuellement."
             ),
@@ -164,8 +241,58 @@ def apply_verified_fedapay_event(
     response_data,
     confirmed_at=None,
 ):
+    return _apply_verified_provider_event(
+        paiement_id=paiement_id,
+        fournisseur=Paiement.Fournisseur.FEDAPAY,
+        fournisseur_nom="FedaPay",
+        reference_field="reference_fedapay",
+        reference_value=reference_fedapay,
+        event_id=event_id,
+        montant=montant,
+        response_data=response_data,
+        response_sanitizer=_sanitize_fedapay_response,
+        confirmed_at=confirmed_at,
+    )
+
+
+def apply_verified_cinetpay_event(
+    *,
+    paiement_id,
+    reference_cinetpay,
+    event_id,
+    montant,
+    response_data,
+    confirmed_at=None,
+):
+    return _apply_verified_provider_event(
+        paiement_id=paiement_id,
+        fournisseur=Paiement.Fournisseur.CINETPAY,
+        fournisseur_nom="CinetPay",
+        reference_field="reference_cinetpay",
+        reference_value=reference_cinetpay,
+        event_id=event_id,
+        montant=montant,
+        response_data=response_data,
+        response_sanitizer=_sanitize_cinetpay_response,
+        confirmed_at=confirmed_at,
+    )
+
+
+def _apply_verified_provider_event(
+    *,
+    paiement_id,
+    fournisseur,
+    fournisseur_nom,
+    reference_field,
+    reference_value,
+    event_id,
+    montant,
+    response_data,
+    response_sanitizer,
+    confirmed_at,
+):
     """Apply provider data only after its signature and transaction are verified."""
-    if not reference_fedapay or not event_id:
+    if not reference_value or not event_id:
         raise ValidationError("La référence et l’identifiant d’événement sont requis.")
 
     with transaction.atomic():
@@ -173,9 +300,16 @@ def apply_verified_fedapay_event(
             paiements__pk=paiement_id,
         )
         payment = Paiement.objects.select_for_update().get(pk=paiement_id)
-        if payment.reference_fedapay != reference_fedapay:
+        if (
+            payment.fournisseur != fournisseur
+            or getattr(payment, reference_field) != reference_value
+        ):
             raise ValidationError(
-                {"reference_fedapay": "La référence FedaPay ne correspond pas."}
+                {
+                    reference_field: (
+                        f"La référence {fournisseur_nom} ne correspond pas."
+                    )
+                }
             )
 
         duplicate_event = Paiement.objects.filter(
@@ -191,7 +325,7 @@ def apply_verified_fedapay_event(
 
         if payment.statut == Paiement.Statut.CONFIRME:
             if (
-                payment.reference_fedapay == reference_fedapay
+                getattr(payment, reference_field) == reference_value
                 and payment.montant == montant
             ):
                 return payment
@@ -227,7 +361,7 @@ def apply_verified_fedapay_event(
 
             payment.statut = Paiement.Statut.A_RECONCILIER
             payment.cle_evenement_fournisseur = event_id
-            payment.reponse_fournisseur = _sanitize_fedapay_response(response_data)
+            payment.reponse_fournisseur = response_sanitizer(response_data)
             payment.date_confirmation = confirmation_time
             payment.save(
                 update_fields=(
@@ -242,7 +376,7 @@ def apply_verified_fedapay_event(
                 type=Notification.Type.PAIEMENT,
                 titre="Paiement à réconcilier",
                 message=(
-                    f"FedaPay a confirmé le paiement de la réservation "
+                    f"{fournisseur_nom} a confirmé le paiement de la réservation "
                     f"{reservation.reference}, mais celle-ci n’est plus valide. "
                     "Aucun billet n’a été émis. Le paiement doit être vérifié "
                     "manuellement."
@@ -260,7 +394,7 @@ def apply_verified_fedapay_event(
             return payment
 
         payment.cle_evenement_fournisseur = event_id
-        payment.reponse_fournisseur = _sanitize_fedapay_response(response_data)
+        payment.reponse_fournisseur = response_sanitizer(response_data)
         payment.date_confirmation = confirmation_time
         payment.statut = Paiement.Statut.CONFIRME
         payment.save(
@@ -306,7 +440,10 @@ def apply_verified_fedapay_event(
 
 
 def sync_fedapay_transaction(*, payment, provider_transaction):
-    if str(provider_transaction.get("id")) != payment.reference_fedapay:
+    if (
+        payment.fournisseur != Paiement.Fournisseur.FEDAPAY
+        or str(provider_transaction.get("id")) != payment.reference_fedapay
+    ):
         raise ValidationError(
             {"transaction": "La transaction FedaPay ne correspond pas au paiement."}
         )
@@ -320,9 +457,15 @@ def sync_fedapay_transaction(*, payment, provider_transaction):
     status = provider_transaction.get("status")
     if amount != payment.montant:
         if status == "approved":
-            return _reconcile_mismatched_fedapay_payment(
+            return _reconcile_mismatched_payment(
                 payment=payment,
                 provider_transaction=provider_transaction,
+                event_id=f"transaction.approved:{payment.reference_fedapay}",
+                provider_name="FedaPay",
+                response_sanitizer=_sanitize_fedapay_response,
+                confirmed_at=parse_datetime(
+                    provider_transaction.get("approved_at") or "",
+                ),
             )
         raise ValidationError(
             {"transaction": "Le montant confirmé ne correspond pas au paiement."}
@@ -380,6 +523,109 @@ def refresh_fedapay_payment(*, payment):
     return sync_fedapay_transaction(
         payment=payment,
         provider_transaction=provider_transaction,
+    )
+
+
+def sync_cinetpay_transaction(*, payment, provider_response):
+    if not isinstance(provider_response, dict):
+        raise ValidationError(
+            {"transaction": "La réponse CinetPay n’est pas valide."}
+        )
+    if (
+        payment.fournisseur != Paiement.Fournisseur.CINETPAY
+        or not payment.reference_cinetpay
+        or str(provider_response.get("merchant_transaction_id", ""))
+        != payment.reference_cinetpay
+    ):
+        raise ValidationError(
+            {"transaction": "La transaction CinetPay ne correspond pas au paiement."}
+        )
+
+    status = str(provider_response.get("status", "")).upper()
+    code = str(provider_response.get("code", ""))
+    if status == "SUCCESS":
+        if code != "100":
+            return payment
+        amount_value = provider_response.get("amount")
+        if amount_value is None:
+            amount = payment.montant
+        else:
+            try:
+                amount = Decimal(str(amount_value))
+            except (InvalidOperation, TypeError, ValueError) as error:
+                raise ValidationError(
+                    {
+                        "transaction": (
+                            "Le montant de la transaction CinetPay est invalide."
+                        )
+                    }
+                ) from error
+        currency = str(provider_response.get("currency", "XOF")).upper()
+        event_id = f"transaction.SUCCESS:{payment.reference_cinetpay}"
+        if amount != payment.montant or currency != "XOF":
+            return _reconcile_mismatched_payment(
+                payment=payment,
+                provider_transaction=provider_response,
+                event_id=event_id,
+                provider_name="CinetPay",
+                response_sanitizer=_sanitize_cinetpay_response,
+            )
+        return apply_verified_cinetpay_event(
+            paiement_id=payment.pk,
+            reference_cinetpay=payment.reference_cinetpay,
+            event_id=event_id,
+            montant=amount,
+            response_data=provider_response,
+        )
+
+    terminal_failures = {
+        "2003": "EXPIRED",
+        "2005": "INSUFFICIENT_BALANCE",
+        "2006": "USER_NOT_FOUND",
+        "2007": "USER_IS_BLOCKED",
+        "2010": "FAILED",
+    }
+    if terminal_failures.get(code) != status:
+        return payment
+
+    event_id = f"transaction.{status}:{payment.reference_cinetpay}"
+    with transaction.atomic():
+        payment = Paiement.objects.select_for_update().get(pk=payment.pk)
+        if payment.statut != Paiement.Statut.EN_ATTENTE:
+            return payment
+        payment.statut = (
+            Paiement.Statut.REJETE
+            if status in {"FAILED", "INSUFFICIENT_BALANCE"}
+            else Paiement.Statut.ECHEC
+        )
+        payment.cle_evenement_fournisseur = event_id
+        payment.reponse_fournisseur = _sanitize_cinetpay_response(provider_response)
+        payment.save(
+            update_fields=(
+                "statut",
+                "cle_evenement_fournisseur",
+                "reponse_fournisseur",
+            )
+        )
+        Notification.objects.create(
+            utilisateur=payment.reservation.voyageur,
+            type=Notification.Type.PAIEMENT,
+            titre="Paiement non confirmé",
+            message=(
+                f"Le paiement de la réservation {payment.reservation.reference} "
+                "n’a pas été confirmé par CinetPay."
+            ),
+        )
+    return payment
+
+
+def refresh_cinetpay_payment(*, payment):
+    from .cinetpay import check_transaction
+
+    provider_response = check_transaction(payment.reference_cinetpay)
+    return sync_cinetpay_transaction(
+        payment=payment,
+        provider_response=provider_response,
     )
 
 

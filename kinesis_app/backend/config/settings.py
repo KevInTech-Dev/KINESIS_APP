@@ -241,6 +241,14 @@ FEDAPAY_WEBHOOK_SECRET = env("FEDAPAY_WEBHOOK_SECRET", default="")
 FEDAPAY_CALLBACK_URL = env("FEDAPAY_CALLBACK_URL", default="").strip()
 if not FEDAPAY_CALLBACK_URL and DEBUG:
     FEDAPAY_CALLBACK_URL = f"{FRONTEND_BASE_URL.rstrip('/')}/paiement/retour"
+CINETPAY_API_KEY = env("CINETPAY_API_KEY", default="").strip()
+CINETPAY_API_PASSWORD = env("CINETPAY_API_PASSWORD", default="").strip()
+CINETPAY_API_BASE_URL = env(
+    "CINETPAY_API_BASE_URL",
+    default="https://api.cinetpay.net",
+).strip()
+CINETPAY_NOTIFY_URL = env("CINETPAY_NOTIFY_URL", default="").strip()
+CINETPAY_RETURN_URL = env("CINETPAY_RETURN_URL", default="").strip()
 EMAIL_HOST = env("EMAIL_HOST", default="")
 EMAIL_PORT = env.int("EMAIL_PORT", default=587)
 EMAIL_USE_TLS = env.bool("EMAIL_USE_TLS", default=True)

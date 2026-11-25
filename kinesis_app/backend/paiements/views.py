@@ -13,6 +13,11 @@ from utilisateurs.models import Utilisateur
 from voyages.models import Voyage
 from voyages.querysets import with_availability
 
+from .cinetpay import (
+    check_transaction as check_cinetpay_transaction,
+    validate_configuration as validate_cinetpay_configuration,
+    verify_webhook_token,
+)
 from .fedapay import retrieve_transaction, verify_webhook_signature
 from .models import BilletElectronique, Paiement
 from .permissions import (
@@ -34,11 +39,14 @@ from .serializers import (
     VoyageDepartSerializer,
 )
 from .services import (
+    create_cinetpay_checkout,
     create_fedapay_checkout,
+    refresh_cinetpay_payment,
     refresh_fedapay_payment,
     register_voyage_departure,
     scan_ticket,
     start_payment_attempt,
+    sync_cinetpay_transaction,
     sync_fedapay_transaction,
     validate_ticket_boarding,
 )
@@ -82,15 +90,17 @@ class PaiementAttemptView(APIView):
         description=(
             "Crée ou reprend une tentative de paiement pour une réservation du "
             "voyageur connecté. La réponse inclut payment_url pour rediriger le "
-            "voyageur vers la page sécurisée FedaPay."
+            "voyageur vers le guichet de paiement sécurisé CinetPay."
         ),
     )
     def post(self, request, reservation_id):
+        validate_cinetpay_configuration(require_notify_url=True)
         payment = start_payment_attempt(
             reservation_id=reservation_id,
             voyageur=request.user,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
         )
-        payment, payment_url = create_fedapay_checkout(paiement_id=payment.pk)
+        payment, payment_url = create_cinetpay_checkout(paiement_id=payment.pk)
         data = PaiementCheckoutSerializer(
             {
                 **PaiementSerializer(payment).data,
@@ -120,8 +130,17 @@ class PaiementDetailView(generics.RetrieveAPIView):
     )
     def retrieve(self, request, *args, **kwargs):
         payment = self.get_object()
-        if payment.statut == Paiement.Statut.EN_ATTENTE and payment.reference_fedapay:
-            payment = refresh_fedapay_payment(payment=payment)
+        if payment.statut == Paiement.Statut.EN_ATTENTE:
+            if (
+                payment.fournisseur == Paiement.Fournisseur.FEDAPAY
+                and payment.reference_fedapay
+            ):
+                payment = refresh_fedapay_payment(payment=payment)
+            elif (
+                payment.fournisseur == Paiement.Fournisseur.CINETPAY
+                and payment.reference_cinetpay
+            ):
+                payment = refresh_cinetpay_payment(payment=payment)
         return Response(self.get_serializer(payment).data)
 
 
@@ -174,6 +193,61 @@ class FedaPayWebhookView(APIView):
         sync_fedapay_transaction(
             payment=payment,
             provider_transaction=provider_transaction,
+        )
+        return Response({"received": True})
+
+
+class CinetPayWebhookView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    @extend_schema(exclude=True)
+    def get(self, request):
+        return Response(status=200)
+
+    @extend_schema(exclude=True)
+    def post(self, request):
+        try:
+            payload = json.loads(request.body)
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return Response({"detail": "Notification CinetPay invalide."}, status=400)
+        if not isinstance(payload, dict):
+            return Response({"detail": "Notification CinetPay invalide."}, status=400)
+
+        merchant_transaction_id = payload.get("merchant_transaction_id")
+        transaction_id = payload.get("transaction_id")
+        notify_token = payload.get("notify_token")
+        if (
+            not isinstance(merchant_transaction_id, str)
+            or not merchant_transaction_id
+            or len(merchant_transaction_id) > 30
+            or not isinstance(transaction_id, str)
+            or not transaction_id
+            or len(transaction_id) > 128
+        ):
+            return Response(
+                {"detail": "Identifiant de transaction CinetPay invalide."},
+                status=400,
+            )
+
+        payment = Paiement.objects.filter(
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+            reference_cinetpay=merchant_transaction_id,
+        ).first()
+        if payment is None:
+            return Response({"received": True})
+        if not verify_webhook_token(payment.notify_token_cinetpay, notify_token):
+            return Response({"detail": "Jeton webhook CinetPay invalide."}, status=403)
+
+        provider_response = check_cinetpay_transaction(merchant_transaction_id)
+        if provider_response.get("transaction_id") != transaction_id:
+            return Response(
+                {"detail": "Identifiant de transaction CinetPay non concordant."},
+                status=403,
+            )
+        sync_cinetpay_transaction(
+            payment=payment,
+            provider_response=provider_response,
         )
         return Response({"received": True})
 

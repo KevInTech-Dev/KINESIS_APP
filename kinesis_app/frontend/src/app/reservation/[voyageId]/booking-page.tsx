@@ -682,7 +682,7 @@ export default function BookingPage({
               </button>
               <p className="booking-note">
                 Vos sièges seront bloqués pendant 10 minutes. Le paiement est
-                traité de manière sécurisée par FedaPay.
+                traité de manière sécurisée par CinetPay.
               </p>
               {createdReservation ? (
                 <Link

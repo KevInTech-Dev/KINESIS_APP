@@ -34,10 +34,17 @@ from .fedapay import (
     create_transaction,
     retrieve_transaction,
 )
+from .cinetpay import (
+    CinetPayUnavailable,
+    check_transaction as check_cinetpay_transaction,
+    create_checkout as create_cinetpay_payment_link,
+    verify_webhook_token,
+)
 from .models import BilletElectronique, Paiement
 from .services import (
     apply_verified_fedapay_event,
     start_payment_attempt,
+    sync_cinetpay_transaction,
     sync_fedapay_transaction,
 )
 
@@ -265,7 +272,102 @@ class PaiementServiceTests(TestCase):
             1,
         )
 
+    def test_cinetpay_success_confirms_payment_and_issues_tickets(self):
+        payment = start_payment_attempt(
+            reservation_id=self.reservation.pk,
+            voyageur=self.traveler,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+        )
+        payment.reference_cinetpay = payment.reference_interne
+        payment.save(update_fields=("reference_cinetpay",))
 
+        confirmed = sync_cinetpay_transaction(
+            payment=payment,
+            provider_response={
+                "code": 100,
+                "status": "SUCCESS",
+                "merchant_transaction_id": payment.reference_cinetpay,
+                "amount": 10000,
+                "currency": "XOF",
+            },
+        )
+
+        self.reservation.refresh_from_db()
+        self.assertEqual(confirmed.statut, Paiement.Statut.CONFIRME)
+        self.assertEqual(self.reservation.statut, Reservation.Statut.PAYEE)
+        self.assertEqual(BilletElectronique.objects.count(), 2)
+
+    def test_cinetpay_wrong_amount_is_reconciled_without_issuing_tickets(self):
+        payment = start_payment_attempt(
+            reservation_id=self.reservation.pk,
+            voyageur=self.traveler,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+        )
+        payment.reference_cinetpay = payment.reference_interne
+        payment.save(update_fields=("reference_cinetpay",))
+
+        reconciled = sync_cinetpay_transaction(
+            payment=payment,
+            provider_response={
+                "code": 100,
+                "status": "SUCCESS",
+                "merchant_transaction_id": payment.reference_cinetpay,
+                "amount": 9000,
+                "currency": "XOF",
+            },
+        )
+
+        self.assertEqual(reconciled.statut, Paiement.Statut.A_RECONCILIER)
+        self.assertEqual(BilletElectronique.objects.count(), 0)
+
+    def test_cinetpay_terminal_failure_does_not_issue_tickets(self):
+        payment = start_payment_attempt(
+            reservation_id=self.reservation.pk,
+            voyageur=self.traveler,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+        )
+        payment.reference_cinetpay = payment.reference_interne
+        payment.save(update_fields=("reference_cinetpay",))
+
+        failed = sync_cinetpay_transaction(
+            payment=payment,
+            provider_response={
+                "code": 2010,
+                "status": "FAILED",
+                "merchant_transaction_id": payment.reference_cinetpay,
+            },
+        )
+
+        self.assertEqual(failed.statut, Paiement.Statut.REJETE)
+        self.assertEqual(BilletElectronique.objects.count(), 0)
+
+    def test_cinetpay_mismatched_merchant_reference_is_rejected(self):
+        payment = start_payment_attempt(
+            reservation_id=self.reservation.pk,
+            voyageur=self.traveler,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+        )
+        payment.reference_cinetpay = payment.reference_interne
+        payment.save(update_fields=("reference_cinetpay",))
+
+        with self.assertRaises(ValidationError):
+            sync_cinetpay_transaction(
+                payment=payment,
+                provider_response={
+                    "code": 100,
+                    "status": "SUCCESS",
+                    "merchant_transaction_id": "different-transaction",
+                },
+            )
+
+
+@override_settings(
+    CINETPAY_API_KEY="test_api_key",
+    CINETPAY_API_PASSWORD="test_api_password",
+    CINETPAY_API_BASE_URL="https://api.cinetpay.net",
+    CINETPAY_NOTIFY_URL="https://api.kinesis.example/api/v1/paiements/cinetpay/webhook/",
+    FRONTEND_BASE_URL="https://kinesis.example",
+)
 class PaiementApiTests(APITestCase):
     password = "Qx7!mR4#vN8p"
 
@@ -307,14 +409,14 @@ class PaiementApiTests(APITestCase):
         )
         self.client.force_authenticate(user=self.traveler)
 
-    def test_initiation_returns_provider_checkout_url(self):
-        with (
-            patch("paiements.services.create_transaction", return_value="98765"),
-            patch(
-                "paiements.services.create_payment_link",
-                return_value="https://checkout.fedapay.com/example",
-            ) as create_link,
-        ):
+    def test_initiation_returns_cinetpay_checkout_url(self):
+        with patch(
+            "paiements.services.create_cinetpay_payment_link",
+            return_value={
+                "payment_url": "https://checkout.cinetpay.com/example",
+                "notify_token": "notify-token",
+            },
+        ) as create_link:
             response = self.client.post(
                 reverse(
                     "payment-attempt",
@@ -325,23 +427,25 @@ class PaiementApiTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         payment = Paiement.objects.get(pk=response.data["id_paiement"])
         self.assertEqual(payment.montant, Decimal(5000))
-        self.assertEqual(payment.reference_fedapay, "98765")
+        self.assertEqual(payment.fournisseur, Paiement.Fournisseur.CINETPAY)
+        self.assertEqual(payment.reference_cinetpay, payment.reference_interne)
+        self.assertEqual(payment.notify_token_cinetpay, "notify-token")
+        self.assertNotIn("notify_token_cinetpay", response.data)
         self.assertEqual(
             response.data["payment_url"],
-            "https://checkout.fedapay.com/example",
+            "https://checkout.cinetpay.com/example",
         )
-        create_link.assert_called_once_with("98765")
+        create_link.assert_called_once()
 
-    def test_repeated_initiation_reuses_same_provider_transaction(self):
+    def test_repeated_initiation_reuses_same_cinetpay_transaction(self):
         with (
             patch(
-                "paiements.services.create_transaction",
-                return_value="98766",
-            ) as create_transaction_mock,
-            patch(
-                "paiements.services.create_payment_link",
-                return_value="https://checkout.fedapay.com/example",
-            ),
+                "paiements.services.create_cinetpay_payment_link",
+                return_value={
+                    "payment_url": "https://checkout.cinetpay.com/example",
+                    "notify_token": "notify-token",
+                },
+            ) as create_link,
         ):
             first = self.client.post(
                 reverse(
@@ -359,15 +463,15 @@ class PaiementApiTests(APITestCase):
         self.assertEqual(first.status_code, status.HTTP_201_CREATED)
         self.assertEqual(second.status_code, status.HTTP_201_CREATED)
         self.assertEqual(first.data["id_paiement"], second.data["id_paiement"])
-        create_transaction_mock.assert_called_once()
+        self.assertEqual(create_link.call_count, 1)
 
     def test_payment_status_is_synchronized_from_provider(self):
-        with (
-            patch("paiements.services.create_transaction", return_value="98767"),
-            patch(
-                "paiements.services.create_payment_link",
-                return_value="https://checkout.fedapay.com/example",
-            ),
+        with patch(
+            "paiements.services.create_cinetpay_payment_link",
+            return_value={
+                "payment_url": "https://checkout.cinetpay.com/example",
+                "notify_token": "notify-token",
+            },
         ):
             initiated = self.client.post(
                 reverse(
@@ -376,13 +480,13 @@ class PaiementApiTests(APITestCase):
                 )
             )
 
+        payment = Paiement.objects.get(pk=initiated.data["id_paiement"])
         with patch(
-            "paiements.fedapay.retrieve_transaction",
+            "paiements.cinetpay.check_transaction",
             return_value={
-                "id": 98767,
-                "amount": 5000,
-                "status": "approved",
-                "approved_at": timezone.now().isoformat(),
+                "code": 100,
+                "status": "SUCCESS",
+                "merchant_transaction_id": payment.reference_cinetpay,
             },
         ):
             response = self.client.get(
@@ -397,6 +501,82 @@ class PaiementApiTests(APITestCase):
         self.reservation.refresh_from_db()
         self.assertEqual(self.reservation.statut, Reservation.Statut.PAYEE)
         self.assertEqual(BilletElectronique.objects.count(), 1)
+
+    def test_cinetpay_webhook_checks_token_and_provider_before_confirmation(self):
+        with patch(
+            "paiements.services.create_cinetpay_payment_link",
+            return_value={
+                "payment_url": "https://checkout.cinetpay.com/example",
+                "notify_token": "notify-token",
+            },
+        ):
+            initiated = self.client.post(
+                reverse(
+                    "payment-attempt",
+                    kwargs={"reservation_id": self.reservation.pk},
+                )
+            )
+        payment = Paiement.objects.get(pk=initiated.data["id_paiement"])
+        payload = json.dumps(
+            {
+                "merchant_transaction_id": payment.reference_cinetpay,
+                "transaction_id": "provider-transaction",
+                "notify_token": "notify-token",
+            }
+        ).encode("utf-8")
+        provider_response = {
+            "code": 100,
+            "status": "SUCCESS",
+            "merchant_transaction_id": payment.reference_cinetpay,
+            "transaction_id": "provider-transaction",
+            "amount": 5000,
+            "currency": "XOF",
+        }
+
+        with patch(
+            "paiements.views.check_cinetpay_transaction",
+            return_value=provider_response,
+        ) as check_transaction:
+            response = self.client.generic(
+                "POST",
+                reverse("cinetpay-webhook"),
+                payload,
+                content_type="application/json",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        check_transaction.assert_called_once_with(payment.reference_cinetpay)
+        payment.refresh_from_db()
+        self.assertEqual(payment.statut, Paiement.Statut.CONFIRME)
+        self.assertEqual(BilletElectronique.objects.count(), 1)
+
+    def test_cinetpay_webhook_rejects_invalid_notification_token(self):
+        payment = Paiement.objects.create(
+            reservation=self.reservation,
+            montant=self.reservation.montant_total,
+            fournisseur=Paiement.Fournisseur.CINETPAY,
+            reference_cinetpay="KIN-CINETPAY-WEBHOOK",
+            notify_token_cinetpay="expected-token",
+        )
+        payload = json.dumps(
+            {
+                "merchant_transaction_id": payment.reference_cinetpay,
+                "transaction_id": "provider-transaction",
+                "notify_token": "invalid-token",
+            }
+        ).encode("utf-8")
+        invalid_token = self.client.generic(
+            "POST",
+            reverse("cinetpay-webhook"),
+            payload,
+            content_type="application/json",
+        )
+
+        self.assertEqual(invalid_token.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(
+            self.client.get(reverse("cinetpay-webhook")).status_code,
+            status.HTTP_200_OK,
+        )
 
     def test_other_traveler_cannot_read_payment(self):
         payment = Paiement.objects.create(
@@ -575,6 +755,204 @@ class PaiementApiTests(APITestCase):
         response = self.client.get(reverse("payment-list"))
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class CinetPayGatewayTests(SimpleTestCase):
+    merchant_settings = {
+        "CINETPAY_API_KEY": "test_api_key",
+        "CINETPAY_API_PASSWORD": "test_api_password",
+        "CINETPAY_API_BASE_URL": "https://api.cinetpay.net",
+        "CINETPAY_NOTIFY_URL": (
+            "https://api.kinesis.example/api/v1/paiements/cinetpay/webhook/"
+        ),
+        "FRONTEND_BASE_URL": "https://kinesis.example",
+    }
+
+    @override_settings(**merchant_settings)
+    @patch("paiements.cinetpay._request_json")
+    def test_checkout_uses_xof_and_server_return_notification_urls(self, request_json):
+        traveler = SimpleNamespace(
+            email="traveler@example.com",
+            prenoms="Jane",
+            nom="Doe",
+            telephone="+22890000000",
+        )
+        reservation = SimpleNamespace(
+            reference="RES-TEST-1",
+            voyageur=traveler,
+        )
+        payment = SimpleNamespace(
+            pk="payment-uuid",
+            reference_cinetpay="KIN-TRANSACTION-1",
+            montant=Decimal("5000"),
+            reservation=reservation,
+        )
+        request_json.return_value = {
+            "code": 200,
+            "status": "OK",
+            "merchant_transaction_id": "KIN-TRANSACTION-1",
+            "notify_token": "notify-token",
+            "payment_url": "https://secure.cinetpay.net/checkout/payment-token",
+        }
+
+        checkout = create_cinetpay_payment_link(payment)
+
+        payload = request_json.call_args.args[1]
+        self.assertEqual(request_json.call_args.args[0], "/v1/payment")
+        self.assertEqual(payload["merchant_transaction_id"], "KIN-TRANSACTION-1")
+        self.assertEqual(payload["amount"], 5000)
+        self.assertEqual(payload["currency"], "XOF")
+        self.assertEqual(payload["client_email"], "traveler@example.com")
+        self.assertEqual(payload["client_first_name"], "Jane")
+        self.assertEqual(
+            payload["notify_url"],
+            "https://api.kinesis.example/api/v1/paiements/cinetpay/webhook/",
+        )
+        self.assertEqual(
+            payload["success_url"],
+            "https://kinesis.example/api/paiements/cinetpay/retour"
+            "?payment_id=payment-uuid",
+        )
+        self.assertEqual(payload["failed_url"], payload["success_url"])
+        self.assertNotIn("api_key", payload)
+        self.assertNotIn("api_password", payload)
+        self.assertEqual(
+            checkout,
+            {
+                "payment_url": "https://secure.cinetpay.net/checkout/payment-token",
+                "notify_token": "notify-token",
+            },
+        )
+
+    @override_settings(**merchant_settings)
+    @patch("paiements.cinetpay._request_json")
+    def test_status_check_uses_transaction_reference(self, request_json):
+        request_json.return_value = {"code": 100, "status": "SUCCESS"}
+
+        response = check_cinetpay_transaction("KIN-TRANSACTION-2")
+
+        self.assertEqual(
+            request_json.call_args.args,
+            ("/v1/payment/KIN-TRANSACTION-2",),
+        )
+        self.assertEqual(request_json.call_args.kwargs, {"method": "GET"})
+        self.assertEqual(response, {"code": 100, "status": "SUCCESS"})
+
+    @override_settings(**merchant_settings)
+    def test_webhook_token_is_compared_to_the_stored_transaction_token(self):
+        self.assertTrue(verify_webhook_token("expected-token", "expected-token"))
+        self.assertFalse(verify_webhook_token("expected-token", "invalid"))
+        self.assertFalse(verify_webhook_token("", "expected-token"))
+
+    @override_settings(**merchant_settings)
+    @patch("paiements.cinetpay.urlopen")
+    def test_oauth_token_is_cached_and_sent_as_bearer(self, mocked_urlopen):
+        response = mocked_urlopen.return_value.__enter__.return_value
+        response.read.side_effect = [
+            json.dumps(
+                {
+                    "code": 200,
+                    "status": "OK",
+                    "access_token": "oauth-test-token",
+                    "token_type": "bearer",
+                    "expires_in": 3600,
+                }
+            ).encode(),
+            json.dumps(
+                {
+                    "code": 100,
+                    "status": "SUCCESS",
+                    "merchant_transaction_id": "KIN-TRANSACTION-4",
+                }
+            ).encode(),
+            json.dumps(
+                {
+                    "code": 100,
+                    "status": "SUCCESS",
+                    "merchant_transaction_id": "KIN-TRANSACTION-5",
+                }
+            ).encode(),
+        ]
+
+        with (
+            patch("paiements.cinetpay._access_token", None),
+            patch("paiements.cinetpay._access_token_fingerprint", None),
+            patch("paiements.cinetpay._access_token_expires_at", 0.0),
+        ):
+            check_cinetpay_transaction("KIN-TRANSACTION-4")
+            check_cinetpay_transaction("KIN-TRANSACTION-5")
+
+        self.assertEqual(mocked_urlopen.call_count, 3)
+        login_request = mocked_urlopen.call_args_list[0].args[0]
+        self.assertEqual(
+            json.loads(login_request.data),
+            {
+                "api_key": "test_api_key",
+                "api_password": "test_api_password",
+            },
+        )
+        payment_request = mocked_urlopen.call_args_list[1].args[0]
+        self.assertEqual(
+            payment_request.get_header("Authorization"),
+            "Bearer oauth-test-token",
+        )
+        self.assertEqual(
+            payment_request.full_url,
+            "https://api.cinetpay.net/v1/payment/KIN-TRANSACTION-4",
+        )
+
+    @override_settings(**merchant_settings)
+    @patch("paiements.cinetpay.urlopen")
+    def test_oauth_rejection_logs_provider_reason_without_credentials(
+        self, mocked_urlopen
+    ):
+        mocked_urlopen.side_effect = HTTPError(
+            "https://api.cinetpay.net/v1/oauth/login",
+            403,
+            "Forbidden",
+            hdrs=None,
+            fp=BytesIO(
+                b'{"code":1005,"status":"ERROR","message":"Invalid credentials"}'
+            ),
+        )
+
+        with (
+            patch("paiements.cinetpay._access_token", None),
+            patch("paiements.cinetpay._access_token_fingerprint", None),
+            patch("paiements.cinetpay._access_token_expires_at", 0.0),
+            self.assertLogs("paiements.cinetpay", level="WARNING") as captured,
+            self.assertRaises(CinetPayUnavailable),
+        ):
+            check_cinetpay_transaction("KIN-TRANSACTION-6")
+
+        self.assertIn("provider_code=1005", captured.output[0])
+        self.assertIn("Invalid credentials", captured.output[0])
+        self.assertNotIn("test_api_password", captured.output[0])
+
+    @override_settings(**merchant_settings)
+    @patch("paiements.cinetpay._request_json")
+    def test_non_successful_checkout_response_has_no_fallback_url(self, request_json):
+        request_json.return_value = {
+            "code": 422,
+            "message": "invalid merchant",
+        }
+        payment = SimpleNamespace(
+            pk="payment-uuid",
+            reference_cinetpay="KIN-TRANSACTION-3",
+            montant=Decimal("5000"),
+            reservation=SimpleNamespace(
+                reference="RES-TEST-3",
+                voyageur=SimpleNamespace(
+                    email="traveler@example.com",
+                    prenoms="Jane",
+                    nom="Doe",
+                    telephone="",
+                ),
+            ),
+        )
+
+        with self.assertRaises(CinetPayUnavailable):
+            create_cinetpay_payment_link(payment)
 
 
 class FedaPayGatewayTests(SimpleTestCase):

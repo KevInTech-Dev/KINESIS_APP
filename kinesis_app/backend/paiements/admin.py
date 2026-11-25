@@ -7,25 +7,32 @@ from .models import BilletElectronique, Paiement
 class PaiementAdmin(admin.ModelAdmin):
     list_display = (
         "reference_interne",
+        "fournisseur",
         "reference_fedapay",
+        "reference_cinetpay",
         "reservation",
         "montant",
         "statut",
         "date_creation",
         "date_confirmation",
     )
-    list_filter = ("statut", "date_creation")
+    list_filter = ("fournisseur", "statut", "date_creation")
     search_fields = (
         "reference_interne",
         "reference_fedapay",
+        "reference_cinetpay",
         "reservation__reference",
     )
-    readonly_fields = tuple(field.name for field in Paiement._meta.fields)
+    readonly_fields = tuple(
+        field.name
+        for field in Paiement._meta.fields
+        if field.name != "notify_token_cinetpay"
+    )
     actions = ("mark_reconciled_payments_as_refunded",)
 
     @admin.action(
         permissions=("change",),
-        description="Marquer remboursé après remboursement effectif sur FedaPay",
+        description="Marquer remboursé après remboursement effectif auprès du fournisseur",
     )
     def mark_reconciled_payments_as_refunded(self, request, queryset):
         reconciled = queryset.filter(statut=Paiement.Statut.A_RECONCILIER)
@@ -36,7 +43,7 @@ class PaiementAdmin(admin.ModelAdmin):
             self.log_change(
                 request,
                 payment,
-                "Remboursement confirmé manuellement dans FedaPay.",
+                "Remboursement confirmé manuellement auprès du fournisseur.",
             )
             updated_count += 1
         self.message_user(
