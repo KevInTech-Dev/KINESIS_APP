@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   Suspense,
@@ -13,7 +12,7 @@ import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import { CatalogTripSkeletons } from "@/components/voyage-skeletons";
-import VoyageCoverImage from "@/components/voyage-cover-image";
+import VoyageCard from "@/components/voyage-card";
 import {
   ListPagination,
   type ListPageSize,
@@ -95,20 +94,6 @@ async function getCatalogPage(url: string): Promise<
     ...result,
     companies: parseCompanyOptions(result.companies),
   };
-}
-
-function formatPrice(price: string | number) {
-  const amount = Number(price);
-  return `${new Intl.NumberFormat("fr-FR").format(amount)} FCFA`;
-}
-
-function formatDate(date: string) {
-  return new Intl.DateTimeFormat("fr-FR", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(new Date(`${date}T12:00:00`));
 }
 
 function buildQuery(filters: Filters) {
@@ -417,58 +402,11 @@ function VoyagesCatalog() {
           ) : (
           <div className="catalog-grid">
             {trips.map((trip) => (
-              <Link
-                className="catalog-card"
+              <VoyageCard
                 href={`/voyages/${encodeURIComponent(trip.id_voyage)}?passagers=${encodeURIComponent(filters.places_min || "1")}`}
                 key={trip.id_voyage}
-              >
-                <div className="catalog-card__image">
-                  <VoyageCoverImage
-                    image={trip.image}
-                    alt=""
-                    sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw"
-                  />
-                  <span>{trip.places_disponibles} place{trip.places_disponibles > 1 ? "s" : ""} disponible{trip.places_disponibles > 1 ? "s" : ""}</span>
-                </div>
-                <div className="catalog-card__body">
-                  <p className="catalog-card__company">
-                    {trip.compagnie_nom || "Compagnie"}
-                  </p>
-                  <h3>{trip.ville_depart_nom} <span aria-hidden="true">→</span> {trip.ville_arrivee_nom}</h3>
-                  {trip.gare_depart || trip.gare_arrivee ? (
-                    <div
-                      className="catalog-card__stations"
-                      role="group"
-                      aria-label="Gares du voyage"
-                    >
-                      {trip.gare_depart ? (
-                        <div className="catalog-card__station">
-                          <span className="catalog-card__station-label">Départ</span>
-                          <span className="catalog-card__station-name">
-                            {trip.gare_depart.nom}
-                          </span>
-                        </div>
-                      ) : null}
-                      {trip.gare_arrivee ? (
-                        <div className="catalog-card__station">
-                          <span className="catalog-card__station-label">Arrivée</span>
-                          <span className="catalog-card__station-name">
-                            {trip.gare_arrivee.nom}
-                          </span>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  <div className="catalog-card__meta">
-                    <span>{formatDate(trip.date_depart)}</span>
-                    <span>{trip.heure_depart.slice(0, 5)}</span>
-                  </div>
-                  <div className="catalog-card__footer">
-                    <strong>{formatPrice(trip.prix)}</strong>
-                    <span>Voir le voyage <span aria-hidden="true">→</span></span>
-                  </div>
-                </div>
-              </Link>
+                trip={trip}
+              />
             ))}
           </div>
           )}

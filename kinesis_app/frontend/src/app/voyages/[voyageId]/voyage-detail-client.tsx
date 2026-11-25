@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import type { Voyage } from "@/lib/types";
 import KinesisLoader from "@/components/kinesis-loader";
-import VoyageCoverImage from "@/components/voyage-cover-image";
 import VoyagesPageHeader from "@/components/voyages-page-header";
 import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
 import { cacheVoyages, getCachedVoyage, isCachedVoyage } from "@/lib/voyage-cache";
@@ -324,20 +323,11 @@ export default function VoyageDetailClient({
       {!loading && trip ? (
         <article className="voyage-detail-page__content">
           <div className="voyage-detail__cover">
-            <VoyageCoverImage
-              image={trip.image}
-              alt=""
-              priority
-              sizes="(max-width: 900px) 100vw, 1240px"
-            />
             <div className="voyage-detail__cover-shade" />
             <div className="voyage-detail__cover-toolbar">
               <Link href="/voyages" className="voyage-detail__back">
                 <span aria-hidden="true">←</span> Tous les voyages
               </Link>
-              <span className="voyage-detail__company">
-                Opéré par <strong>{trip.compagnie_nom || "une compagnie partenaire"}</strong>
-              </span>
             </div>
             <div className="voyage-detail__cover-copy">
               <h1>

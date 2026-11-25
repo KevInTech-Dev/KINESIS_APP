@@ -9,7 +9,7 @@ import { getUserFacingErrorMessage } from "@/lib/user-facing-errors";
 import type { Ville, Voyage } from "@/lib/types";
 import AppDialog from "@/components/app-dialog";
 import ProfileAvatar from "@/components/profile-avatar";
-import VoyageCoverImage from "@/components/voyage-cover-image";
+import VoyageCard from "@/components/voyage-card";
 import { HomeTripSkeletons } from "@/components/voyage-skeletons";
 import { fetchPaginatedApiResponse } from "@/lib/paginated-api";
 import { getPublicCities } from "@/lib/public-cities";
@@ -203,75 +203,6 @@ function getErrorMessage(error: unknown) {
   return getUserFacingErrorMessage(
     error,
     "Une erreur inattendue s’est produite. Réessayez dans quelques instants.",
-  );
-}
-
-function formatPrice(price: string | number) {
-  const amount = Number(price);
-  return Number.isFinite(amount)
-    ? `${new Intl.NumberFormat("fr-FR").format(amount)} FCFA`
-    : `${price} FCFA`;
-}
-
-function formatDate(date: string) {
-  const parsed = new Date(`${date}T12:00:00`);
-  return new Intl.DateTimeFormat("fr-FR", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  }).format(parsed);
-}
-
-function TripCard({
-  trip,
-  onSelect,
-  onBook,
-}: {
-  trip: Voyage;
-  onSelect?: (trip: Voyage) => void;
-  onBook?: (trip: Voyage) => void;
-}) {
-  return (
-    <article className="catalog-card home-trip-card">
-      {onSelect || onBook ? (
-        <button
-          className="home-trip-card__select"
-          onClick={() => (onBook ?? onSelect)?.(trip)}
-          type="button"
-          aria-label={`${onBook ? "Consulter" : "Préparer une recherche pour"} ${trip.ville_depart_nom} vers ${trip.ville_arrivee_nom}`}
-        />
-      ) : null}
-      <div className="catalog-card__image">
-        <VoyageCoverImage
-          image={trip.image}
-          alt=""
-          sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 33vw"
-        />
-        <span>
-          {trip.places_disponibles} place
-          {trip.places_disponibles > 1 ? "s" : ""} disponible
-          {trip.places_disponibles > 1 ? "s" : ""}
-        </span>
-      </div>
-      <div className="catalog-card__body">
-        <p className="catalog-card__company">{trip.compagnie_nom || "Compagnie"}</p>
-        <h3>
-          {trip.ville_depart_nom} <span aria-hidden="true">→</span>{" "}
-          {trip.ville_arrivee_nom}
-        </h3>
-        <div className="catalog-card__meta">
-          <span>{formatDate(trip.date_depart)}</span>
-          <span>{trip.heure_depart.slice(0, 5)}</span>
-        </div>
-        <div className="catalog-card__footer">
-          <strong>{formatPrice(trip.prix)}</strong>
-          <span>
-            {onSelect ? "Choisir ce voyage" : "Voir le voyage"}{" "}
-            <span aria-hidden="true">→</span>
-          </span>
-        </div>
-      </div>
-    </article>
   );
 }
 
@@ -732,21 +663,19 @@ export default function HomePage() {
 
       <main>
         <section className="hero" id="accueil">
-          <div className="hero__background" />
-          <div className="hero__rings" aria-hidden="true" />
           <div className="hero__inner">
             <div className="hero__copy">
               <p className="eyebrow eyebrow--hero">
                 <span />
-                Voyagez autrement au Togo
+                Voyages en bus au Togo
               </p>
               <h1>
-                Finies les files d’attente
-                <span>dans les agences de voyage.</span>
+                <span className="hero__title-line">Votre prochain voyage</span>
+                <span>commence ici.</span>
               </h1>
               <p className="hero__description">
-                Avec KINESIS, réservez votre place en quelques clics et voyagez
-                entre les villes du Togo en toute sérénité.
+                Comparez les départs, choisissez votre itinéraire et réservez
+                votre place en quelques clics.
               </p>
               <a className="hero-cta hero-cta--desktop" href="#recherche">
                 Rechercher un voyage
@@ -754,15 +683,42 @@ export default function HomePage() {
                   <Icon name="arrow" />
                 </span>
               </a>
-              <button
-                className="hero-cta hero-cta--mobile"
-                type="button"
-                onClick={() => setSearchDialogOpen(true)}
-              >
-                Rechercher un voyage
-                <span><Icon name="arrow" /></span>
-              </button>
+              <p className="hero__note">
+                Retrouvez vos réservations et billets dans votre espace personnel.
+              </p>
             </div>
+            <div className="hero__gallery" aria-label="Autocar et intérieur de bus">
+              <div className="hero__photo hero__photo--main">
+                <Image
+                  src="/images/hero-bus-exterior.png"
+                  alt="Autocar de voyage moderne prêt à prendre la route"
+                  fill
+                  priority
+                  sizes="(max-width: 700px) 94vw, (max-width: 960px) 52vw, 600px"
+                />
+                <div className="hero__photo-caption">
+                  <span>KINESIS · VOYAGES EN BUS</span>
+                  <strong>La route vous attend.</strong>
+                </div>
+              </div>
+              <div className="hero__photo hero__photo--inset">
+                <Image
+                  src="/images/hero-bus-interior.png"
+                  alt="Sièges lumineux à l’intérieur d’un autocar"
+                  fill
+                  sizes="(max-width: 700px) 54vw, (max-width: 960px) 30vw, 324px"
+                />
+                <span className="hero__photo-tag">À bord</span>
+              </div>
+            </div>
+            <button
+              className="hero-cta hero-cta--mobile"
+              type="button"
+              onClick={() => setSearchDialogOpen(true)}
+            >
+              Rechercher un voyage
+              <span><Icon name="arrow" /></span>
+            </button>
           </div>
         </section>
 
@@ -876,7 +832,7 @@ export default function HomePage() {
           ) : (
             <div className="trip-grid">
               {trips.slice(0, 3).map((trip) => (
-                <TripCard
+                <VoyageCard
                   key={trip.id_voyage}
                   trip={trip}
                   onBook={(selectedTrip) => {
@@ -900,7 +856,7 @@ export default function HomePage() {
               </div>
               <div className="trip-grid trip-grid--results">
                 {pageSearchResults.map((trip) => (
-                  <TripCard
+                  <VoyageCard
                     key={trip.id_voyage}
                     trip={trip}
                     onBook={(selectedTrip) => {

@@ -1375,25 +1375,13 @@ export default function CompanyWorkspace() {
       place_totale: Number(formData.get("place_totale") ?? editingTrip?.place_totale),
       prix: Number(formData.get("prix") ?? editingTrip?.prix),
     };
-    const image = formData.get("image");
-    const requestPayload: FormData | typeof payload =
-      image instanceof File && image.size > 0
-        ? (() => {
-            const multipart = new FormData();
-            Object.entries(payload).forEach(([key, value]) => {
-              multipart.append(key, String(value));
-            });
-            multipart.append("image", image);
-            return multipart;
-          })()
-        : payload;
     setSaving(true);
     setError(null);
     try {
       const savedTrip = await requestApi(
         editingTrip ? `voyages/${editingTrip.id_voyage}` : "voyages",
         editingTrip ? "PATCH" : "POST",
-        requestPayload,
+        payload,
       );
       if (isTrip(savedTrip)) {
         setTrips((current) =>
@@ -2285,21 +2273,6 @@ export default function CompanyWorkspace() {
                   <label><span>Nombre de places</span><input name="place_totale" type="number" min="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.place_totale ?? "30"} /></label>
                   <label><span>Prix par place (FCFA)</span><input name="prix" type="number" min="0" step="1" required disabled={editingTripFieldsLocked} defaultValue={editingTrip?.prix ?? ""} /></label>
                 </div>
-                {editingTrip?.image ? (
-                  <div className="company-trip-image-preview">
-                    <span>Image actuelle</span>
-                    <Image
-                      src={editingTrip.image}
-                      alt={`Image du trajet ${editingTrip.ville_depart_nom} vers ${editingTrip.ville_arrivee_nom}`}
-                      width={320}
-                      height={180}
-                    />
-                  </div>
-                ) : null}
-                <label>
-                  <span>Image du trajet <small>{editingTrip?.image ? "(facultatif, remplace l’image actuelle)" : "(facultatif)"}</small></span>
-                  <input name="image" type="file" accept="image/*" disabled={editingTripFieldsLocked} />
-                </label>
                 <div className="company-form-actions">
                   <button type="submit" className="company-button" disabled={saving || editingTripFieldsLocked}>{saving ? "Enregistrement…" : editingTrip ? "Enregistrer les modifications" : "Publier le trajet"}</button>
                   {editingTrip ? <button type="button" className="company-cancel-button" onClick={() => { setEditingTrip(null); setTripDepartCity(""); setTripArrivalCity(""); setTripDepartStation(""); setTripArrivalStation(""); setTripDialogOpen(false); }}>Annuler</button> : null}
