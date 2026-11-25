@@ -11,6 +11,7 @@ import {
   BusFront,
   ChartNoAxesCombined,
   ChevronRight,
+  CalendarDays,
   CreditCard,
   EllipsisVertical,
   ExternalLink,
@@ -19,11 +20,16 @@ import {
   LogOut,
   Luggage,
   Plus,
+  RefreshCw,
   TicketCheck,
   UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import { DropdownMenu } from "radix-ui";
+import AnalyticsLineChart, {
+  type AnalyticsLineChartMetric,
+  type AnalyticsLineChartPoint,
+} from "@/components/analytics-line-chart";
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import AppDialog from "@/components/app-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
@@ -190,12 +196,38 @@ type RecordDetails = {
   title: string;
   fields: Array<[string, string]>;
 };
+type CompanyOverviewCacheEntry = {
+  trips: Trip[];
+  agents: Agent[];
+  reservations: CompanyReservation[];
+  payments: Payment[];
+  agentPermissions: Record<string, string[]>;
+  updatedAt: number;
+};
 type RowAction = {
   label: string;
   onSelect: () => void;
   disabled?: boolean;
   danger?: boolean;
 };
+
+const COMPANY_OVERVIEW_CACHE_DURATION_MS = 30_000;
+const MAX_COMPANY_OVERVIEW_CACHE_ENTRIES = 3;
+const companyOverviewCache = new Map<string, CompanyOverviewCacheEntry>();
+
+function cacheCompanyOverview(
+  companyId: string,
+  overview: Omit<CompanyOverviewCacheEntry, "updatedAt">,
+) {
+  companyOverviewCache.delete(companyId);
+  companyOverviewCache.set(companyId, { ...overview, updatedAt: Date.now() });
+
+  while (companyOverviewCache.size > MAX_COMPANY_OVERVIEW_CACHE_ENTRIES) {
+    const oldestCompanyId = companyOverviewCache.keys().next().value;
+    if (oldestCompanyId === undefined) break;
+    companyOverviewCache.delete(oldestCompanyId);
+  }
+}
 
 function deferredDataForTab(tab: Tab): DeferredData | null {
   if (tab === "stations" || tab === "trips") return "locations";
@@ -789,9 +821,14 @@ export default function CompanyWorkspace() {
   const [agentPermissions, setAgentPermissions] = useState<Record<string, string[]>>({});
   const loadedDeferredData = useRef(new Set<DeferredData>());
   const pendingDeferredData = useRef(new Map<DeferredData, Promise<void>>());
+  const overviewDataLoaded = useRef(false);
+  const skipOverviewCacheWrite = useRef(false);
 
-  const loadOverviewData = useCallback(async (companyId: string) => {
-    setOverviewDataLoading(true);
+  const loadOverviewData = useCallback(async (
+    companyId: string,
+    background = false,
+  ) => {
+    setOverviewDataLoading(!background);
     setOverviewDataFailed(false);
     setError(null);
     try {
@@ -800,22 +837,34 @@ export default function CompanyWorkspace() {
         throw new Error("Les données du tableau de bord reçues sont invalides.");
       }
       const loadedAgents = listFrom(dashboardData.agents, isAgent, "agents");
-      setTrips(
-        listFrom(dashboardData.trips, isTrip, "trips").filter(
-          (trip) => trip.compagnie === companyId,
-        ),
+      const loadedTrips = listFrom(dashboardData.trips, isTrip, "trips").filter(
+        (trip) => trip.compagnie === companyId,
       );
+      const loadedReservations = listFrom(
+        dashboardData.reservations,
+        isCompanyReservation,
+        "reservations",
+      );
+      const loadedPayments = listFrom(dashboardData.payments, isPayment, "payments");
+      const loadedAgentPermissions = Object.fromEntries(
+        loadedAgents.map((agent) => [agent.id, agent.permissions]),
+      );
+      overviewDataLoaded.current = true;
+      cacheCompanyOverview(companyId, {
+        trips: loadedTrips,
+        agents: loadedAgents,
+        reservations: loadedReservations,
+        payments: loadedPayments,
+        agentPermissions: loadedAgentPermissions,
+      });
+      setTrips(loadedTrips);
       setAgents(loadedAgents);
-      setReservations(
-        listFrom(dashboardData.reservations, isCompanyReservation, "reservations"),
-      );
-      setPayments(listFrom(dashboardData.payments, isPayment, "payments"));
-      setAgentPermissions(
-        Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
-      );
+      setReservations(loadedReservations);
+      setPayments(loadedPayments);
+      setAgentPermissions(loadedAgentPermissions);
     } catch (loadError) {
       console.error("Company overview data loading failed", loadError);
-      setOverviewDataFailed(true);
+      setOverviewDataFailed(!companyOverviewCache.has(companyId));
       setError(
         getUserFacingErrorMessage(
           loadError,
@@ -826,6 +875,22 @@ export default function CompanyWorkspace() {
       setOverviewDataLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!profile || !overviewDataLoaded.current) return;
+    if (skipOverviewCacheWrite.current) {
+      skipOverviewCacheWrite.current = false;
+      return;
+    }
+
+    cacheCompanyOverview(profile.id, {
+      trips,
+      agents,
+      reservations,
+      payments,
+      agentPermissions,
+    });
+  }, [agentPermissions, agents, payments, profile, reservations, trips]);
 
   const loadDeferredData = useCallback(async (data: DeferredData) => {
     if (loadedDeferredData.current.has(data)) return;
@@ -900,7 +965,28 @@ export default function CompanyWorkspace() {
       setCompany(companyData);
       setProfile(sessionBody);
       if (!refreshAll) {
-        void loadOverviewData(sessionBody.id);
+        const cachedOverview = companyOverviewCache.get(sessionBody.id);
+        if (cachedOverview) {
+          skipOverviewCacheWrite.current = true;
+          overviewDataLoaded.current = true;
+          setTrips(cachedOverview.trips);
+          setAgents(cachedOverview.agents);
+          setReservations(cachedOverview.reservations);
+          setPayments(cachedOverview.payments);
+          setAgentPermissions(cachedOverview.agentPermissions);
+          setOverviewDataLoading(false);
+          setOverviewDataFailed(false);
+        } else {
+          overviewDataLoaded.current = false;
+        }
+
+        const cacheIsFresh =
+          cachedOverview &&
+          Date.now() - cachedOverview.updatedAt <
+            COMPANY_OVERVIEW_CACHE_DURATION_MS;
+        if (!cacheIsFresh) {
+          void loadOverviewData(sessionBody.id, Boolean(cachedOverview));
+        }
         void loadDeferredData("notifications");
         return;
       }
@@ -936,6 +1022,7 @@ export default function CompanyWorkspace() {
       setAgentPermissions(
         Object.fromEntries(loadedAgents.map((agent) => [agent.id, agent.permissions])),
       );
+      overviewDataLoaded.current = true;
       setOverviewDataFailed(false);
       setOverviewDataLoading(false);
       loadedDeferredData.current.add("locations");
@@ -1006,16 +1093,28 @@ export default function CompanyWorkspace() {
     (reservation) => reservation.statut === "EN_ATTENTE_PAIEMENT",
   ).length;
   const activeAgentCount = agents.filter((agent) => agent.is_active).length;
+  const futureTripCapacity = activeTrips.reduce(
+    (total, trip) => total + Math.max(0, trip.place_totale),
+    0,
+  );
+  const futureAvailableSeats = activeTrips.reduce(
+    (total, trip) =>
+      total + Math.min(Math.max(0, trip.place_totale), Math.max(0, trip.places_disponibles)),
+    0,
+  );
+  const futureReservedSeats = Math.max(
+    0,
+    futureTripCapacity - futureAvailableSeats,
+  );
+  const futureSeatOccupancy = futureTripCapacity
+    ? Math.round((futureReservedSeats / futureTripCapacity) * 100)
+    : 0;
   const paymentBuckets = useMemo(
     () =>
       dashboardNow === null
         ? []
         : getPaymentBuckets(payments, paymentRange, dashboardNow),
     [dashboardNow, payments, paymentRange],
-  );
-  const maximumBucketPayment = Math.max(
-    0,
-    ...paymentBuckets.map((bucket) => bucket.amount),
   );
   const rangePaymentTotal = paymentBuckets.reduce(
     (total, bucket) => total + bucket.amount,
@@ -1025,18 +1124,32 @@ export default function CompanyWorkspace() {
     (total, bucket) => total + bucket.count,
     0,
   );
-  const chartMaximum = Math.max(1, maximumBucketPayment);
-  const chartPoints = paymentBuckets.map((bucket, index) => {
-    const x = 70 + (index * 710) / Math.max(paymentBuckets.length - 1, 1);
-    const y = 198 - (bucket.amount / chartMaximum) * 166;
-    return { ...bucket, x, y };
-  });
-  const chartLinePath = chartPoints
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-  const chartAreaPath = chartPoints.length
-    ? `${chartLinePath} L ${chartPoints[chartPoints.length - 1].x} 198 L ${chartPoints[0].x} 198 Z`
-    : "";
+  const paymentChartPoints: AnalyticsLineChartPoint[] = paymentBuckets.map(
+    (bucket) => ({
+      label: bucket.label,
+      value: bucket.amount,
+      valueLabel: formatPrice(bucket.amount),
+      detail: `${bucket.count.toLocaleString("fr-FR")} paiement(s) confirmé(s)`,
+    }),
+  );
+  const averagePayment = rangePaymentTotal / Math.max(rangePaymentCount, 1);
+  const paymentChartMetrics: AnalyticsLineChartMetric[] = [
+    {
+      label: "Total encaissé",
+      value: formatPrice(rangePaymentTotal),
+      detail: "sur la période sélectionnée",
+    },
+    {
+      label: "Paiements confirmés",
+      value: rangePaymentCount.toLocaleString("fr-FR"),
+      detail: "transactions",
+    },
+    {
+      label: "Montant moyen",
+      value: formatPrice(averagePayment),
+      detail: "par paiement",
+    },
+  ];
 
   function selectTab(nextTab: Tab) {
     setTab(nextTab);
@@ -1346,6 +1459,7 @@ export default function CompanyWorkspace() {
     try {
       const response = await fetch("/api/auth/deconnexion", { method: "POST" });
       if (!response.ok) throw new Error("La déconnexion n’a pas abouti.");
+      if (profile) companyOverviewCache.delete(profile.id);
       window.dispatchEvent(new Event("kinesis:role-mobile-reset"));
       router.push("/");
       router.refresh();
@@ -1964,12 +2078,26 @@ export default function CompanyWorkspace() {
         {error ? <p className="company-alert company-alert--error" role="alert">{error}</p> : null}
 
         {tab === "overview" ? (
-          <div className="company-content">
-            <section className="company-welcome-card">
+          <div className="company-content company-dashboard">
+            <section className="company-dashboard-heading">
               <div>
-                <p className="company-eyebrow">{getTimeGreeting()}, {company.nom_commercial.toUpperCase()}</p>
-                <h2>Le point sur votre activité.</h2>
-                <p>Retrouvez vos départs, réservations et paiements au même endroit.</p>
+                <p className="company-eyebrow">TABLEAU DE BORD · ESPACE COMPAGNIE</p>
+                <h2>{getTimeGreeting()}, {company.nom_commercial}</h2>
+                <p>Suivez vos départs, vos réservations et vos revenus en un coup d’œil.</p>
+              </div>
+              <div className="company-dashboard-heading__actions">
+                {dashboardNow !== null ? (
+                  <span><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat("fr-FR", { dateStyle: "full" }).format(new Date(dashboardNow))}</span>
+                ) : null}
+                <button
+                  type="button"
+                  className="company-dashboard-refresh"
+                  onClick={() => void loadOverviewData(profile.id)}
+                  disabled={overviewDataLoading}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  {overviewDataLoading ? "Actualisation…" : "Actualiser"}
+                </button>
                 <button type="button" className="company-button" onClick={startTripCreation}>
                   Publier un trajet <Plus aria-hidden="true" size={16} />
                 </button>
@@ -1986,93 +2114,108 @@ export default function CompanyWorkspace() {
               </p>
             ) : (
               <>
-            <div className="company-stat-grid">
+            <div className="company-stat-grid company-dashboard-stats">
               <article className="company-stat-card">
                 <span className="company-stat-card__icon"><BusFront aria-hidden="true" /></span>
                 <span>Départs à venir</span>
-                <strong>{activeTrips.length}</strong>
-                <small>Trajets publiés</small>
+                <strong>{activeTrips.length.toLocaleString("fr-FR")}</strong>
+                <small>Trajets publiés et à venir</small>
               </article>
               <article className="company-stat-card">
                 <span className="company-stat-card__icon company-stat-card__icon--amber"><TicketCheck aria-hidden="true" /></span>
-                <span>Réservations à suivre</span>
-                <strong>{pendingReservationCount}</strong>
-                <small>En attente de paiement</small>
+                <span>À suivre</span>
+                <strong>{pendingReservationCount.toLocaleString("fr-FR")}</strong>
+                <small>Réservations en attente de paiement</small>
               </article>
               <article className="company-stat-card">
                 <span className="company-stat-card__icon company-stat-card__icon--blue"><UsersRound aria-hidden="true" /></span>
-                <span>Agents actifs</span>
-                <strong>{activeAgentCount}</strong>
-                <small>Sur {agents.length} compte(s) d’équipe</small>
+                <span>Équipe active</span>
+                <strong>{activeAgentCount.toLocaleString("fr-FR")}</strong>
+                <small>Sur {agents.length.toLocaleString("fr-FR")} compte(s) agent</small>
               </article>
               <article className="company-stat-card">
                 <span className="company-stat-card__icon company-stat-card__icon--gold"><CreditCard aria-hidden="true" /></span>
-                <span>Montant payé</span>
+                <span>Revenus confirmés</span>
                 <strong>{formatPrice(confirmedPaymentAmount)}</strong>
-                <small>{payments.filter((payment) => payment.statut === "CONFIRME").length} paiement(s) confirmé(s)</small>
+                <small>{payments.filter((payment) => payment.statut === "CONFIRME").length.toLocaleString("fr-FR")} paiement(s) confirmé(s)</small>
               </article>
             </div>
-            <section className="company-panel company-payment-chart-panel">
-              <div className="company-panel-heading company-payment-chart-heading">
-                <div>
-                  <h2><ChartNoAxesCombined aria-hidden="true" /> Évolution des paiements</h2>
-                  <p>{formatPrice(rangePaymentTotal)} · {rangePaymentCount} paiement(s) confirmé(s)</p>
+            <div className="company-dashboard-analytics">
+              <section className="company-panel company-payment-chart-panel">
+                <div className="company-panel-heading company-payment-chart-heading">
+                  <div>
+                    <h2><ChartNoAxesCombined aria-hidden="true" /> Évolution des paiements</h2>
+                    <p>
+                      Encaissements confirmés ·{" "}
+                      {PAYMENT_RANGES.find((range) => range.id === paymentRange)?.label}
+                    </p>
+                  </div>
+                  <div className="company-payment-range-switch" aria-label="Période du graphique">
+                    {PAYMENT_RANGES.map((range) => (
+                      <button
+                        type="button"
+                        key={range.id}
+                        aria-pressed={paymentRange === range.id}
+                        onClick={() => setPaymentRange(range.id)}
+                      >
+                        {range.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-                <div className="company-payment-range-switch" aria-label="Période du graphique">
-                  {PAYMENT_RANGES.map((range) => (
-                    <button
-                      type="button"
-                      key={range.id}
-                      aria-pressed={paymentRange === range.id}
-                      onClick={() => setPaymentRange(range.id)}
-                    >
-                      {range.label}
-                    </button>
-                  ))}
+                {rangePaymentCount > 0 ? (
+                  <AnalyticsLineChart
+                    key={paymentRange}
+                    points={paymentChartPoints}
+                    metrics={paymentChartMetrics}
+                    ariaLabel={`Montants des paiements confirmés sur ${PAYMENT_RANGES.find((range) => range.id === paymentRange)?.label}`}
+                    formatAxisValue={(value) =>
+                      new Intl.NumberFormat("fr-FR", {
+                        notation: "compact",
+                        maximumFractionDigits: 1,
+                      }).format(value)
+                    }
+                    variant="gold"
+                  />
+                ) : (
+                  <p className="company-empty">Aucun paiement confirmé sur cette période.</p>
+                )}
+              </section>
+              <section className="company-panel company-occupancy-panel">
+                <div className="company-panel-heading">
+                  <div>
+                    <h2>Occupation des départs</h2>
+                    <p>Places des trajets publiés à venir</p>
+                  </div>
                 </div>
-              </div>
-              {rangePaymentCount > 0 ? (
-                <svg
-                  className="company-payment-chart"
-                  viewBox="0 0 820 250"
-                  role="img"
-                  aria-label={`Montants des paiements confirmés sur ${PAYMENT_RANGES.find((range) => range.id === paymentRange)?.label}`}
-                >
-                  <defs>
-                    <linearGradient id="company-payment-area" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#27835f" stopOpacity="0.2" />
-                      <stop offset="100%" stopColor="#27835f" stopOpacity="0.01" />
-                    </linearGradient>
-                  </defs>
-                  {[32, 115, 198].map((y, index) => (
-                    <g key={y}>
-                      <line className="company-payment-chart__grid" x1="70" x2="790" y1={y} y2={y} />
-                      <text className="company-payment-chart__axis-label" x="58" y={y + 4} textAnchor="end">
-                        {new Intl.NumberFormat("fr-FR", {
-                          notation: "compact",
-                          maximumFractionDigits: 1,
-                        }).format((chartMaximum * (2 - index)) / 2)}
-                      </text>
-                    </g>
-                  ))}
-                  {chartAreaPath ? <path className="company-payment-chart__area" d={chartAreaPath} /> : null}
-                  {chartLinePath ? <path className="company-payment-chart__line" d={chartLinePath} /> : null}
-                  {chartPoints.map((point) => (
-                    <g key={point.label}>
-                      <circle className="company-payment-chart__point-halo" cx={point.x} cy={point.y} r="7" />
-                      <circle className="company-payment-chart__point" cx={point.x} cy={point.y} r="3.5">
-                        <title>{`${point.label} : ${formatPrice(point.amount)} (${point.count} paiement(s))`}</title>
-                      </circle>
-                      <text className="company-payment-chart__date" x={point.x} y="229" textAnchor="middle">
-                        {point.label}
-                      </text>
-                    </g>
-                  ))}
-                </svg>
-              ) : (
-                <p className="company-empty">Aucun paiement confirmé sur cette période.</p>
-              )}
-            </section>
+                <div className="company-occupancy-content">
+                  <div
+                    className="company-occupancy-donut"
+                    role="img"
+                    aria-label={`${futureSeatOccupancy}% des places des départs à venir sont réservées`}
+                    style={{
+                      background: `conic-gradient(#d98235 0 ${futureSeatOccupancy}%, #e8eee8 ${futureSeatOccupancy}% 100%)`,
+                    }}
+                  >
+                    <div>
+                      <strong>{futureSeatOccupancy}%</strong>
+                      <span>occupées</span>
+                    </div>
+                  </div>
+                  <div className="company-occupancy-legend">
+                    <div>
+                      <span><i className="is-reserved" />Places réservées</span>
+                      <strong>{futureReservedSeats.toLocaleString("fr-FR")}</strong>
+                    </div>
+                    <div>
+                      <span><i className="is-available" />Places disponibles</span>
+                      <strong>{futureAvailableSeats.toLocaleString("fr-FR")}</strong>
+                    </div>
+                    <small>{futureTripCapacity.toLocaleString("fr-FR")} places au total</small>
+                  </div>
+                </div>
+              </section>
+            </div>
             <div className="company-content--split company-dashboard-lower">
               <section className="company-panel company-dashboard-table-panel">
                 <div className="company-panel-heading">

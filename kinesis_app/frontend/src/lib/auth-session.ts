@@ -16,11 +16,20 @@ type AuthSession = {
   rotated: boolean;
 };
 
+type AuthTokenPair = {
+  access: string;
+  refresh: string;
+};
+
+type AuthTokensResult =
+  | { tokens: AuthTokenPair }
+  | { status: number; data: unknown };
+
 type AuthSessionResult =
   | { session: AuthSession }
   | { status: number; data: unknown };
 
-export async function readAuthSession(): Promise<AuthSessionResult> {
+export async function readAuthTokens(): Promise<AuthTokensResult> {
   const cookieStore = await cookies();
   const access = cookieStore.get(accessCookieName)?.value;
   const refresh = cookieStore.get(refreshCookieName)?.value;
@@ -32,30 +41,48 @@ export async function readAuthSession(): Promise<AuthSessionResult> {
     };
   }
 
-  let activeAccess = access;
-  let activeRefresh = refresh;
+  return { tokens: { access, refresh } };
+}
+
+export async function refreshAuthTokens(
+  refresh: string,
+): Promise<AuthTokensResult> {
+  const refreshed = await postAuthToBackend("token/refresh/", { refresh });
+
+  if (refreshed.status < 200 || refreshed.status >= 300) {
+    return { status: refreshed.status, data: refreshed.data };
+  }
+
+  if (!isTokenPair(refreshed.data)) {
+    console.error("Backend refresh response did not contain both tokens.");
+    return {
+      status: 502,
+      data: { detail: "La réponse de renouvellement de session est invalide." },
+    };
+  }
+
+  return { tokens: refreshed.data };
+}
+
+export async function readAuthSession(): Promise<AuthSessionResult> {
+  const tokenResult = await readAuthTokens();
+  if ("status" in tokenResult) {
+    return tokenResult;
+  }
+
+  let activeAccess = tokenResult.tokens.access;
+  let activeRefresh = tokenResult.tokens.refresh;
   let rotated = false;
   let profile = await getAuthFromBackend("me/", activeAccess);
 
   if (profile.status === 401) {
-    const refreshed = await postAuthToBackend("token/refresh/", {
-      refresh: activeRefresh,
-    });
-
-    if (refreshed.status < 200 || refreshed.status >= 300) {
-      return { status: refreshed.status, data: refreshed.data };
+    const refreshed = await refreshAuthTokens(activeRefresh);
+    if ("status" in refreshed) {
+      return refreshed;
     }
 
-    if (!isTokenPair(refreshed.data)) {
-      console.error("Backend refresh response did not contain both tokens.");
-      return {
-        status: 502,
-        data: { detail: "La réponse de renouvellement de session est invalide." },
-      };
-    }
-
-    activeAccess = refreshed.data.access;
-    activeRefresh = refreshed.data.refresh;
+    activeAccess = refreshed.tokens.access;
+    activeRefresh = refreshed.tokens.refresh;
     rotated = true;
     profile = await getAuthFromBackend("me/", activeAccess);
   }

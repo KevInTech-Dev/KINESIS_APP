@@ -257,6 +257,25 @@ class VoyageApiTests(APITestCase):
         self.assertEqual(cached_response.json(), first_response.json())
         self.assertEqual(len(repeated_queries.captured_queries), 0)
 
+    def test_authenticated_traveler_reuses_public_catalog_cache(self):
+        url = reverse("voyage-list")
+        self.client.get(url, {"page_size": 5})
+        traveler = User.objects.create_user(
+            email="voyageur-cache@example.com",
+            password=self.password,
+            nom="Voyageur",
+            prenoms="Cache",
+            role=User.Role.VOYAGEUR,
+        )
+        self.client.force_authenticate(user=traveler)
+
+        with CaptureQueriesContext(connection) as repeated_queries:
+            response = self.client.get(url, {"page_size": 5})
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["results"][0]["id_voyage"], str(self.voyage.pk))
+        self.assertEqual(len(repeated_queries.captured_queries), 0)
+
     def test_public_catalog_cache_is_invalidated_after_trip_update(self):
         url = reverse("voyage-list")
         first_response = self.client.get(url)

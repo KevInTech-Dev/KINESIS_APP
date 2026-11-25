@@ -5,13 +5,21 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
-  ChartNoAxesCombined,
+  ArrowRight,
   Bell,
   Building2,
+  CalendarDays,
+  ChartNoAxesCombined,
   CircleUserRound,
   ExternalLink,
+  LayoutDashboard,
+  RefreshCw,
   UsersRound,
 } from "lucide-react";
+import AnalyticsLineChart, {
+  type AnalyticsLineChartMetric,
+  type AnalyticsLineChartPoint,
+} from "@/components/analytics-line-chart";
 import ConfirmationDialog from "@/components/confirmation-dialog";
 import KinesisLoader from "@/components/kinesis-loader";
 import {
@@ -111,7 +119,7 @@ type AdminNotification = {
   date_lecture: string | null;
   date_creation: string;
 };
-type Section = "companies" | "accounts" | "notifications";
+type Section = "overview" | "companies" | "accounts" | "notifications";
 
 const USER_RANGES: { id: UserRange; label: string; days: number }[] = [
   { id: "7", label: "7 jours", days: 7 },
@@ -342,6 +350,20 @@ function getUserRegistrationBuckets(
   return buckets;
 }
 
+function getUserRoleGradient(summary: UserSummary | null) {
+  if (!summary || summary.total === 0) {
+    return "conic-gradient(#e8eee8 0% 100%)";
+  }
+
+  let position = 0;
+  const segments = USER_ROLES.map((role) => {
+    const start = position;
+    position += (summary.roles[role] / summary.total) * 100;
+    return `${USER_ROLE_COLORS[role]} ${start}% ${position}%`;
+  });
+  return `conic-gradient(${segments.join(", ")})`;
+}
+
 async function requestAdministrationApi(
   resource: string,
   method = "GET",
@@ -409,7 +431,7 @@ function safeDocumentUrl(value: string | null): string | null {
 export default function AdministrationWorkspace() {
   const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [section, setSection] = useState<Section>("accounts");
+  const [section, setSection] = useState<Section>("overview");
   const [statusFilter, setStatusFilter] =
     useState<StatusFilter>("EN_ATTENTE_VALIDATION");
   const [page, setPage] = useState(1);
@@ -422,6 +444,9 @@ export default function AdministrationWorkspace() {
   const [userSummary, setUserSummary] = useState<UserSummary | null>(null);
   const [userSummaryLoading, setUserSummaryLoading] = useState(false);
   const [userSummaryError, setUserSummaryError] = useState<string | null>(null);
+  const [overviewCompanies, setOverviewCompanies] = useState<CompanyPage | null>(null);
+  const [overviewCompaniesLoading, setOverviewCompaniesLoading] = useState(false);
+  const [overviewCompaniesError, setOverviewCompaniesError] = useState<string | null>(null);
   const [userRange, setUserRange] = useState<UserRange>("7");
   const [userSearchInput, setUserSearchInput] = useState("");
   const [userSearch, setUserSearch] = useState("");
@@ -612,6 +637,26 @@ export default function AdministrationWorkspace() {
     },
     [],
   );
+  const loadOverviewCompanies = useCallback(async () => {
+    setOverviewCompaniesLoading(true);
+    setOverviewCompaniesError(null);
+    try {
+      const result = await requestAdministrationApi(
+        "compagnies?status=EN_ATTENTE_VALIDATION&page_size=5",
+      );
+      setOverviewCompanies(parseCompanyPage(result));
+    } catch (loadError) {
+      console.error("Administration overview companies loading failed", loadError);
+      setOverviewCompaniesError(
+        getUserFacingErrorMessage(
+          loadError,
+          "Impossible de charger les dossiers à examiner.",
+        ),
+      );
+    } finally {
+      setOverviewCompaniesLoading(false);
+    }
+  }, []);
   const loadUsers = useCallback(
     async (
       filter: UserFilter,
@@ -735,7 +780,6 @@ export default function AdministrationWorkspace() {
     void Promise.resolve().then(() => {
       if (active) {
         void loadUsers(userFilter, userSearch, userPage, userPageSize);
-        void loadUserSummary(userRange);
       }
     });
     return () => {
@@ -743,7 +787,6 @@ export default function AdministrationWorkspace() {
     };
   }, [
     loadUsers,
-    loadUserSummary,
     profile,
     reloadKey,
     section,
@@ -753,6 +796,40 @@ export default function AdministrationWorkspace() {
     userRange,
     userSearch,
   ]);
+
+  useEffect(() => {
+    if (
+      !profile ||
+      profile.role !== "ADMINISTRATEUR" ||
+      (section !== "overview" && section !== "accounts")
+    ) {
+      return;
+    }
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        void loadUserSummary(userRange);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadUserSummary, profile, reloadKey, section, userRange]);
+
+  useEffect(() => {
+    if (!profile || profile.role !== "ADMINISTRATEUR" || section !== "overview") {
+      return;
+    }
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (active) {
+        void loadOverviewCompanies();
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, [loadOverviewCompanies, profile, reloadKey, section]);
 
   useEffect(() => {
     if (!profile || profile.role !== "ADMINISTRATEUR") return;
@@ -875,23 +952,48 @@ export default function AdministrationWorkspace() {
     (total, bucket) => total + bucket.count,
     0,
   );
-  const userChartMaximum = Math.max(
-    1,
-    ...userRegistrationBuckets.map((bucket) => bucket.count),
+  const userChartPoints: AnalyticsLineChartPoint[] = userRegistrationBuckets.map(
+    (bucket) => ({
+      label: bucket.label,
+      value: bucket.count,
+      valueLabel: bucket.count.toLocaleString("fr-FR"),
+      detail: "nouvelle(s) inscription(s)",
+    }),
   );
-  const userChartPoints = userRegistrationBuckets.map((bucket, index) => {
-    const x = 70 + (index * 710) / Math.max(userRegistrationBuckets.length - 1, 1);
-    const y = 198 - (bucket.count / userChartMaximum) * 166;
-    return { ...bucket, x, y };
-  });
-  const userChartLinePath = userChartPoints
-    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
-    .join(" ");
-  const userChartAreaPath = userChartPoints.length
-    ? `${userChartLinePath} L ${userChartPoints[userChartPoints.length - 1].x} 198 L ${userChartPoints[0].x} 198 Z`
-    : "";
+  const userChartPeak = userRegistrationBuckets.reduce(
+    (peak, bucket) => (bucket.count > peak.count ? bucket : peak),
+    { label: "—", count: 0 },
+  );
+  const userChartAverage = userRegistrationTotal / Math.max(userRegistrationBuckets.length, 1);
+  const userChartMetrics: AnalyticsLineChartMetric[] = [
+    {
+      label: "Total sur la période",
+      value: userRegistrationTotal.toLocaleString("fr-FR"),
+      detail: "nouvelles inscriptions",
+    },
+    {
+      label: "Moyenne par intervalle",
+      value: new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 1 }).format(userChartAverage),
+      detail: "sur 7 intervalles",
+    },
+    {
+      label: "Pic d’inscriptions",
+      value: userChartPeak.count.toLocaleString("fr-FR"),
+      detail: userChartPeak.label,
+    },
+  ];
+  const userRoleGradient = getUserRoleGradient(userSummary);
+  const recentAdminNotifications = [...notifications]
+    .sort(
+      (first, second) =>
+        Date.parse(second.date_creation) - Date.parse(first.date_creation),
+    )
+    .slice(0, 4);
+  const registrationRangeLabel =
+    USER_RANGES.find((range) => range.id === userRange)?.label ?? "7 jours";
 
   const workspaceItems: RoleWorkspaceItem[] = [
+    { id: "overview", label: "Vue d’ensemble", icon: LayoutDashboard, group: "operations" },
     { id: "accounts", label: "Utilisateurs", icon: UsersRound, group: "operations" },
     { id: "companies", label: "Dossiers compagnies", icon: Building2, group: "operations" },
     {
@@ -907,6 +1009,7 @@ export default function AdministrationWorkspace() {
   ];
   function selectSection(nextSection: string) {
     if (
+      nextSection !== "overview" &&
       nextSection !== "companies" &&
       nextSection !== "accounts" &&
       nextSection !== "notifications"
@@ -924,8 +1027,10 @@ export default function AdministrationWorkspace() {
     <RoleWorkspaceShell
       eyebrow="ESPACE ADMINISTRATION"
       title={
-        section === "companies"
-          ? "Dossiers compagnies"
+        section === "overview"
+          ? "Vue d’ensemble"
+          : section === "companies"
+            ? "Dossiers compagnies"
           : section === "notifications"
             ? "Notifications"
             : "Utilisateurs"
@@ -941,40 +1046,66 @@ export default function AdministrationWorkspace() {
     >
 
         <div className="admin-content">
-          <section className="admin-welcome">
-            <div>
-              {section === "companies" ? (
-                <>
-                  <p className="admin-eyebrow">DOSSIERS COMPAGNIE</p>
-                  <h2>Vérifiez les pièces avant d’activer un compte.</h2>
-                  <p>
-                    Les documents sont privés et réservés aux administrateurs
-                    KINESIS. L’approbation envoie un lien d’activation à l’entreprise.
-                    Les dossiers sont triés du plus récent au plus ancien, puis par statut et nom commercial.
-                  </p>
-                </>
-              ) : section === "notifications" ? (
-                <>
-                  <p className="admin-eyebrow">CENTRE DE NOTIFICATIONS</p>
-                  <h2>Suivez les événements importants de KINESIS.</h2>
-                  <p>
-                    Les nouveaux dossiers compagnie en attente de validation
-                    apparaissent ici.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="admin-eyebrow">UTILISATEURS</p>
-                  <h2>Suivez les inscriptions sur la plateforme.</h2>
-                  <p>
-                    Recherchez les voyageurs, compagnies et agents. Les accès et
-                    les rôles restent contrôlés par les règles KINESIS. La liste est triée
-                    du plus récent au plus ancien, puis par nom et prénoms.
-                  </p>
-                </>
-              )}
-            </div>
-          </section>
+          {section === "overview" ? (
+            <section className="admin-overview-heading">
+              <div>
+                <p className="admin-eyebrow">PILOTAGE DE LA PLATEFORME</p>
+                <h2>Bonjour {profile.prenoms || profile.nom}, voici KINESIS.</h2>
+                <p>Les indicateurs clés et les éléments qui demandent votre attention.</p>
+              </div>
+              <div className="admin-overview-heading__actions">
+                <span><CalendarDays aria-hidden="true" />{new Intl.DateTimeFormat("fr-FR", { dateStyle: "full" }).format(new Date())}</span>
+                <button
+                  type="button"
+                  className="admin-refresh"
+                  onClick={() => {
+                    void loadUserSummary(userRange);
+                    void loadOverviewCompanies();
+                    void loadNotifications();
+                  }}
+                  disabled={userSummaryLoading || overviewCompaniesLoading}
+                >
+                  <RefreshCw aria-hidden="true" />
+                  {userSummaryLoading || overviewCompaniesLoading ? "Actualisation…" : "Actualiser"}
+                </button>
+              </div>
+            </section>
+          ) : (
+            <section className="admin-welcome">
+              <div>
+                {section === "companies" ? (
+                  <>
+                    <p className="admin-eyebrow">DOSSIERS COMPAGNIE</p>
+                    <h2>Vérifiez les pièces avant d’activer un compte.</h2>
+                    <p>
+                      Les documents sont privés et réservés aux administrateurs
+                      KINESIS. L’approbation envoie un lien d’activation à l’entreprise.
+                      Les dossiers sont triés du plus récent au plus ancien, puis par statut et nom commercial.
+                    </p>
+                  </>
+                ) : section === "notifications" ? (
+                  <>
+                    <p className="admin-eyebrow">CENTRE DE NOTIFICATIONS</p>
+                    <h2>Suivez les événements importants de KINESIS.</h2>
+                    <p>
+                      Les nouveaux dossiers compagnie en attente de validation
+                      apparaissent ici.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="admin-eyebrow">UTILISATEURS</p>
+                    <h2>Suivez les inscriptions sur la plateforme.</h2>
+                    <p>
+                      Recherchez les voyageurs, compagnies et agents. Les accès et
+                      les rôles restent contrôlés par les règles KINESIS. La liste est triée
+                      du plus récent au plus ancien, puis par nom et prénoms.
+                    </p>
+                  </>
+                )}
+              </div>
+            </section>
+          )}
 
           {error ? (
             <div className="admin-feedback admin-feedback--error" role="alert">
@@ -988,7 +1119,270 @@ export default function AdministrationWorkspace() {
             </div>
           ) : null}
 
-          {section === "notifications" ? (
+          {section === "overview" ? (
+            <section className="admin-overview">
+              <div className="admin-overview-stats">
+                <article className="admin-overview-stat">
+                  <span className="admin-overview-stat__icon admin-overview-stat__icon--green">
+                    <UsersRound aria-hidden="true" />
+                  </span>
+                  <span>Comptes sur la plateforme</span>
+                  <strong>{userSummary ? userSummary.total.toLocaleString("fr-FR") : "—"}</strong>
+                  <small>Tous les rôles confondus</small>
+                </article>
+                <article className="admin-overview-stat">
+                  <span className="admin-overview-stat__icon admin-overview-stat__icon--blue">
+                    <CircleUserRound aria-hidden="true" />
+                  </span>
+                  <span>Voyageurs</span>
+                  <strong>{userSummary ? userSummary.roles.VOYAGEUR.toLocaleString("fr-FR") : "—"}</strong>
+                  <small>Comptes voyageurs enregistrés</small>
+                </article>
+                <article className="admin-overview-stat">
+                  <span className="admin-overview-stat__icon admin-overview-stat__icon--gold">
+                    <Building2 aria-hidden="true" />
+                  </span>
+                  <span>Comptes compagnie</span>
+                  <strong>{userSummary ? userSummary.roles.COMPAGNIE.toLocaleString("fr-FR") : "—"}</strong>
+                  <small>Profils compagnie enregistrés</small>
+                </article>
+                <article className="admin-overview-stat">
+                  <span className="admin-overview-stat__icon admin-overview-stat__icon--amber">
+                    <Bell aria-hidden="true" />
+                  </span>
+                  <span>Dossiers à examiner</span>
+                  <strong>{overviewCompanies ? overviewCompanies.count.toLocaleString("fr-FR") : "—"}</strong>
+                  <small>En attente de validation</small>
+                </article>
+              </div>
+
+              <div className="admin-overview-analytics">
+                <section className="admin-overview-panel admin-overview-registrations">
+                  <div className="admin-overview-panel__heading">
+                    <div>
+                      <h2><ChartNoAxesCombined aria-hidden="true" /> Inscriptions</h2>
+                      <p>
+                        {userSummary
+                          ? `Évolution des inscriptions · ${registrationRangeLabel}`
+                          : "Évolution des inscriptions sur la plateforme"}
+                      </p>
+                    </div>
+                    <div className="company-payment-range-switch" aria-label="Période des inscriptions">
+                      {USER_RANGES.map((range) => (
+                        <button
+                          type="button"
+                          key={range.id}
+                          aria-pressed={userRange === range.id}
+                          onClick={() => setUserRange(range.id)}
+                        >
+                          {range.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {userSummaryLoading && !userSummary ? (
+                    <p className="admin-user-chart-message">Chargement des données…</p>
+                  ) : userSummaryError ? (
+                    <p className="admin-user-chart-message is-error" role="alert">
+                      {userSummaryError}
+                      <button type="button" onClick={() => void loadUserSummary(userRange)}>
+                        Réessayer
+                      </button>
+                    </p>
+                  ) : userSummary && userRegistrationTotal > 0 ? (
+                    <AnalyticsLineChart
+                      key={userRange}
+                      points={userChartPoints}
+                      metrics={userChartMetrics}
+                      ariaLabel={`Nouvelles inscriptions sur ${registrationRangeLabel}`}
+                      formatAxisValue={(value) =>
+                        Math.round(value).toLocaleString("fr-FR")
+                      }
+                    />
+                  ) : userSummary ? (
+                    <p className="admin-user-chart-message">
+                      Aucune nouvelle inscription sur cette période.
+                    </p>
+                  ) : (
+                    <p className="admin-user-chart-message">Les données apparaîtront ici.</p>
+                  )}
+                  {userSummaryError && userSummary ? (
+                    <p className="admin-overview-stale-note" role="status">
+                      Les chiffres affichés n’ont pas pu être actualisés.
+                    </p>
+                  ) : null}
+                </section>
+
+                <section className="admin-overview-panel admin-overview-roles">
+                  <div className="admin-overview-panel__heading">
+                    <div>
+                      <h2>Répartition des comptes</h2>
+                      <p>Par profil sur KINESIS</p>
+                    </div>
+                  </div>
+                  {userSummary ? (
+                    <div className="admin-overview-role-layout">
+                      <div
+                        className="admin-overview-role-donut"
+                        role="img"
+                        aria-label={`Répartition de ${userSummary.total} comptes par rôle`}
+                        style={{ background: userRoleGradient }}
+                      >
+                        <div>
+                          <small>Total</small>
+                          <strong>{userSummary.total.toLocaleString("fr-FR")}</strong>
+                          <span>comptes</span>
+                        </div>
+                      </div>
+                      <div className="admin-overview-role-legend">
+                        {USER_ROLES.map((role) => (
+                          <div key={role}>
+                            <span>
+                              <i style={{ backgroundColor: USER_ROLE_COLORS[role] }} aria-hidden="true" />
+                              {roleLabel(role)}
+                            </span>
+                            <strong>{userSummary.roles[role].toLocaleString("fr-FR")}</strong>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : userSummaryLoading ? (
+                    <p className="admin-user-chart-message">Chargement de la répartition…</p>
+                  ) : (
+                    <p className="admin-user-chart-message is-error" role="alert">
+                      {userSummaryError ?? "La répartition n’est pas disponible."}
+                    </p>
+                  )}
+                </section>
+              </div>
+
+              <div className="admin-overview-lower">
+                <section className="admin-overview-panel">
+                  <div className="admin-overview-panel__heading">
+                    <div>
+                      <h2>Dossiers à examiner</h2>
+                      <p>Les demandes compagnie en attente de validation</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-overview-link"
+                      onClick={() => {
+                        setStatusFilter("EN_ATTENTE_VALIDATION");
+                        setPage(1);
+                        selectSection("companies");
+                      }}
+                    >
+                      Tous les dossiers <ArrowRight aria-hidden="true" />
+                    </button>
+                  </div>
+                  {overviewCompaniesLoading && !overviewCompanies ? (
+                    <p className="admin-empty">Chargement des dossiers…</p>
+                  ) : overviewCompaniesError ? (
+                    <div className="admin-overview-inline-error" role="alert">
+                      <span>{overviewCompaniesError}</span>
+                      <button type="button" onClick={() => void loadOverviewCompanies()}>
+                        Réessayer
+                      </button>
+                    </div>
+                  ) : overviewCompanies?.results.length ? (
+                    <div className="admin-overview-company-list">
+                      {overviewCompanies.results.map((company) => (
+                        <button
+                          type="button"
+                          key={company.id}
+                          onClick={() => {
+                            setStatusFilter("EN_ATTENTE_VALIDATION");
+                            setPage(1);
+                            selectSection("companies");
+                          }}
+                        >
+                          <span className="admin-overview-company-mark">
+                            <Building2 aria-hidden="true" />
+                          </span>
+                          <span className="admin-overview-company-copy">
+                            <strong>{company.nom_commercial || company.raison_sociale || company.email}</strong>
+                            <small>{company.email}</small>
+                          </span>
+                          <span className="admin-overview-pending-label">À examiner</span>
+                          <ArrowRight aria-hidden="true" className="admin-overview-row-arrow" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="admin-empty">
+                      <strong>Aucun dossier en attente</strong>
+                      <span>Les nouvelles demandes apparaîtront ici.</span>
+                    </div>
+                  )}
+                </section>
+
+                <section className="admin-overview-panel admin-overview-activity">
+                  <div className="admin-overview-panel__heading">
+                    <div>
+                      <h2>Activité récente</h2>
+                      <p>
+                        {unreadNotificationCount
+                          ? `${unreadNotificationCount} notification(s) non lue(s)`
+                          : "Les dernières notifications KINESIS"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-overview-link"
+                      onClick={() => selectSection("notifications")}
+                    >
+                      Tout voir <ArrowRight aria-hidden="true" />
+                    </button>
+                  </div>
+                  {recentAdminNotifications.length ? (
+                    <div className="admin-overview-notification-list">
+                      {recentAdminNotifications.map((notification) => (
+                        <article key={notification.id_notification}>
+                          <span
+                            className={`admin-overview-notification-dot${notification.lue ? "" : " is-unread"}`}
+                            aria-hidden="true"
+                          />
+                          <div>
+                            <strong>{notification.titre}</strong>
+                            <p>{notification.message}</p>
+                            <time dateTime={notification.date_creation}>
+                              {new Intl.DateTimeFormat("fr-FR", {
+                                dateStyle: "medium",
+                                timeStyle: "short",
+                              }).format(new Date(notification.date_creation))}
+                            </time>
+                          </div>
+                          {!notification.lue ? (
+                            <button
+                              type="button"
+                              aria-label={`Marquer « ${notification.titre} » comme lue`}
+                              onClick={() => void markNotificationRead(notification.id_notification)}
+                              disabled={notificationsSaving}
+                            >
+                              <ArrowRight aria-hidden="true" />
+                            </button>
+                          ) : null}
+                        </article>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="admin-empty">
+                      <strong>Aucune activité récente</strong>
+                      <span>Les événements importants apparaîtront ici.</span>
+                    </div>
+                  )}
+                  <div className="admin-overview-shortcuts">
+                    <button type="button" onClick={() => selectSection("accounts")}>
+                      Gérer les utilisateurs <ArrowRight aria-hidden="true" />
+                    </button>
+                    <button type="button" onClick={() => selectSection("companies")}>
+                      Gérer les compagnies <ArrowRight aria-hidden="true" />
+                    </button>
+                  </div>
+                </section>
+              </div>
+            </section>
+          ) : section === "notifications" ? (
             <section className="admin-panel" aria-label="Notifications">
               <div className="admin-panel-heading">
                 <div>
@@ -1211,40 +1605,15 @@ export default function AdministrationWorkspace() {
                 ) : userSummary ? (
                   <>
                     {userRegistrationTotal > 0 ? (
-                      <svg
-                        className="admin-user-chart-svg"
-                        viewBox="0 0 820 250"
-                        role="img"
-                        aria-label={`Nouvelles inscriptions sur ${USER_RANGES.find((range) => range.id === userRange)?.label}`}
-                      >
-                        <defs>
-                          <linearGradient id="admin-user-chart-area" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#27835f" stopOpacity="0.2" />
-                            <stop offset="100%" stopColor="#27835f" stopOpacity="0.01" />
-                          </linearGradient>
-                        </defs>
-                        {[32, 115, 198].map((y, index) => (
-                          <g key={y}>
-                            <line className="admin-user-chart__grid" x1="70" x2="790" y1={y} y2={y} />
-                            <text className="admin-user-chart__axis-label" x="58" y={y + 4} textAnchor="end">
-                              {Math.round((userChartMaximum * (2 - index)) / 2).toLocaleString("fr-FR")}
-                            </text>
-                          </g>
-                        ))}
-                        {userChartAreaPath ? <path className="admin-user-chart__area" d={userChartAreaPath} /> : null}
-                        {userChartLinePath ? <path className="admin-user-chart__line" d={userChartLinePath} /> : null}
-                        {userChartPoints.map((point) => (
-                          <g key={point.label}>
-                            <circle className="admin-user-chart__point-halo" cx={point.x} cy={point.y} r="7" />
-                            <circle className="admin-user-chart__point" cx={point.x} cy={point.y} r="3.5">
-                              <title>{`${point.label} : ${point.count} inscription(s)`}</title>
-                            </circle>
-                            <text className="admin-user-chart__date" x={point.x} y="229" textAnchor="middle">
-                              {point.label}
-                            </text>
-                          </g>
-                        ))}
-                      </svg>
+                      <AnalyticsLineChart
+                        key={userRange}
+                        points={userChartPoints}
+                        metrics={userChartMetrics}
+                        ariaLabel={`Nouvelles inscriptions sur ${USER_RANGES.find((range) => range.id === userRange)?.label}`}
+                        formatAxisValue={(value) =>
+                          Math.round(value).toLocaleString("fr-FR")
+                        }
+                      />
                     ) : (
                       <p className="admin-user-chart-message">
                         Aucune nouvelle inscription sur cette période.

@@ -207,6 +207,7 @@ function VoyagesCatalog() {
   const [filters, setFilters] = useState<Filters>(() => filtersFromQuery(submittedQuery));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [requestFailed, setRequestFailed] = useState(false);
   const [cityError, setCityError] = useState("");
   const includeFacetsOnNextRequest = useRef(true);
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
@@ -250,6 +251,7 @@ function VoyagesCatalog() {
         setTrips(result.results);
         cacheVoyages(result.results);
         setTripCount(result.count);
+        setRequestFailed(false);
         if (result.companies) {
           setCompanies(result.companies);
           includeFacetsOnNextRequest.current = false;
@@ -257,6 +259,7 @@ function VoyagesCatalog() {
       })
       .catch((loadError: unknown) => {
         if (active) {
+          setRequestFailed(true);
           setError(
             getUserFacingErrorMessage(
               loadError,
@@ -280,6 +283,7 @@ function VoyagesCatalog() {
 
   function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setRequestFailed(false);
     if (
       filters.ville_depart &&
       filters.ville_arrivee &&
@@ -309,6 +313,7 @@ function VoyagesCatalog() {
     window.history.replaceState(null, "", nextUrl);
     setLoading(true);
     setError("");
+    setRequestFailed(false);
     includeFacetsOnNextRequest.current = true;
     setSubmittedQuery(query.toString());
     setPage(1);
@@ -321,6 +326,7 @@ function VoyagesCatalog() {
     window.history.replaceState(null, "", "/voyages");
     setLoading(true);
     setError("");
+    setRequestFailed(false);
     includeFacetsOnNextRequest.current = true;
     setSubmittedQuery("");
     setPage(1);
@@ -328,17 +334,16 @@ function VoyagesCatalog() {
     setMobileFiltersOpen(false);
   }
 
+  function retryCatalogRequest() {
+    setLoading(true);
+    setError("");
+    setRequestFailed(false);
+    setRefreshKey((current) => current + 1);
+  }
+
   return (
     <main className="voyage-catalog">
       <VoyagesPageHeader currentPage="catalogue" />
-
-      <section className="catalog-hero">
-        <div className="catalog-hero__content">
-          <p className="catalog-hero__eyebrow">LE TOGO EN MOUVEMENT, AVEC VOUS</p>
-          <h1>Trouvez votre prochain <span>départ.</span></h1>
-          <p>Comparez les itinéraires et choisissez le voyage qui vous convient.</p>
-        </div>
-      </section>
 
       <div className="catalog-layout">
         <div className="catalog-filters-desktop">
@@ -364,7 +369,16 @@ function VoyagesCatalog() {
           className="catalog-filters-dialog"
           onClose={() => setMobileFiltersOpen(false)}
         >
-          {error ? <p className="catalog-message catalog-message--error" role="alert">{error}</p> : null}
+          {error ? (
+            requestFailed ? (
+              <div className="catalog-message catalog-message--error catalog-message--retry" role="alert">
+                <span>{error}</span>
+                <button type="button" onClick={retryCatalogRequest}>Réessayer</button>
+              </div>
+            ) : (
+              <p className="catalog-message catalog-message--error" role="alert">{error}</p>
+            )
+          ) : null}
           <CatalogFiltersForm
             filters={filters}
             cities={cities}
@@ -393,7 +407,16 @@ function VoyagesCatalog() {
               </span>
             ) : null}
           </div>
-          {error ? <p className="catalog-message catalog-message--error" role="alert">{error}</p> : null}
+          {error ? (
+            requestFailed ? (
+              <div className="catalog-message catalog-message--error catalog-message--retry" role="alert">
+                <span>{error}</span>
+                <button type="button" onClick={retryCatalogRequest}>Réessayer</button>
+              </div>
+            ) : (
+              <p className="catalog-message catalog-message--error" role="alert">{error}</p>
+            )
+          ) : null}
           {!loading && !error && trips.length === 0 ? (
             <p className="catalog-message">Aucun voyage ne correspond à ces critères. Modifiez vos filtres et réessayez.</p>
           ) : null}
@@ -418,11 +441,13 @@ function VoyagesCatalog() {
             onPageChange={(nextPage) => {
               setLoading(true);
               setError("");
+              setRequestFailed(false);
               setPage(nextPage);
             }}
             onPageSizeChange={(nextPageSize) => {
               setLoading(true);
               setError("");
+              setRequestFailed(false);
               setPageSize(nextPageSize);
               setPage(1);
             }}

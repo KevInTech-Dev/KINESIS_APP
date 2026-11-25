@@ -3,10 +3,60 @@ import {
   clearAuthCookies,
   setAuthCookies,
 } from "@/lib/auth-cookies";
-import { readAuthSession } from "@/lib/auth-session";
-import { isUserProfile } from "@/lib/user-profile";
+import {
+  readAuthTokens,
+  refreshAuthTokens,
+} from "@/lib/auth-session";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
+type ProxyAuth = {
+  access: string;
+  refresh: string;
+  rotated: boolean;
+};
+type BackendRequestResult =
+  | { response: Response }
+  | { authError: { status: number; data: unknown } };
+
+function authErrorResponse(error: { status: number; data: unknown }) {
+  const response = NextResponse.json(error.data, { status: error.status });
+  if (error.status === 401) clearAuthCookies(response);
+  return response;
+}
+
+function finalizeAuthResponse(response: NextResponse, auth: ProxyAuth) {
+  if (auth.rotated) {
+    if (response.status === 401) {
+      clearAuthCookies(response);
+    } else {
+      setAuthCookies(response, auth.access, auth.refresh);
+    }
+  }
+  return response;
+}
+
+async function fetchWithAuth(
+  url: URL,
+  init: RequestInit,
+  auth: ProxyAuth,
+): Promise<BackendRequestResult> {
+  const makeRequest = () => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${auth.access}`);
+    return fetch(url, { ...init, headers });
+  };
+
+  const response = await makeRequest();
+  if (response.status !== 401) return { response };
+
+  const refreshed = await refreshAuthTokens(auth.refresh);
+  if ("status" in refreshed) return { authError: refreshed };
+
+  auth.access = refreshed.tokens.access;
+  auth.refresh = refreshed.tokens.refresh;
+  auth.rotated = true;
+  return { response: await makeRequest() };
+}
 
 function isAllowedResource(path: string[], method: string) {
   const resource = path.join("/");
@@ -42,25 +92,12 @@ function isAllowedResource(path: string[], method: string) {
 }
 
 async function proxyCompanyRequest(request: Request, context: RouteContext) {
-  const auth = await readAuthSession();
-  if ("status" in auth) {
-    const response = NextResponse.json(auth.data, { status: auth.status });
-    if (auth.status === 401) clearAuthCookies(response);
-    return response;
+  // Django validates the token and endpoint permissions on the actual request.
+  const tokenResult = await readAuthTokens();
+  if ("status" in tokenResult) {
+    return authErrorResponse(tokenResult);
   }
-
-  if (!isUserProfile(auth.session.profile)) {
-    return NextResponse.json(
-      { detail: "Le profil reçu du serveur est invalide." },
-      { status: 502 },
-    );
-  }
-  if (auth.session.profile.role !== "COMPAGNIE") {
-    return NextResponse.json(
-      { detail: "Cet espace est réservé aux comptes compagnie." },
-      { status: 403 },
-    );
-  }
+  const auth: ProxyAuth = { ...tokenResult.tokens, rotated: false };
 
   const { path } = await context.params;
   const method = request.method.toUpperCase();
@@ -90,8 +127,8 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
       reservations: "reservations",
       payments: "paiements",
     } as const;
-    try {
-      const results = await Promise.all(
+    const fetchDashboardResources = async () =>
+      Promise.all(
         Object.entries(resources).map(async ([key, resource]) => {
           const url = new URL(
             `/api/v1/${resource}/`,
@@ -101,7 +138,7 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
           const response = await fetch(url, {
             headers: {
               Accept: "application/json",
-              Authorization: `Bearer ${auth.session.access}`,
+              Authorization: `Bearer ${auth.access}`,
             },
             cache: "no-store",
             signal: AbortSignal.timeout(20_000),
@@ -126,6 +163,18 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
           return { key, status: response.status, data };
         }),
       );
+
+    try {
+      let results = await fetchDashboardResources();
+      if (results.some((result) => result.status === 401)) {
+        const refreshed = await refreshAuthTokens(auth.refresh);
+        if ("status" in refreshed) return authErrorResponse(refreshed);
+        auth.access = refreshed.tokens.access;
+        auth.refresh = refreshed.tokens.refresh;
+        auth.rotated = true;
+        results = await fetchDashboardResources();
+      }
+
       const failure = results.find(
         (result) => result.status < 200 || result.status >= 300,
       );
@@ -138,23 +187,16 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
             Object.fromEntries(results.map(({ key, data }) => [key, data])),
             { headers: { "Cache-Control": "no-store" } },
           );
-      if (auth.session.rotated) {
-        setAuthCookies(response, auth.session.access, auth.session.refresh);
-      }
-      return response;
+      return finalizeAuthResponse(response, auth);
     } catch (error) {
       console.error("Company dashboard request failed", error);
-      const response = NextResponse.json(
+      return finalizeAuthResponse(NextResponse.json(
         {
           detail:
             "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
         },
         { status: 502, headers: { "Cache-Control": "no-store" } },
-      );
-      if (auth.session.rotated) {
-        setAuthCookies(response, auth.session.access, auth.session.refresh);
-      }
-      return response;
+      ), auth);
     }
   }
 
@@ -180,7 +222,6 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
   let body: BodyInit | undefined;
   const headers = new Headers({
     Accept: "application/json",
-    Authorization: `Bearer ${auth.session.access}`,
   });
   if (method !== "GET" && method !== "HEAD") {
     const contentType = request.headers.get("content-type") ?? "";
@@ -201,22 +242,24 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
 
   let backendResponse: Response;
   try {
-    backendResponse = await fetch(url, {
+    const result = await fetchWithAuth(url, {
       method,
       headers,
       ...(body === undefined ? {} : { body }),
       cache: "no-store",
       signal: AbortSignal.timeout(20_000),
-    });
+    }, auth);
+    if ("authError" in result) return authErrorResponse(result.authError);
+    backendResponse = result.response;
   } catch (error) {
     console.error(`Company API request failed for ${url.pathname}`, error);
-    return NextResponse.json(
+    return finalizeAuthResponse(NextResponse.json(
       {
         detail:
           "Impossible de joindre le service pour le moment. Vérifiez votre connexion et réessayez dans quelques instants.",
       },
       { status: 502 },
-    );
+    ), auth);
   }
 
   const responseText = await backendResponse.text();
@@ -252,10 +295,7 @@ async function proxyCompanyRequest(request: Request, context: RouteContext) {
           status: backendResponse.status,
           headers: { "Cache-Control": "no-store" },
         });
-  if (auth.session.rotated) {
-    setAuthCookies(response, auth.session.access, auth.session.refresh);
-  }
-  return response;
+  return finalizeAuthResponse(response, auth);
 }
 
 export async function GET(request: Request, context: RouteContext) {

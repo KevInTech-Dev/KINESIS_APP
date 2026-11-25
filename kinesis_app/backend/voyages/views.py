@@ -134,7 +134,11 @@ class VoyageListCreateView(generics.ListCreateAPIView):
 
     def list(self, request, *args, **kwargs):
         cache_key = None
-        if request.method == "GET" and not request.user.is_authenticated:
+        user = request.user
+        can_use_public_cache = (
+            not user.is_authenticated or user.role != user.Role.COMPAGNIE
+        )
+        if request.method == "GET" and can_use_public_cache:
             cache_key = get_public_voyages_cache_key(request)
             if cache_key:
                 cached_data = get_cached_public_voyages(cache_key)

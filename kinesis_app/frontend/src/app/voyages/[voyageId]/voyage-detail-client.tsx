@@ -322,24 +322,10 @@ export default function VoyageDetailClient({
       ) : null}
       {!loading && trip ? (
         <article className="voyage-detail-page__content">
-          <div className="voyage-detail__cover">
-            <div className="voyage-detail__cover-shade" />
-            <div className="voyage-detail__cover-toolbar">
-              <Link href="/voyages" className="voyage-detail__back">
-                <span aria-hidden="true">←</span> Tous les voyages
-              </Link>
-            </div>
-            <div className="voyage-detail__cover-copy">
-              <h1>
-                <span className="voyage-detail__origin">{trip.ville_depart_nom}</span>
-                <span className="voyage-detail__route-arrow" aria-hidden="true"> →  </span>
-                <span className="voyage-detail__destination">{trip.ville_arrivee_nom}</span>
-              </h1>
-              <span className="voyage-detail__cover-date">
-                {formatDate(trip.date_depart)} <span aria-hidden="true">·</span>{" "}
-                {trip.heure_depart.slice(0, 5)}
-              </span>
-            </div>
+          <div className="voyage-detail__intro">
+            <Link href="/voyages" className="voyage-detail__back">
+              <span aria-hidden="true">←</span> Tous les voyages
+            </Link>
           </div>
 
           <div className="voyage-detail__lower">
